@@ -1,0 +1,35 @@
+/**
+ * Express app — CORS, Stripe webhook (raw body), JSON routes, error handling.
+ */
+import express from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import routes from './routes/index.js';
+import { stripeWebhook } from './controllers/payment.controller.js';
+import { notFound, errorHandler } from './middleware/errorHandler.js';
+import { corsOptions } from './config/cors.js';
+
+const app = express();
+
+app.use(cors(corsOptions));
+
+app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), stripeWebhook);
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+app.get('/', (_req, res) => {
+  res.json({
+    success: true,
+    message: 'Welcome to MarketPlus API',
+    docs: '/api/health',
+  });
+});
+
+app.use('/api', routes);
+
+app.use(notFound);
+app.use(errorHandler);
+
+export default app;
