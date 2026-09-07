@@ -30,28 +30,22 @@ function printMobileUrls() {
 export default defineConfig({
   plugins: [react(), tailwindcss(), printMobileUrls()],
   build: {
-    modulePreload: {
-      resolveDependencies: (_filename, deps) => deps.filter((dep) => !dep.includes('/admin-')),
-    },
     rollupOptions: {
       output: {
+        // Only group node_modules into stable vendor chunks. Application code is
+        // left to split automatically along the lazy() / dynamic-import route
+        // boundaries defined in src/app/lazyRoutes.js and lazyAdminRoutes.js —
+        // forcing it into single "admin"/"storefront" chunks (as before) merged
+        // ~220 admin files into one 2.2 MB download and defeated code-splitting.
         manualChunks(id) {
-          if (!id.includes('node_modules')) {
-            if (id.includes('/src/admin/')) return 'admin';
-            if (
-              id.includes('/src/components/home/')
-              || id.includes('/src/pages/HomePage')
-            ) {
-              return 'storefront-home';
-            }
-            if (id.includes('/src/')) return 'storefront';
-            return undefined;
-          }
+          if (!id.includes('node_modules')) return undefined;
           if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/')) {
             return 'vendor-react';
           }
           if (id.includes('lucide-react')) return 'vendor-icons';
           if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
+          if (id.includes('leaflet')) return 'vendor-maps';
+          if (id.includes('@stripe')) return 'vendor-stripe';
           return 'vendor';
         },
       },

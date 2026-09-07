@@ -48,12 +48,13 @@ export const optionalProtect = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id);
-    if (!user) throw new AppError('User not found', 401);
-    req.user = user;
+    // Optional auth: a missing/expired/invalid token must never block a public
+    // route — just continue as an anonymous visitor.
+    if (user) req.user = user;
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return next(new AppError('Not authorized — invalid token', 401));
+      return next();
     }
     next(error);
   }
