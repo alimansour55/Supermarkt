@@ -16,13 +16,14 @@ function formatDayLabel(dateStr, isAr) {
 
 function ChartTooltip({ active, payload, label, isAr }) {
   if (!active || !payload?.length) return null;
+  const point = payload[0]?.payload;
   return (
     <div className="rounded-lg border border-border bg-white px-3 py-2 text-sm shadow-lg">
       <p className="font-medium text-text">{formatDayLabel(label, isAr)}</p>
       <p className="text-primary-600">{formatPrice(payload[0]?.value)}</p>
-      {payload[1] && (
+      {point?.orders != null && (
         <p className="text-text-muted">
-          {isAr ? 'طلبات' : 'Orders'}: {payload[1].value}
+          {isAr ? 'طلبات' : 'Orders'}: {point.orders}
         </p>
       )}
     </div>

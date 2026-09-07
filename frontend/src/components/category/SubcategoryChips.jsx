@@ -1,58 +1,43 @@
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
-import { categoryLabel } from '../../utils/categoryHelpers';
+import { buildCategoryPath, categoryLabel } from '../../utils/categoryHelpers';
+import CategoryImage from './CategoryImage';
 
 /**
- * Subcategory navigation: "All {parent}" + child chips, or siblings when on a child category.
+ * Sibling subcategory chips when viewing a leaf category.
  */
 export default function SubcategoryChips({
   currentSlug,
   parentCategory,
   subcategories,
+  pathPrefix = null,
+  mainSlug = null,
 }) {
   const { language } = useLanguage();
   const isAr = language === 'ar';
+  const prefix = pathPrefix || mainSlug || (parentCategory?.slug ? parentCategory.slug : '');
 
-  const chips = [];
-
-  if (parentCategory) {
-    chips.push({
-      slug: parentCategory.slug,
-      label: isAr ? `كل ${categoryLabel(parentCategory, true)}` : `All ${categoryLabel(parentCategory, false)}`,
-      icon: parentCategory.icon,
-    });
-    subcategories.forEach((sub) => {
-      chips.push({ slug: sub.slug, label: categoryLabel(sub, isAr), icon: sub.icon });
-    });
-  } else if (subcategories.length > 0) {
-    chips.push({
-      slug: currentSlug,
-      label: isAr ? 'الكل' : 'All',
-      icon: null,
-    });
-    subcategories.forEach((sub) => {
-      chips.push({ slug: sub.slug, label: categoryLabel(sub, isAr), icon: sub.icon });
-    });
-  }
-
-  if (chips.length <= 1) return null;
+  if (!subcategories?.length) return null;
 
   return (
     <div className="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-      {chips.map((chip) => {
-        const active = chip.slug === currentSlug;
+      {subcategories.map((sub) => {
+        const active = sub.slug === currentSlug;
+        const href = prefix
+          ? buildCategoryPath(`${prefix}/${sub.slug}`)
+          : buildCategoryPath(sub.slug);
         return (
           <Link
-            key={chip.slug}
-            to={`/categories/${chip.slug}`}
+            key={sub.slug}
+            to={href}
             className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
               active
                 ? 'bg-primary-600 text-white shadow-sm'
                 : 'border border-border bg-white text-text hover:bg-primary-50'
             }`}
           >
-            {chip.icon && <span className="text-base">{chip.icon}</span>}
-            {chip.label}
+            <CategoryImage category={sub} size="xs" className="!h-6 !w-6 !rounded-full" />
+            {categoryLabel(sub, isAr)}
           </Link>
         );
       })}

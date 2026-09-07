@@ -33,7 +33,13 @@ export const orderConfirmationTemplate = (order, user) => {
       <strong>رقم الطلب:</strong> ${order.orderNumber}<br/>
       <strong>التاريخ:</strong> ${formatEmailDate(order.createdAt || new Date())}<br/>
       <strong>طريقة الدفع:</strong> ${paymentLabel}<br/>
-      <strong>طريقة التوصيل:</strong> ${order.deliveryMethod === 'express' ? 'توصيل سريع' : 'توصيل مجدول'}
+      <strong>طريقة التوصيل:</strong> ${
+        order.deliveryMethod === 'express'
+          ? 'توصيل سريع'
+          : order.deliveryMethod === 'recurring'
+            ? `توصيل دوري (${order.recurringDelivery?.frequency === 'monthly' ? 'شهري' : order.recurringDelivery?.frequency === 'biweekly' ? 'كل أسبوعين' : 'أسبوعي'})`
+            : 'توصيل عادي'
+      }
     `)}
     ${orderSummaryBlock(order)}
     ${renderKeyValueTable([
@@ -95,9 +101,17 @@ export const orderStatusUpdateTemplate = (order, user, newStatus) => {
     preparing: 'فريقنا يجهّز طلبك الآن.',
     out_for_delivery: 'طلبك في الطريق إليك! استعد للاستلام.',
     delivered: 'تم تسليم طلبك. نتمنى أن تستمتع بمشترياتك!',
+    delivery_failed: 'تعذّر تسليم طلبك. راجع التفاصيل أدناه أو تواصل معنا.',
     cancelled: 'تم إلغاء طلبك. إذا كان لديك أي استفسار، تواصل معنا.',
+    refunded: 'تم استرداد المبلغ إلى حسابك. قد يستغرق ظهوره بضعة أيام.',
+    substitution_pending: 'اقترحنا منتجاً بديلاً لأحد عناصر طلبك. راجع التطبيق للموافقة أو الرفض.',
+    message: 'لديك رسالة جديدة بخصوص طلبك. راجع التطبيق للرد.',
     pending: 'طلبك قيد المراجعة.',
   };
+
+  const failureReason = newStatus === 'delivery_failed'
+    ? (order.deliveryFailureReasonAr || order.deliveryFailureReasonEn || '')
+    : '';
 
   const bodyHtml = `
     <p style="margin: 0 0 16px;">مرحباً <strong>${user.name}</strong>،</p>
@@ -105,6 +119,7 @@ export const orderStatusUpdateTemplate = (order, user, newStatus) => {
     ${renderInfoBox(`
       <strong>رقم الطلب:</strong> ${order.orderNumber}<br/>
       <strong>الحالة الجديدة:</strong> <span style="color:#059669;font-weight:700">${statusLabel}</span>
+      ${failureReason ? `<br/><strong>سبب فشل التسليم:</strong> ${failureReason}` : ''}
     `)}
     ${renderButton(ordersUrl, '🔍 متابعة الطلب')}
   `;

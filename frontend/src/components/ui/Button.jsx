@@ -23,13 +23,15 @@ export default function Button({
   size = 'md',
   className = '',
   disabled = false,
+  loading = false,
   type = 'button',
   ...props
 }) {
   return (
     <button
       type={type}
-      disabled={disabled}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={[
         'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
@@ -40,6 +42,12 @@ export default function Button({
       ].join(' ')}
       {...props}
     >
+      {loading && (
+        <span
+          className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+          aria-hidden
+        />
+      )}
       {children}
     </button>
   );

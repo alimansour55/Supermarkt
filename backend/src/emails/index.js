@@ -10,6 +10,7 @@ import {
 } from './templates/orderTemplates.js';
 import { lowStockTemplate } from './templates/inventoryTemplates.js';
 import { STAFF_ROLES } from '../constants/roles.js';
+import { renderEmailTemplate } from '../services/notificationTemplate.service.js';
 
 export const sendEmail = async ({ to, subject, html, text }) => {
   const transporter = getTransporter();
@@ -34,6 +35,14 @@ export const sendEmail = async ({ to, subject, html, text }) => {
 
 const dispatch = async (to, template) => sendEmail({ to, ...template });
 
+async function dispatchTemplateOrFallback(to, key, lang, data, fallbackFn) {
+  const custom = await renderEmailTemplate(key, lang, data);
+  if (custom?.subject && custom?.html) {
+    return dispatch(to, custom);
+  }
+  return dispatch(to, fallbackFn());
+}
+
 export const getAdminEmails = async () => {
   if (process.env.ADMIN_EMAIL) {
     return [process.env.ADMIN_EMAIL];
@@ -50,17 +59,36 @@ export const sendPasswordResetEmail = (user, token) => dispatch(user.email, pass
 
 export const sendOrderConfirmationEmail = async (order, user) => {
   if (!user?.email) return null;
-  return dispatch(user.email, orderConfirmationTemplate(order, user));
+  return dispatchTemplateOrFallback(
+    user.email,
+    'order_confirmation',
+    'ar',
+    { order, user },
+    () => orderConfirmationTemplate(order, user),
+  );
 };
 
 export const sendPaymentSuccessEmail = async (order, user) => {
   if (!user?.email) return null;
-  return dispatch(user.email, paymentSuccessTemplate(order, user));
+  return dispatchTemplateOrFallback(
+    user.email,
+    'payment_success',
+    'ar',
+    { order, user },
+    () => paymentSuccessTemplate(order, user),
+  );
 };
 
 export const sendOrderStatusUpdateEmail = async (order, user, newStatus) => {
   if (!user?.email || !newStatus) return null;
-  return dispatch(user.email, orderStatusUpdateTemplate(order, user, newStatus));
+  const { getStatusLabel } = await import('./helpers.js');
+  return dispatchTemplateOrFallback(
+    user.email,
+    'order_status_update',
+    'ar',
+    { order, user, statusLabel: getStatusLabel(newStatus) },
+    () => orderStatusUpdateTemplate(order, user, newStatus),
+  );
 };
 
 export const sendAdminNewOrderEmail = async (order, customer) => {
@@ -69,7 +97,10 @@ export const sendAdminNewOrderEmail = async (order, customer) => {
     console.warn('No admin emails configured for new order notification');
     return null;
   }
-  const template = adminNewOrderTemplate(order, customer);
+  const custom = await renderEmailTemplate('admin_new_order', 'ar', { order, user: customer });
+  const template = custom?.subject && custom?.html
+    ? custom
+    : adminNewOrderTemplate(order, customer);
   return sendEmail({ to: adminEmails, ...template });
 };
 
@@ -92,10 +123,12 @@ export const sendLowStockEmail = async (product, threshold) => {
 export const notifyOrderCreated = async (order, user) => {
   try {
     const { notifyNewOrder } = await import('../services/notification.service.js');
+    const { notifyOrderTimeline } = await import('../services/orderNotification.service.js');
     await Promise.all([
       sendOrderConfirmationEmail(order, user),
       sendAdminNewOrderEmail(order, user),
       notifyNewOrder(order),
+      notifyOrderTimeline(order, user, 'order_created'),
     ]);
   } catch (err) {
     console.error('Order email notification failed:', err.message);

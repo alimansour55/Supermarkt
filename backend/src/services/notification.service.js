@@ -20,6 +20,24 @@ export async function notifyNewOrder(order) {
   });
 }
 
+export async function notifyOrderCustomerMessage(order, preview) {
+  const snippet = (preview || '').trim().slice(0, 120);
+  const customerName = order.user?.name || order.phone || '';
+
+  return createNotification({
+    type: 'order_customer_message',
+    titleAr: 'رسالة من عميل على طلب',
+    titleEn: 'Customer message on order',
+    messageAr: `طلب #${order.orderNumber}${customerName ? ` — ${customerName}` : ''}${snippet ? `: ${snippet}` : ''}`,
+    messageEn: `Order #${order.orderNumber}${customerName ? ` — ${customerName}` : ''}${snippet ? `: ${snippet}` : ''}`,
+    link: `/admin/order-chats?order=${order._id}`,
+    data: {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+    },
+  });
+}
+
 export async function notifyLowStock(product, threshold) {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const existing = await Notification.findOne({

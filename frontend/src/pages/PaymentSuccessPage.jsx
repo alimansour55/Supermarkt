@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { paymentService } from '../services/apiServices';
 import { formatPrice } from '../utils/formatters';
+import { formatOrderNumber } from '../utils/orderNumber';
 import Button from '../components/ui/Button';
 import Loader from '../components/ui/Loader';
 
 export default function PaymentSuccessPage() {
   const { language } = useLanguage();
+  const { refreshUser } = useAuth();
   const { state } = useLocation();
   const [searchParams] = useSearchParams();
   const { clearCart } = useCart();
@@ -28,6 +31,7 @@ export default function PaymentSuccessPage() {
         if (data.success && data.order) {
           setOrder(data.order);
           clearCart();
+          refreshUser?.();
         } else {
           setError(data.message || (language === 'ar' ? 'لم يكتمل الدفع' : 'Payment not completed'));
         }
@@ -36,10 +40,11 @@ export default function PaymentSuccessPage() {
         setError(err.response?.data?.message || (language === 'ar' ? 'تعذر التحقق من الدفع' : 'Could not verify payment'));
       })
       .finally(() => setLoading(false));
-  }, [sessionId, orderId, clearCart, language]);
+  }, [sessionId, orderId, clearCart, language, refreshUser]);
 
   const orderNumber = order?.orderNumber || state?.orderNumber || 'MP-000000';
   const total = order?.total ?? state?.total ?? 0;
+  const pointsEarned = order?.pointsEarned ?? state?.pointsEarned ?? 0;
   const cod = state?.cod && !sessionId;
 
   if (loading) {
@@ -90,11 +95,21 @@ export default function PaymentSuccessPage() {
             : (language === 'ar' ? 'تم الدفع بنجاح' : 'Payment successful')}
         </p>
         <div className="mt-6 rounded-xl bg-surface p-4 text-sm">
-          <p><span className="text-text-muted">{language === 'ar' ? 'رقم الطلب:' : 'Order #:'}</span> <strong>{orderNumber}</strong></p>
+          <p><span className="text-text-muted">{language === 'ar' ? 'رقم الطلب:' : 'Order #:'}</span> <strong className="font-mono tabular-nums">{formatOrderNumber(orderNumber)}</strong></p>
           {total > 0 && <p className="mt-1"><span className="text-text-muted">{language === 'ar' ? 'الإجمالي:' : 'Total:'}</span> <strong>{formatPrice(total)}</strong></p>}
+          {pointsEarned > 0 && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
+              {language === 'ar'
+                ? `🎁 +${pointsEarned} نقطة استرداد نقدي (1%) — راجع «نقاطي»`
+                : `🎁 +${pointsEarned} cashback points (1%) — see My Points`}
+            </p>
+          )}
         </div>
         <div className="mt-6 flex flex-col gap-3">
           <Link to="/orders"><Button className="w-full">{language === 'ar' ? 'طلباتي' : 'My Orders'}</Button></Link>
+          {pointsEarned > 0 && (
+            <Link to="/my-points"><Button variant="secondary" className="w-full">{language === 'ar' ? 'نقاطي' : 'My Points'}</Button></Link>
+          )}
           <Link to="/"><Button variant="secondary" className="w-full">{language === 'ar' ? 'متابعة التسوق' : 'Continue Shopping'}</Button></Link>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import ProductImageGallery from '../components/ProductImageGallery';
@@ -7,10 +7,17 @@ import {
   hasValidationErrors,
   validateProductForm,
 } from '../utils/productFormValidation';
+import { localizeAdminApiError } from '../constants/productCategoryErrors';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Textarea from '../../components/ui/Textarea';
 import Loader from '../../components/ui/Loader';
+import ProductCatalogFields from '../components/ProductCatalogFields';
+import ProductCategoryPicker from '../components/ProductCategoryPicker';
+import BrandFilterSelect from '../components/BrandFilterSelect';
+import { buildCategorySelectionFromLeaf, categoryHasChildren, getCategoryBreadcrumb } from '../../utils/categoryHelpers';
+import { isVideoUrl } from '../../utils/imageHelpers';
+import { adminNewProductUrl } from '../utils/adminProductRoutes';
 
 const emptyForm = {
   nameAr: '',
@@ -22,19 +29,45 @@ const emptyForm = {
   wholesalePrice: '',
   oldPrice: '',
   category: '',
+  mainCategory: '',
   subCategory: '',
-  brand: 'MarketPlus',
+  brand: '',
   stock: 0,
   unit: 'piece',
   emoji: '🛍️',
   isFeatured: false,
   isOffer: false,
+  isBestSeller: false,
+  isOurProduct: false,
   isActive: true,
+  sku: '',
+  barcode: '',
+  variants: [],
+  specs: [],
+  frequentlyBoughtTogether: [],
+  similarProducts: [],
 };
 
 const ALL_FIELDS = [
-  'nameAr', 'nameEn', 'category', 'price', 'wholesalePrice', 'stock', 'oldPrice',
+  'nameAr', 'nameEn', 'mainCategory', 'subCategory', 'price', 'wholesalePrice', 'stock', 'oldPrice',
 ];
+
+/** Defaults kept after “Save & add another”; category and product identity are cleared. */
+function buildFormForAnother(previous) {
+  return {
+    ...emptyForm,
+    brand: previous.brand || emptyForm.brand,
+    unit: previous.unit || emptyForm.unit,
+    emoji: previous.emoji || emptyForm.emoji,
+    isActive: previous.isActive !== false,
+    wholesalePrice: previous.wholesalePrice !== '' && previous.wholesalePrice != null
+      ? previous.wholesalePrice
+      : '',
+    category: '',
+    mainCategory: '',
+    subCategory: '',
+  };
+}
 
 function formatDateTime(value, isAr) {
   if (!value) return '';
@@ -50,6 +83,7 @@ function mapImagesFromProduct(p) {
     .map((url, index) => ({
       url,
       publicId: p.cloudinaryPublicIds?.[index] || null,
+      type: p.mediaTypes?.[index] || (isVideoUrl(url) ? 'video' : 'image'),
     }));
 }
 
@@ -57,12 +91,15 @@ export default function ProductFormPage() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const prefillCategoryId = searchParams.get('category') || '';
   const { language } = useLanguage();
   const isAr = language === 'ar';
 
   const [form, setForm] = useState(emptyForm);
-  const [meta, setMeta] = useState({ updatedAt: null, stockUpdatedAt: null, stockHistory: [] });
   const [categories, setCategories] = useState([]);
+  const [meta, setMeta] = useState({ updatedAt: null, stockUpdatedAt: null, stockHistory: [] });
+  const [allProducts, setAllProducts] = useState([]);
   const [images, setImages] = useState([]);
   const [files, setFiles] = useState([]);
   const [removingImage, setRemovingImage] = useState(null);
@@ -71,16 +108,33 @@ export default function ProductFormPage() {
   const [submitError, setSubmitError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [touched, setTouched] = useState({});
+  const [categoryPickerKey, setCategoryPickerKey] = useState(0);
+  const [brands, setBrands] = useState([]);
+
+  const safeCategories = Array.isArray(categories) ? categories : [];
 
   useEffect(() => {
-    adminApi.getCategories({ limit: 200 }).then(({ data }) => setCategories(data.data));
+    adminApi.getCategories({ limit: 500 })
+      .then(({ data }) => setCategories(Array.isArray(data.data) ? data.data : []))
+      .catch(() => setCategories([]));
+    adminApi.getProducts({ limit: 300 })
+      .then(({ data }) => setAllProducts(Array.isArray(data.data) ? data.data : []))
+      .catch(() => setAllProducts([]));
+    adminApi.getBrands({ limit: 500, isActive: 'true' })
+      .then(({ data }) => setBrands(Array.isArray(data.data) ? data.data : []))
+      .catch(() => setBrands([]));
   }, []);
 
   useEffect(() => {
     if (!isEdit) return;
     adminApi.getProduct(id)
       .then(({ data }) => {
-        const p = data.data;
+        const p = data?.data;
+        if (!p?._id) {
+          setSubmitError(isAr ? 'المنتج غير موجود أو تم حذفه' : 'Product not found or was deleted');
+          return;
+        }
+        const leafId = p.subCategory || p.categoryId || p.category || '';
         setForm({
           nameAr: p.nameAr || p.name || '',
           nameEn: p.nameEn || '',
@@ -90,15 +144,25 @@ export default function ProductFormPage() {
           price: p.price,
           wholesalePrice: p.wholesalePrice ?? '',
           oldPrice: p.oldPrice || '',
-          category: p.categoryId || p.category || '',
-          subCategory: p.subCategory || '',
-          brand: p.brand || 'MarketPlus',
+          mainCategory: p.mainCategory || '',
+          subCategory: leafId,
+          category: leafId,
+          brand: p.brand || '',
           stock: p.stock,
           unit: p.unit || 'piece',
           emoji: p.emoji || '🛍️',
           isFeatured: p.isFeatured || false,
           isOffer: p.isOffer || false,
+          isBestSeller: p.isBestSeller || false,
+          isOurProduct: p.isOurProduct || false,
           isActive: p.isActive !== false,
+          sku: p.sku || '',
+          barcode: p.barcode || '',
+          variants: p.variants || [],
+          specs: p.specs || [],
+          frequentlyBoughtTogether: (p.frequentlyBoughtTogether || []).map(String),
+          similarProducts: (p.similarProducts || []).map(String),
+          _id: p._id,
         });
         setImages(mapImagesFromProduct(p));
         setMeta({
@@ -107,17 +171,43 @@ export default function ProductFormPage() {
           stockHistory: p.stockHistory || [],
         });
       })
+      .catch((err) => {
+        setSubmitError(err.response?.data?.message || (isAr ? 'تعذر تحميل المنتج' : 'Could not load product'));
+      })
       .finally(() => setLoading(false));
   }, [id, isEdit]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
+  useEffect(() => {
+    if (!form.subCategory || form.mainCategory || !safeCategories.length) return;
+    const selection = buildCategorySelectionFromLeaf(safeCategories, form.subCategory);
+    if (selection.level1) {
+      setForm((f) => ({ ...f, mainCategory: String(selection.level1) }));
+    }
+  }, [form.subCategory, form.mainCategory, safeCategories]);
+
+  useEffect(() => {
+    if (isEdit || !prefillCategoryId || !safeCategories.length) return;
+    const selection = buildCategorySelectionFromLeaf(safeCategories, prefillCategoryId);
+    if (!selection.leafId) return;
+    setForm((f) => {
+      if (f.subCategory) return f;
+      return {
+        ...f,
+        mainCategory: selection.level1 ? String(selection.level1) : '',
+        subCategory: String(selection.leafId),
+        category: String(selection.leafId),
+      };
+    });
+  }, [isEdit, prefillCategoryId, safeCategories]);
+
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
   useEffect(() => {
     if (!Object.keys(touched).length) return;
-    setFieldErrors(validateProductForm(form, isAr));
-  }, [form, touched, isAr]);
+    setFieldErrors(validateProductForm(form, isAr, safeCategories));
+  }, [form, touched, isAr, safeCategories]);
 
   const showError = (field) => (touched[field] ? fieldErrors[field] : undefined);
 
@@ -147,18 +237,36 @@ export default function ProductFormPage() {
   };
 
   const resetForAnother = () => {
-    setForm(emptyForm);
+    setForm((prev) => buildFormForAnother(prev));
+    setCategoryPickerKey((k) => k + 1);
     setImages([]);
     setFiles([]);
     setMeta({ updatedAt: null, stockUpdatedAt: null, stockHistory: [] });
     setFieldErrors({});
     setTouched({});
     setSubmitError('');
+    if (prefillCategoryId) {
+      navigate(adminNewProductUrl(), { replace: true });
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleCategoryChange = useCallback(({ mainCategory, subCategory }) => {
+    setForm((f) => {
+      if (String(f.mainCategory) === String(mainCategory) && String(f.subCategory) === String(subCategory)) {
+        return f;
+      }
+      return {
+        ...f,
+        mainCategory,
+        subCategory,
+        category: subCategory,
+      };
+    });
+  }, []);
+
   const handleSave = async (addAnother = false) => {
-    const errors = validateProductForm(form, isAr);
+    const errors = validateProductForm(form, isAr, safeCategories);
     setFieldErrors(errors);
     setTouched(Object.fromEntries(ALL_FIELDS.map((f) => [f, true])));
     if (hasValidationErrors(errors)) return;
@@ -166,14 +274,29 @@ export default function ProductFormPage() {
     setSaving(true);
     setSubmitError('');
     try {
+      const mainCategory = form.mainCategory || (form.subCategory
+        ? String(buildCategorySelectionFromLeaf(safeCategories, form.subCategory).level1 || '')
+        : '');
       const payload = {
         ...form,
+        mainCategory,
+        subCategory: form.subCategory,
+        category: form.subCategory,
         price: Number(form.price),
         wholesalePrice: form.wholesalePrice !== '' && form.wholesalePrice != null
           ? Number(form.wholesalePrice)
           : 0,
         oldPrice: form.oldPrice ? Number(form.oldPrice) : null,
         stock: Number(form.stock),
+        variants: (form.variants || []).map((v) => ({
+          ...v,
+          price: v.price !== '' && v.price != null ? Number(v.price) : Number(form.price),
+          wholesalePrice: v.wholesalePrice !== '' && v.wholesalePrice != null ? Number(v.wholesalePrice) : 0,
+          stock: Number(v.stock || 0),
+        })),
+        specs: form.specs || [],
+        frequentlyBoughtTogether: form.frequentlyBoughtTogether || [],
+        similarProducts: form.similarProducts || [],
       };
 
       let productId = id;
@@ -201,22 +324,28 @@ export default function ProductFormPage() {
 
       navigate('/admin/products');
     } catch (err) {
-      setSubmitError(err.response?.data?.message || (isAr ? 'حدث خطأ' : 'Something went wrong'));
+      setSubmitError(localizeAdminApiError(
+        err,
+        isAr,
+        'Could not save the product — check the form and try again.',
+        'تعذّر حفظ المنتج — تحقق من النموذج وحاول مرة أخرى.',
+      ));
     } finally {
       setSaving(false);
     }
   };
 
-  const parentCategories = categories.filter((c) => !c.parentCategory);
-  const subCategories = categories.filter((c) => c.parentCategory);
-
-  const selectErrorClass = (field) =>
-    showError(field) ? 'border-red-400 focus:border-red-400' : '';
-
   const sellPrice = Number(form.price) || 0;
   const wholesale = Number(form.wholesalePrice) || 0;
   const unitProfit = sellPrice - wholesale;
   const marginPct = sellPrice > 0 ? Math.round((unitProfit / sellPrice) * 1000) / 10 : 0;
+
+  const prefillCategory = prefillCategoryId && !isEdit
+    ? safeCategories.find((c) => String(c._id) === String(prefillCategoryId))
+    : null;
+  const prefillBreadcrumb = prefillCategory
+    ? getCategoryBreadcrumb(prefillCategory, safeCategories, isAr)
+    : '';
 
   if (loading) {
     return <div className="flex justify-center py-20"><Loader size="lg" /></div>;
@@ -243,6 +372,21 @@ export default function ProductFormPage() {
         className="space-y-6 rounded-2xl border border-border bg-white p-6 shadow-sm"
         noValidate
       >
+        {prefillBreadcrumb && form.subCategory && (
+          <div className="rounded-xl border border-primary-200 bg-primary-50 px-3 py-2.5 text-sm text-primary-900">
+            {isAr
+              ? `القسم مُعبّأ مسبقًا: ${prefillBreadcrumb}`
+              : `Category pre-filled: ${prefillBreadcrumb}`}
+            {categoryHasChildren(safeCategories, form.subCategory) && (
+              <p className="mt-1 text-xs text-amber-800">
+                {isAr
+                  ? 'هذا القسم له أقسام فرعية — اختر مستوى أعمق قبل الحفظ.'
+                  : 'This category has children — pick a deeper subcategory before saving.'}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
             label={isAr ? 'الاسم (عربي)' : 'Name (Arabic)'}
@@ -263,7 +407,36 @@ export default function ProductFormPage() {
             required
           />
           <Input label="Slug" value={form.slug} onChange={(e) => set('slug', e.target.value)} />
-          <Input label={isAr ? 'العلامة التجارية' : 'Brand'} value={form.brand} onChange={(e) => set('brand', e.target.value)} />
+          <div>
+            <BrandFilterSelect
+              brands={brands}
+              value={form.brand || ''}
+              onChange={(v) => set('brand', v)}
+              isAr={isAr}
+              label={isAr ? 'العلامة التجارية' : 'Brand'}
+              placeholder={isAr ? 'اختر علامة تجارية…' : 'Select a brand…'}
+              maxOptions={200}
+            />
+            <p className="mt-1.5 text-xs text-text-muted">
+              {isAr ? (
+                <>
+                  القائمة من{' '}
+                  <Link to="/admin/brands" className="font-semibold text-primary-600 hover:underline">
+                    {isAr ? 'العلامات التجارية' : 'Brands'}
+                  </Link>
+                  {' '}— يجب أن تطابق قيمة الفلتر في المنتج.
+                </>
+              ) : (
+                <>
+                  Options come from{' '}
+                  <Link to="/admin/brands" className="font-semibold text-primary-600 hover:underline">
+                    Brands
+                  </Link>
+                  {' '}— must match the product filter value.
+                </>
+              )}
+            </p>
+          </div>
           <Input
             label={isAr ? 'سعر البيع' : 'Selling price'}
             name="price"
@@ -346,42 +519,15 @@ export default function ProductFormPage() {
           <Input label="Emoji" value={form.emoji} onChange={(e) => set('emoji', e.target.value)} />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">{isAr ? 'القسم' : 'Category'}</label>
-            <select
-              className={[
-                'w-full rounded-xl border border-border px-4 py-2.5',
-                selectErrorClass('category'),
-              ].join(' ')}
-              value={form.category}
-              onChange={(e) => set('category', e.target.value)}
-              onBlur={() => touch('category')}
-              required
-            >
-              <option value="">{isAr ? 'اختر' : 'Select'}</option>
-              {parentCategories.map((c) => (
-                <option key={c._id} value={c._id}>{isAr ? c.nameAr : c.nameEn}</option>
-              ))}
-            </select>
-            {showError('category') && (
-              <p className="mt-1 text-sm text-red-600">{showError('category')}</p>
-            )}
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium">{isAr ? 'قسم فرعي' : 'Subcategory'}</label>
-            <select
-              className="w-full rounded-xl border border-border px-4 py-2.5"
-              value={form.subCategory}
-              onChange={(e) => set('subCategory', e.target.value)}
-            >
-              <option value="">{isAr ? 'بدون' : 'None'}</option>
-              {subCategories.map((c) => (
-                <option key={c._id} value={c._id}>{isAr ? c.nameAr : c.nameEn}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <ProductCategoryPicker
+          key={categoryPickerKey}
+          categories={safeCategories}
+          value={form.subCategory}
+          onChange={handleCategoryChange}
+          subCategoryError={showError('subCategory')}
+          onTouchSubCategory={() => touch('subCategory')}
+          isAr={isAr}
+        />
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Textarea
@@ -411,12 +557,29 @@ export default function ProductFormPage() {
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.isFeatured} onChange={(e) => set('isFeatured', e.target.checked)} />
-            {isAr ? 'مميز' : 'Featured'}
+            {isAr ? 'وصل حديثاً 🆕' : 'New arrival 🆕'}
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.isBestSeller} onChange={(e) => set('isBestSeller', e.target.checked)} />
+            {isAr ? 'الأكثر مبيعاً ⭐' : 'Best seller ⭐'}
+          </label>
+          <label className="flex items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-900">
+            <input type="checkbox" checked={form.isOurProduct} onChange={(e) => set('isOurProduct', e.target.checked)} />
+            {isAr ? 'منتجنا (علامتنا التجارية)' : 'Our product (house brand)'}
           </label>
         </div>
 
+        <ProductCatalogFields
+          form={form}
+          set={set}
+          isAr={isAr}
+          products={allProducts}
+          categories={safeCategories}
+          productId={id}
+        />
+
         <div>
-          <label className="mb-2 block text-sm font-medium">{isAr ? 'صور المنتج' : 'Product images'}</label>
+          <label className="mb-2 block text-sm font-medium">{isAr ? 'صور وفيديو المنتج' : 'Product images & video'}</label>
           <ProductImageGallery
             images={images}
             pendingFiles={files}

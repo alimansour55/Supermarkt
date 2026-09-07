@@ -1,47 +1,23 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import User from '../models/User.js';
+import { countPendingReviews } from '../utils/productRating.js';
+import { countOrdersWithUnreadCustomerMessages } from '../utils/orderMessages.js';
+import { countPendingOrderReturns } from './orderReturn.controller.js';
 import { formatOrder } from '../utils/formatters.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { ORDER_STATUSES } from '../constants/orderStatuses.js';
+import {
+  fillRevenueByDay,
+  getStoreDateKey,
+  revenueOrderMatch,
+  startOfStoreDay,
+  storeDateGroupField,
+  pctChange,
+} from '../utils/revenueReport.js';
+import { getAdminStockAlertThreshold } from '../utils/adminStockThreshold.js';
 
-const NON_CANCELLED = { orderStatus: { $ne: 'cancelled' } };
-
-function startOfDay(date = new Date()) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function endOfDay(date = new Date()) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
-
-function pctChange(current, previous) {
-  if (!previous) return current > 0 ? 100 : 0;
-  return Math.round(((current - previous) / previous) * 100);
-}
-
-function fillSalesByDay(rows, days = 30) {
-  const map = new Map(rows.map((r) => [r.date, r]));
-  const result = [];
-  const cursor = startOfDay();
-  cursor.setDate(cursor.getDate() - (days - 1));
-
-  for (let i = 0; i < days; i += 1) {
-    const key = cursor.toISOString().slice(0, 10);
-    const row = map.get(key);
-    result.push({
-      date: key,
-      revenue: row?.revenue || 0,
-      orders: row?.orders || 0,
-    });
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return result;
-}
+const REVENUE_MATCH = revenueOrderMatch();
 
 async function sumRevenueAndCount(match) {
   const [agg] = await Order.aggregate([
@@ -58,14 +34,17 @@ async function sumRevenueAndCount(match) {
 }
 
 export const getDashboardStats = asyncHandler(async (_req, res) => {
+  const adminStockThreshold = await getAdminStockAlertThreshold();
   const now = new Date();
-  const todayStart = startOfDay(now);
-  const yesterdayStart = startOfDay(new Date(now.getTime() - 86400000));
-  const yesterdayEnd = endOfDay(new Date(now.getTime() - 86400000));
-  const sevenDaysAgo = startOfDay(new Date(now.getTime() - 6 * 86400000));
-  const prevSevenStart = startOfDay(new Date(now.getTime() - 13 * 86400000));
-  const prevSevenEnd = endOfDay(new Date(now.getTime() - 7 * 86400000));
-  const thirtyDaysAgo = startOfDay(new Date(now.getTime() - 29 * 86400000));
+  const todayStart = startOfStoreDay(now);
+  const todayKey = getStoreDateKey(now);
+  const yesterdayKey = getStoreDateKey(new Date(now.getTime() - 86400000));
+  const yesterdayStart = new Date(`${yesterdayKey}T00:00:00+02:00`);
+  const yesterdayEnd = new Date(`${todayKey}T00:00:00+02:00`);
+  const sevenDaysAgo = startOfStoreDay(new Date(now.getTime() - 6 * 86400000));
+  const prevSevenStart = startOfStoreDay(new Date(now.getTime() - 13 * 86400000));
+  const prevSevenEnd = new Date(sevenDaysAgo.getTime() - 1);
+  const thirtyDaysAgo = startOfStoreDay(new Date(now.getTime() - 29 * 86400000));
 
   const [
     totalOrders,
@@ -73,8 +52,13 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
     totalUsers,
     salesAgg,
     lowStockProducts,
+    outOfStockProducts,
+    outOfStockCount,
     latestOrders,
     pendingOrdersCount,
+    pendingReviewsCount,
+    ordersUnreadMessagesCount,
+    pendingReturnsCount,
     salesByDayRaw,
     ordersByStatusRaw,
     todayStats,
@@ -84,32 +68,40 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
     newUsers7d,
     newUsersPrev7d,
   ] = await Promise.all([
-    Order.countDocuments(NON_CANCELLED),
+    Order.countDocuments(REVENUE_MATCH),
     Product.countDocuments(),
     User.countDocuments({ role: 'user' }),
     Order.aggregate([
-      { $match: NON_CANCELLED },
+      { $match: REVENUE_MATCH },
       { $group: { _id: null, totalSales: { $sum: '$total' } } },
     ]),
-    Product.find({ stock: { $lte: 10 }, isActive: true })
+    Product.find({ stock: { $lte: adminStockThreshold, $gt: 0 }, isActive: true })
       .sort({ stock: 1 })
       .limit(10)
       .select('nameAr nameEn stock price slug emoji'),
+    Product.find({ stock: 0, isActive: true })
+      .sort({ updatedAt: -1 })
+      .limit(10)
+      .select('nameAr nameEn stock price slug emoji'),
+    Product.countDocuments({ stock: 0, isActive: true }),
     Order.find()
       .sort({ createdAt: -1 })
       .limit(8)
       .populate('user', 'name email'),
     Order.countDocuments({ orderStatus: 'pending' }),
+    countPendingReviews(Product),
+    countOrdersWithUnreadCustomerMessages(),
+    countPendingOrderReturns(),
     Order.aggregate([
       {
         $match: {
           createdAt: { $gte: thirtyDaysAgo },
-          ...NON_CANCELLED,
+          ...REVENUE_MATCH,
         },
       },
       {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          _id: storeDateGroupField(),
           revenue: { $sum: '$total' },
           orders: { $sum: 1 },
         },
@@ -117,15 +109,15 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
       { $sort: { _id: 1 } },
     ]),
     Order.aggregate([{ $group: { _id: '$orderStatus', count: { $sum: 1 } } }]),
-    sumRevenueAndCount({ createdAt: { $gte: todayStart }, ...NON_CANCELLED }),
+    sumRevenueAndCount({ createdAt: { $gte: todayStart }, ...REVENUE_MATCH }),
     sumRevenueAndCount({
-      createdAt: { $gte: yesterdayStart, $lte: yesterdayEnd },
-      ...NON_CANCELLED,
+      createdAt: { $gte: yesterdayStart, $lt: yesterdayEnd },
+      ...REVENUE_MATCH,
     }),
-    sumRevenueAndCount({ createdAt: { $gte: sevenDaysAgo }, ...NON_CANCELLED }),
+    sumRevenueAndCount({ createdAt: { $gte: sevenDaysAgo }, ...REVENUE_MATCH }),
     sumRevenueAndCount({
       createdAt: { $gte: prevSevenStart, $lte: prevSevenEnd },
-      ...NON_CANCELLED,
+      ...REVENUE_MATCH,
     }),
     User.countDocuments({ role: 'user', createdAt: { $gte: sevenDaysAgo } }),
     User.countDocuments({
@@ -134,12 +126,13 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
     }),
   ]);
 
-  const salesByDay = fillSalesByDay(
+  const salesByDay = fillRevenueByDay(
     salesByDayRaw.map((r) => ({
       date: r._id,
       revenue: r.revenue,
       orders: r.orders,
     })),
+    30,
   );
 
   const statusMap = Object.fromEntries(
@@ -161,6 +154,9 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
       totalProducts,
       totalUsers,
       pendingOrdersCount,
+      pendingReviewsCount,
+      ordersUnreadMessagesCount,
+      pendingReturnsCount,
       todayOrders: todayStats.orders,
       todayRevenue: todayStats.revenue,
       todayOrdersChange: pctChange(todayStats.orders, yesterdayStats.orders),
@@ -176,6 +172,8 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
       salesByDay,
       ordersByStatus,
       lowStockProducts,
+      outOfStockProducts,
+      outOfStockCount,
       latestOrders: latestOrders.map(formatOrder),
     },
   });

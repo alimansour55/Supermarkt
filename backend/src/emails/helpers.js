@@ -16,6 +16,7 @@ export const ORDER_STATUS_LABELS = {
   preparing: { ar: 'جاري التجهيز', en: 'Preparing' },
   out_for_delivery: { ar: 'في الطريق إليك', en: 'Out for delivery' },
   delivered: { ar: 'تم التسليم', en: 'Delivered' },
+  delivery_failed: { ar: 'فشل التسليم', en: 'Delivery failed' },
   cancelled: { ar: 'ملغي', en: 'Cancelled' },
 };
 

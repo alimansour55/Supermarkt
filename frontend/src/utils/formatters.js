@@ -1,9 +1,29 @@
-export function formatPrice(amount, locale = 'ar-EG', currency = 'EGP') {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount ?? 0);
+function latinizeDigits(text) {
+  return String(text ?? '')
+    .replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '')
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .trim();
+}
+
+/** Format a numeric amount with Latin digits (en-US), no currency symbol. */
+export function formatMoneyLatin(amount, options = {}) {
+  const {
+    minimumFractionDigits = 2,
+    maximumFractionDigits = 2,
+  } = options;
+
+  const formatted = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits,
+    maximumFractionDigits,
+  }).format(Number(amount) || 0);
+
+  return latinizeDigits(formatted);
+}
+
+/** Storefront price: Latin digits, number first — reads correctly when right-aligned in Arabic. */
+export function formatPrice(amount, _locale = 'en-US', currency = 'EGP') {
+  return `${formatMoneyLatin(amount)} ${currency}`;
 }
 
 export function formatDate(date, locale = 'ar-EG') {

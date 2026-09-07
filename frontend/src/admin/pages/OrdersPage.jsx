@@ -1,63 +1,96 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Download, ShoppingCart } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { MessageCircle, Package, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
-import { ORDER_STATUSES, PAYMENT_STATUSES } from '../adminConstants';
 import { useAdminListPage } from '../hooks/useAdminListPage';
 import { downloadBlob } from '../utils/downloadBlob';
-import StatusBadge from '../components/StatusBadge';
-import PaymentStatusBadge from '../components/PaymentStatusBadge';
 import OrderDetailPanel from '../components/OrderDetailPanel';
+import OrdersListPanel from '../components/orders/OrdersListPanel';
 import { useAdminStats } from '../context/AdminStatsContext';
-import Button from '../../components/ui/Button';
-import { formatPrice } from '../../utils/formatters';
-import { AdminListPage, ListFilterSelect } from '../components/list';
 import { useToast } from '../components';
+import { scrollToTop } from '../../utils/scrollToTop';
+import { useOrderChat } from '../../hooks/useOrderChat';
+
+const INITIAL_FILTERS = {
+  orderStatus: '',
+  paymentStatus: '',
+  dateFrom: '',
+  dateTo: '',
+};
 
 export default function OrdersPage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
   const toast = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const orderFromUrl = searchParams.get('order');
   const [selectedId, setSelectedId] = useState(null);
   const [selected, setSelected] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [drivers, setDrivers] = useState([]);
+  const [highlightChat, setHighlightChat] = useState(false);
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+
+  const refreshDrivers = useCallback(() => {
+    adminApi.getDeliveryStaff()
+      .then(({ data }) => setDrivers(data.data || []))
+      .catch(() => setDrivers([]));
+  }, []);
+
+  useEffect(() => {
+    refreshDrivers();
+  }, [refreshDrivers]);
+
+  const {
+    pendingOrdersCount,
+    ordersUnreadMessagesCount,
+    refreshStats,
+  } = useAdminStats();
 
   const list = useAdminListPage({
     fetchFn: (params) => adminApi.getOrders(params),
-    initialFilters: {
-      orderStatus: '',
-      paymentStatus: '',
-      dateFrom: '',
-      dateTo: '',
-    },
+    initialFilters: INITIAL_FILTERS,
   });
 
-  const loadDetail = useCallback(async (orderId) => {
+  const loadDetail = useCallback(async (orderId, { updateUrl = true } = {}) => {
     setDetailLoading(true);
+    setHighlightChat(false);
+    setMobileShowDetail(true);
     try {
       const { data } = await adminApi.getOrder(orderId);
       setSelected(data.order);
+      setSelectedId(orderId);
+      setHighlightChat(Boolean(data.hadUnreadCustomerMessages));
+      if (updateUrl) {
+        setSearchParams({ order: orderId }, { replace: true });
+      }
+      list.reload();
+      refreshStats();
     } catch {
       setSelected(null);
+      setSelectedId(null);
+      setHighlightChat(false);
     } finally {
       setDetailLoading(false);
     }
-  }, []);
+  }, [refreshStats, list.reload, setSearchParams]);
 
   const handleSelectOrder = (order) => {
-    setSelectedId(order._id);
     loadDetail(order._id);
+    scrollToTop();
+  };
+
+  const handleBack = () => {
+    setMobileShowDetail(false);
+    setSearchParams({}, { replace: true });
   };
 
   useEffect(() => {
     if (!orderFromUrl) return;
-    setSelectedId(orderFromUrl);
-    loadDetail(orderFromUrl);
+    loadDetail(orderFromUrl, { updateUrl: false });
   }, [orderFromUrl, loadDetail]);
 
   useEffect(() => {
@@ -65,7 +98,38 @@ export default function OrdersPage() {
     toast.error(list.loadError);
   }, [list.loadError, toast]);
 
-  const { refreshStats } = useAdminStats();
+  const fetchMessages = useCallback(async () => {
+    if (!selectedId) return [];
+    const { data } = await adminApi.getOrderMessages(selectedId);
+    return data.messages;
+  }, [selectedId]);
+
+  const sendChatMessage = useCallback(async (payload) => {
+    if (!selectedId) return [];
+    const { data } = await adminApi.addOrderMessage(selectedId, payload);
+    return data.order.messages;
+  }, [selectedId]);
+
+  const onChatMessagesChange = useCallback(() => {
+    refreshStats();
+  }, [refreshStats]);
+
+  const {
+    messages: chatMessages,
+    sending: chatSending,
+    send: sendThreadMessage,
+  } = useOrderChat({
+    orderId: selectedId,
+    initialMessages: selected?.messages || [],
+    fetchMessages,
+    sendMessageFn: sendChatMessage,
+    enabled: Boolean(selectedId) && !detailLoading,
+    onMessagesChange: onChatMessagesChange,
+  });
+
+  const detailOrder = selected
+    ? { ...selected, messages: chatMessages }
+    : null;
 
   const patchOrder = async (fields) => {
     if (!selectedId) return;
@@ -75,13 +139,117 @@ export default function OrdersPage() {
       setSelected(data.order);
       list.reload();
       refreshStats();
-      if (fields.orderStatus) {
+      if (fields.orderStatus === 'delivery_failed') {
+        toast.success(isAr ? 'تم تسجيل فشل التسليم' : 'Delivery failure recorded');
+      } else if (fields.orderStatus) {
         toast.success(isAr ? 'تم تحديث الحالة' : 'Status updated');
       } else if (fields.adminNotes !== undefined) {
         toast.success(isAr ? 'تم حفظ الملاحظات' : 'Notes saved');
       }
     } catch (err) {
       toast.error(err.response?.data?.message || (isAr ? 'حدث خطأ' : 'Update failed'));
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleOrderAction = async (action, payload = {}) => {
+    if (!selectedId) return;
+    setUpdating(true);
+    try {
+      let data;
+      switch (action) {
+        case 'cancel':
+          ({ data } = await adminApi.cancelOrder(selectedId, payload));
+          toast.success(isAr ? 'تم إلغاء الطلب' : 'Order cancelled');
+          break;
+        case 'refund':
+          ({ data } = await adminApi.refundOrder(selectedId, payload));
+          toast.success(isAr ? 'تم الاسترداد' : 'Refund processed');
+          break;
+        case 'substitution':
+          ({ data } = await adminApi.suggestSubstitution(selectedId, payload));
+          toast.success(isAr ? 'تم إرسال اقتراح البديل' : 'Substitution suggested');
+          break;
+        case 'assignDriver': {
+          const prevStatus = selected?.orderStatus;
+          ({ data } = await adminApi.assignDriver(selectedId, payload));
+          const newStatus = data.order?.orderStatus;
+          if (newStatus === 'out_for_delivery' && prevStatus !== 'out_for_delivery') {
+            toast.success(
+              isAr
+                ? 'تم تعيين المندوب — الطلب الآن «في الطريق»'
+                : 'Driver assigned — order is now out for delivery',
+            );
+          } else {
+            toast.success(isAr ? 'تم تعيين المندوب' : 'Driver assigned');
+          }
+          refreshDrivers();
+          break;
+        }
+        case 'message':
+          await sendThreadMessage(payload);
+          toast.success(isAr ? 'تم إرسال الرسالة' : 'Message sent');
+          list.reload();
+          refreshStats();
+          setUpdating(false);
+          return;
+        case 'return':
+          ({ data } = await adminApi.requestOrderReturn(selectedId, payload));
+          toast.success(isAr ? 'تم تسجيل الإرجاع' : 'Return recorded');
+          break;
+        case 'reviewReturn': {
+          const rejectNote = (payload.adminNote || '').trim();
+          if (payload.action === 'reject' && rejectNote.length < 5) {
+            toast.error(
+              isAr
+                ? 'يرجى كتابة سبب الرفض أو اختيار أحد الأسباب المقترحة'
+                : 'Please enter a rejection reason or pick a suggested reason',
+            );
+            setUpdating(false);
+            return;
+          }
+          ({ data } = await adminApi.reviewReturn(selectedId, payload.returnId, {
+            action: payload.action,
+            adminNote: rejectNote,
+          }));
+          if (payload.action === 'approve') {
+            toast.success(isAr ? 'تمت الموافقة — يمكنك متابعة مراحل الاسترجاع' : 'Return approved — continue return steps');
+          } else if (payload.action === 'reopen') {
+            toast.success(isAr ? 'تم إعادة الطلب للمراجعة' : 'Sent back to pending review');
+          } else if (payload.action === 'reject' && payload.fromRejected) {
+            toast.success(isAr ? 'تم تحديث سبب الرفض' : 'Rejection reason updated');
+          } else {
+            toast.success(isAr ? 'تم رفض الإرجاع' : 'Return rejected');
+          }
+          break;
+        }
+        case 'returnFulfillment':
+          ({ data } = await adminApi.updateReturnFulfillment(
+            selectedId,
+            payload.returnId,
+            payload.fulfillmentStatus,
+          ));
+          toast.success(
+            payload.fulfillmentStatus === 'completed'
+              ? (isAr ? 'تم الاسترجاع — تم تحديث حالة الطلب' : 'Returned — order status synced')
+              : (isAr ? 'تم تحديث مرحلة الاسترجاع' : 'Return stage updated'),
+          );
+          break;
+        case 'invoice': {
+          const res = await adminApi.downloadInvoice(selectedId, isAr ? 'ar' : 'en');
+          downloadBlob(res.data, `invoice-${selected?.orderNumber || selectedId}.pdf`);
+          setUpdating(false);
+          return;
+        }
+        default:
+          return;
+      }
+      setSelected(data.order);
+      list.reload();
+      refreshStats();
+    } catch (err) {
+      toast.error(err.response?.data?.message || (isAr ? 'حدث خطأ' : 'Action failed'));
     } finally {
       setUpdating(false);
     }
@@ -99,115 +267,130 @@ export default function OrdersPage() {
     }
   };
 
-  const columns = [
-    {
-      key: 'orderNumber',
-      header: '#',
-      sortKey: 'orderNumber',
-      render: (order) => <span className="font-medium">{order.orderNumber}</span>,
-    },
-    {
-      key: 'customer',
-      header: isAr ? 'العميل' : 'Customer',
-      render: (order) => order.user?.name || order.phone,
-    },
-    {
-      key: 'total',
-      header: isAr ? 'المبلغ' : 'Total',
-      sortKey: 'total',
-      render: (order) => formatPrice(order.total),
-    },
-    {
-      key: 'status',
-      header: isAr ? 'الحالة' : 'Status',
-      render: (order) => (
-        <div className="flex flex-col gap-1">
-          <StatusBadge status={order.orderStatus || order.status} language={language} />
-          <PaymentStatusBadge status={order.paymentStatus} language={language} />
-        </div>
-      ),
-    },
-  ];
+  const handleClearFilters = () => {
+    Object.entries(INITIAL_FILTERS).forEach(([key, value]) => {
+      list.setFilter(key, value);
+    });
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-5">
-        <div className="xl:col-span-2">
-          <AdminListPage
-            isAr={isAr}
-            q={list.q}
-            onSearchChange={list.setQ}
-            searchPlaceholder={isAr ? 'بحث برقم الطلب أو الهاتف...' : 'Search order # or phone...'}
-            sort={list.sort}
-            onSort={list.toggleSort}
-            actions={(
-              <Button variant="secondary" size="sm" onClick={handleExport} disabled={exporting}>
-                <Download className="h-4 w-4" />
-                {isAr ? 'تصدير CSV' : 'Export CSV'}
-              </Button>
-            )}
-            filters={(
-              <>
-                <ListFilterSelect
-                  label={isAr ? 'حالة الطلب' : 'Order status'}
-                  value={list.filters.orderStatus}
-                  onChange={(v) => list.setFilter('orderStatus', v)}
-                  options={[
-                    { value: '', label: isAr ? 'كل الحالات' : 'All statuses' },
-                    ...ORDER_STATUSES.map((s) => ({
-                      value: s.value,
-                      label: isAr ? s.labelAr : s.labelEn,
-                    })),
-                  ]}
-                />
-                <ListFilterSelect
-                  label={isAr ? 'الدفع' : 'Payment'}
-                  value={list.filters.paymentStatus}
-                  onChange={(v) => list.setFilter('paymentStatus', v)}
-                  options={[
-                    { value: '', label: isAr ? 'الكل' : 'All' },
-                    ...PAYMENT_STATUSES.map((s) => ({
-                      value: s.value,
-                      label: isAr ? s.labelAr : s.labelEn,
-                    })),
-                  ]}
-                />
-                <input
-                  type="date"
-                  value={list.filters.dateFrom}
-                  onChange={(e) => list.setFilter('dateFrom', e.target.value)}
-                  className="rounded-xl border border-border px-3 py-2 text-sm"
-                  aria-label={isAr ? 'من تاريخ' : 'From date'}
-                />
-                <input
-                  type="date"
-                  value={list.filters.dateTo}
-                  onChange={(e) => list.setFilter('dateTo', e.target.value)}
-                  className="rounded-xl border border-border px-3 py-2 text-sm"
-                  aria-label={isAr ? 'إلى تاريخ' : 'To date'}
-                />
-              </>
-            )}
-            columns={columns}
-            data={list.data}
-            loading={list.loading}
-            onRowClick={handleSelectOrder}
-            rowClassName={(order) => (selectedId === order._id ? 'bg-primary-50' : '')}
-            pagination={list.pagination}
-            onPageChange={list.setPage}
-            emptyIcon={ShoppingCart}
-            emptyTitle={isAr ? 'لا توجد طلبات' : 'No orders'}
-          />
+    <div className="flex h-[calc(100vh-7.5rem)] min-h-[560px] flex-col">
+      {(pendingOrdersCount > 0 || ordersUnreadMessagesCount > 0) && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {pendingOrdersCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+              {pendingOrdersCount}
+              {' '}
+              {isAr ? 'بانتظار المعالجة' : 'awaiting action'}
+            </span>
+          )}
+          {ordersUnreadMessagesCount > 0 && (
+            <Link
+              to="/admin/order-chats"
+              className="inline-flex items-center gap-1.5 rounded-full border border-rose-200/80 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-800 transition-colors hover:bg-rose-100"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              {ordersUnreadMessagesCount}
+              {' '}
+              {isAr ? 'رسالة جديدة' : 'new messages'}
+            </Link>
+          )}
         </div>
+      )}
 
-        <div className="rounded-2xl border border-border bg-white p-5 shadow-sm xl:col-span-3 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">
-          <OrderDetailPanel
-            order={selected}
-            loading={detailLoading}
-            isAr={isAr}
-            updating={updating}
-            onPatch={patchOrder}
-          />
+      <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/80 bg-white shadow-sm">
+        <OrdersListPanel
+          isAr={isAr}
+          language={language}
+          orders={list.data}
+          loading={list.loading}
+          selectedId={selectedId}
+          onSelect={handleSelectOrder}
+          q={list.q}
+          onSearchChange={list.setQ}
+          filters={list.filters}
+          onFilterChange={list.setFilter}
+          onClearFilters={handleClearFilters}
+          pagination={list.pagination}
+          onPageChange={list.setPage}
+          onRefresh={list.reload}
+          onExport={handleExport}
+          exporting={exporting}
+          className={mobileShowDetail ? 'hidden lg:flex' : 'flex'}
+        />
+
+        <div
+          className={[
+            'min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-slate-50/60',
+            !mobileShowDetail && !selectedId ? 'hidden lg:flex' : 'flex',
+          ].join(' ')}
+        >
+          {selectedId && (
+            <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="rounded-lg border border-border px-3 py-1.5 text-sm font-semibold text-text-muted hover:bg-slate-50"
+              >
+                {isAr ? '← القائمة' : '← List'}
+              </button>
+              {selected?.orderNumber && (
+                <span className="font-mono text-sm font-bold tabular-nums text-text">
+                  #{selected.orderNumber}
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="flex-1 p-4 lg:p-5">
+            {!selected && !detailLoading ? (
+              <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-6 py-12 text-center">
+                <div className="relative mb-6">
+                  <div className="absolute inset-0 rounded-2xl bg-primary-100/50 blur-xl" />
+                  <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-50 to-primary-100 text-primary-600 shadow-sm">
+                    <Package className="h-9 w-9" strokeWidth={1.5} />
+                  </div>
+                </div>
+                <h3 className="text-lg font-bold text-text">
+                  {isAr ? 'اختر طلباً من القائمة' : 'Select an order from the list'}
+                </h3>
+                <p className="mt-2 max-w-md text-sm leading-relaxed text-text-muted">
+                  {isAr
+                    ? 'انقر على أي طلب لعرض التفاصيل وتحديث الحالة والدفع والمحادثة والمرتجعات.'
+                    : 'Click any order to view details and manage status, payment, chat, and returns.'}
+                </p>
+                <div className="mt-8 grid max-w-sm grid-cols-3 gap-4 text-center">
+                  {[
+                    { icon: ShoppingCart, labelAr: 'تحديث الحالة', labelEn: 'Update status' },
+                    { icon: MessageCircle, labelAr: 'المحادثة', labelEn: 'Chat' },
+                    { icon: Package, labelAr: 'المرتجعات', labelEn: 'Returns' },
+                  ].map(({ icon: Icon, labelAr, labelEn }) => (
+                    <div key={labelEn} className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-border/60">
+                      <Icon className="mx-auto h-5 w-5 text-primary-600" strokeWidth={1.5} />
+                      <p className="mt-1.5 text-[11px] font-medium text-text-muted">
+                        {isAr ? labelAr : labelEn}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mx-auto w-full max-w-4xl">
+                <OrderDetailPanel
+                  order={detailOrder}
+                  loading={detailLoading}
+                  isAr={isAr}
+                  updating={updating || chatSending}
+                  drivers={drivers}
+                  highlightChat={highlightChat}
+                  onDismissChatHighlight={() => setHighlightChat(false)}
+                  onPatch={patchOrder}
+                  onAction={handleOrderAction}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

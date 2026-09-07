@@ -9,8 +9,10 @@ import { initCloudinary } from './utils/cloudinaryUpload.js';
 import { configureStripe } from './config/stripe.js';
 import { configureNodemailer } from './config/nodemailer.js';
 import { configureSms } from './config/sms.js';
+import { logMobileAccessHints } from './utils/lanAddress.js';
 
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5001;
+const FRONTEND_PORT = Number(process.env.FRONTEND_PORT) || 5173;
 
 const startServer = async () => {
   try {
@@ -22,9 +24,10 @@ const startServer = async () => {
     configureNodemailer();
     configureSms();
 
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`API running on http://localhost:${PORT} (all interfaces)`);
       console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      logMobileAccessHints({ frontendPort: FRONTEND_PORT, apiPort: PORT });
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);

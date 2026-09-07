@@ -5,7 +5,25 @@ const RECOMMENDED_IN_PRODUCTION = [
   'STRIPE_WEBHOOK_SECRET',
 ];
 
+const DEV_DEFAULTS = {
+  MONGODB_URI: 'mongodb://127.0.0.1:27017/marketplus',
+  JWT_SECRET: 'dev_jwt_secret_at_least_32_characters_long',
+};
+
+/** Apply safe local defaults so `npm run dev` works before copying .env.example */
+function applyDevEnvDefaults() {
+  if (process.env.NODE_ENV === 'production') return;
+  Object.entries(DEV_DEFAULTS).forEach(([key, value]) => {
+    if (!process.env[key]?.trim()) {
+      process.env[key] = value;
+      console.warn(`[env] Using development default for ${key}`);
+    }
+  });
+}
+
 export const validateEnv = () => {
+  applyDevEnvDefaults();
+
   const missing = REQUIRED.filter((key) => !process.env[key]?.trim());
 
   if (missing.length) {

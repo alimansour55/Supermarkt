@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, Package, ShoppingCart } from 'lucide-react';
+import { Bell, MessageCircle, Package, ShoppingCart } from 'lucide-react';
 import { adminApi } from '../adminApi';
 import { formatRelativeTime } from '../../utils/formatters';
 
 const TYPE_ICONS = {
   new_order: ShoppingCart,
   low_stock: Package,
+  order_customer_message: MessageCircle,
 };
+
+function notificationIconClass(type) {
+  if (type === 'low_stock') return 'bg-amber-100 text-amber-700';
+  if (type === 'order_customer_message') return 'bg-rose-100 text-rose-700';
+  return 'bg-primary-100 text-primary-700';
+}
 
 export default function NotificationBell({ isAr, onUnreadChange }) {
   const [open, setOpen] = useState(false);
@@ -106,7 +113,7 @@ export default function NotificationBell({ isAr, onUnreadChange }) {
                 const Icon = TYPE_ICONS[n.type] || Bell;
                 const content = (
                   <div className="flex gap-3">
-                    <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${n.type === 'low_stock' ? 'bg-amber-100 text-amber-700' : 'bg-primary-100 text-primary-700'}`}>
+                    <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${notificationIconClass(n.type)}`}>
                       <Icon className="h-4 w-4" />
                     </span>
                     <div className="min-w-0 flex-1">

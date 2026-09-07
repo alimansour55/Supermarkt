@@ -52,6 +52,30 @@ export function AuthProvider({ children }) {
     setError(null);
     const { data } = await authService.verifyOtp(payload);
     skipNextFetch.current = true;
+    sessionStorage.setItem(STORAGE_KEYS.PENDING_CART_MERGE, '1');
+    setToken(data.token);
+    setUser(data.user);
+    setLoading(false);
+    return data;
+  };
+
+  const adminLogin = async (username, password) => {
+    setError(null);
+    const payload = password !== undefined
+      ? { username, password }
+      : { password: username };
+    const { data } = await authService.adminLogin(payload);
+    skipNextFetch.current = true;
+    setToken(data.token);
+    setUser(data.user);
+    setLoading(false);
+    return data;
+  };
+
+  const driverLogin = async (username, password) => {
+    setError(null);
+    const { data } = await authService.driverLogin({ username, password });
+    skipNextFetch.current = true;
     setToken(data.token);
     setUser(data.user);
     setLoading(false);
@@ -86,6 +110,8 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!user,
       sendOtp,
       verifyOtp,
+      adminLogin,
+      driverLogin,
       resendOtp,
       logout,
       setError,

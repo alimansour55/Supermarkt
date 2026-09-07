@@ -1,31 +1,36 @@
-export default function ProductGridSkeleton({ count = 8, compact = false }) {
+import { Skeleton } from '../ui/Skeleton';
+import { tileGridClass } from '../../utils/tileGridShared';
+
+export default function ProductGridSkeleton({ count = 8, layout = 'scroll', columns = 4 }) {
   const items = Array.from({ length: count }, (_, i) => i);
 
-  if (compact) {
+  if (layout === 'scroll') {
     return (
-      <div className="flex gap-4 overflow-hidden pb-2">
+      <div className="flex gap-3 overflow-hidden pb-2">
         {items.map((i) => (
-          <div key={i} className="min-w-[168px] shrink-0 animate-pulse rounded-xl border border-border bg-white p-3">
-            <div className="aspect-square rounded-lg bg-slate-200" />
-            <div className="mt-3 h-4 w-full rounded bg-slate-200" />
-            <div className="mt-2 h-3 w-2/3 rounded bg-slate-100" />
-            <div className="mt-3 h-9 w-full rounded-lg bg-slate-200" />
+          <div key={i} className="min-w-[156px] max-w-[176px] shrink-0 overflow-hidden rounded-[7px] border border-[#bed0e4] bg-white">
+            <Skeleton className="h-[132px] rounded-none sm:h-[156px]" />
+            <div className="space-y-2 p-2">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-2.5 w-14" />
+              <Skeleton className="h-4 w-16" />
+            </div>
           </div>
         ))}
       </div>
     );
   }
 
+  const gridCols = layout === 'grid' ? columns : Math.min(columns, 4);
+
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+    <div className={`grid gap-3 ${tileGridClass(gridCols)}`}>
       {items.map((i) => (
-        <div key={i} className="animate-pulse overflow-hidden rounded-xl border border-border bg-white">
-          <div className="aspect-square bg-slate-200" />
-          <div className="space-y-2 p-3">
-            <div className="h-4 w-full rounded bg-slate-200" />
-            <div className="h-3 w-4/5 rounded bg-slate-100" />
-            <div className="mt-2 h-3 w-1/2 rounded bg-slate-100" />
-            <div className="mt-3 h-10 w-full rounded-lg bg-slate-200" />
+        <div key={i} className="overflow-hidden rounded-[7px] border border-[#bed0e4] bg-white">
+          <Skeleton className="h-[132px] rounded-none sm:h-[156px] lg:h-[176px]" />
+          <div className="space-y-2 p-2.5">
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-5 w-20" />
           </div>
         </div>
       ))}

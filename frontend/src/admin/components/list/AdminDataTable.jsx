@@ -48,9 +48,9 @@ export default function AdminDataTable({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="max-h-[68vh] overflow-auto">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-text-muted">
+        <thead className="sticky top-0 z-10 border-b border-border bg-slate-50 text-text-muted">
           <tr>
             {selectable && (
               <th className="w-10 px-4 py-3">
@@ -66,7 +66,7 @@ export default function AdminDataTable({
               <th
                 key={col.key}
                 className={[
-                  'px-4 py-3 font-medium',
+                  'whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500',
                   col.align === 'end' ? 'text-end' : 'text-start',
                   col.headerClassName || '',
                 ].join(' ')}
@@ -75,7 +75,7 @@ export default function AdminDataTable({
                   <button
                     type="button"
                     onClick={() => onSort(col.sortKey)}
-                    className="inline-flex items-center gap-1 hover:text-text"
+                    className="inline-flex items-center gap-1 normal-case tracking-normal hover:text-text"
                   >
                     {col.header}
                     <SortIcon field={col.sortKey} sort={sort} />
@@ -86,26 +86,29 @@ export default function AdminDataTable({
               </th>
             ))}
             {rowActions && (
-              <th className="w-12 px-4 py-3 text-end">{isAr ? 'إجراءات' : 'Actions'}</th>
+              <th className="w-12 px-4 py-3 text-end">
+                <span className="sr-only">{isAr ? 'إجراءات' : 'Actions'}</span>
+              </th>
             )}
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
           {data.map((row) => {
-            const id = row[keyField] ?? row.id;
+            const id = row[keyField] ?? row.id ?? row.code;
             const selected = selectedIds.includes(id);
             return (
               <tr
                 key={id}
                 className={[
+                  'transition-colors',
                   onRowClick ? 'cursor-pointer hover:bg-slate-50' : 'hover:bg-slate-50/80',
-                  selected ? 'bg-primary-50/50' : '',
+                  selected ? 'bg-primary-50/50 hover:bg-primary-50/70' : '',
                   rowClassName?.(row) || '',
                 ].join(' ')}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {selectable && (
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selected}
@@ -118,7 +121,7 @@ export default function AdminDataTable({
                   <td
                     key={col.key}
                     className={[
-                      'px-4 py-3',
+                      'px-4 py-3.5 align-middle',
                       col.align === 'end' ? 'text-end' : 'text-start',
                       col.cellClassName || '',
                     ].join(' ')}
@@ -127,7 +130,7 @@ export default function AdminDataTable({
                   </td>
                 ))}
                 {rowActions && (
-                  <td className="px-4 py-3 text-end" onClick={(e) => e.stopPropagation()}>
+                  <td className="px-4 py-3.5 text-end" onClick={(e) => e.stopPropagation()}>
                     <RowActionsMenu items={rowActions(row)} isAr={isAr} />
                   </td>
                 )}

@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { STAFF_ROLES } from '../constants/roles.js';
+import { ALL_PERMISSIONS } from '../constants/permissions.js';
+import geoFields from '../schemas/geoFields.js';
 
 const addressSchema = new mongoose.Schema(
   {
@@ -13,8 +16,48 @@ const addressSchema = new mongoose.Schema(
     area: { type: String, trim: true },
     postalCode: { type: String, trim: true },
     isDefault: { type: Boolean, default: false },
+    ...geoFields,
   },
   { _id: true },
+);
+
+const pointsHistorySchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ['earn', 'redeem', 'adjust', 'expire', 'refund'],
+      required: true,
+    },
+    points: {
+      type: Number,
+      required: true,
+    },
+    order: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Order',
+      default: null,
+    },
+    amount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    note: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    adjustedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    expiresAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  { _id: true, timestamps: { createdAt: true, updatedAt: false } },
 );
 
 const userSchema = new mongoose.Schema(
@@ -25,17 +68,20 @@ const userSchema = new mongoose.Schema(
       trim: true,
       maxlength: 100,
     },
+    username: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      minlength: 3,
+      maxlength: 32,
+      match: [/^[a-z0-9._-]+$/, 'Username may only contain letters, numbers, dots, hyphens, and underscores'],
+    },
     phone: {
       type: String,
-      required: [true, 'Phone number is required'],
-      unique: true,
       trim: true,
-      index: true,
     },
     email: {
       type: String,
-      sparse: true,
-      unique: true,
       lowercase: true,
       trim: true,
     },
@@ -46,8 +92,28 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['user', 'manager', 'admin', 'super_admin'],
+      enum: ['user', 'manager', 'admin', 'super_admin', 'driver'],
       default: 'user',
+    },
+    permissions: {
+      type: [{
+        type: String,
+        enum: ALL_PERMISSIONS,
+      }],
+      default: [],
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
     isPhoneVerified: {
       type: Boolean,
@@ -99,6 +165,26 @@ const userSchema = new mongoose.Schema(
       type: [addressSchema],
       default: [],
     },
+    favorites: {
+      type: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product',
+      }],
+      default: [],
+    },
+    pointsBalance: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    pointsHistory: {
+      type: [pointsHistorySchema],
+      default: [],
+    },
+    reviewBlocked: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -106,6 +192,14 @@ const userSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   },
 );
+
+userSchema.pre('validate', function requirePhoneForCustomers(next) {
+  const isStaffWithUsername = STAFF_ROLES.includes(this.role) && this.username;
+  if (!isStaffWithUsername && !this.phone) {
+    this.invalidate('phone', 'Phone number is required');
+  }
+  next();
+});
 
 userSchema.pre('save', async function hashPassword(next) {
   if (!this.isModified('password') || !this.password) return next();
@@ -150,6 +244,19 @@ userSchema.methods.verifyPhoneOtp = function verifyPhoneOtp(code) {
   this.mfaEnabled = true;
   return { ok: true };
 };
+
+userSchema.index(
+  { email: 1 },
+  { unique: true, partialFilterExpression: { email: { $type: 'string', $gt: '' } } },
+);
+userSchema.index(
+  { phone: 1 },
+  { unique: true, partialFilterExpression: { phone: { $type: 'string', $gt: '' } } },
+);
+userSchema.index(
+  { username: 1 },
+  { unique: true, partialFilterExpression: { username: { $type: 'string', $gt: '' } } },
+);
 
 const User = mongoose.model('User', userSchema);
 

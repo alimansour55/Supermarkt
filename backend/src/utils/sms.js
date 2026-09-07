@@ -1,4 +1,3 @@
-import twilio from 'twilio';
 import { AppError } from './AppError.js';
 import { twilioClient, isSmsConfigured, getTwilioPhoneNumber } from '../config/sms.js';
 

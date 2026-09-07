@@ -47,6 +47,20 @@
   ::selection {
     @apply bg-primary-200 text-primary-900;
   }
+
+  html.theme-rotating {
+    transition:
+      --color-primary-50 0.7s ease,
+      --color-primary-100 0.7s ease,
+      --color-primary-200 0.7s ease,
+      --color-primary-300 0.7s ease,
+      --color-primary-400 0.7s ease,
+      --color-primary-500 0.7s ease,
+      --color-primary-600 0.7s ease,
+      --color-primary-700 0.7s ease,
+      --color-primary-800 0.7s ease,
+      --color-primary-900 0.7s ease;
+  }
 }
 
 @layer utilities {
@@ -76,5 +90,282 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background: var(--color-border);
     border-radius: 9999px;
+  }
+
+  .skeleton {
+    @apply rounded-lg bg-slate-200;
+    background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .mega-menu-panel {
+    animation: megaMenuIn 0.22s ease-out;
+  }
+
+  @keyframes megaMenuIn {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .card-surface {
+    @apply rounded-2xl border border-border bg-white shadow-sm;
+  }
+
+  .card-stepper-shell {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .card-stepper-btn {
+    @apply transition-all duration-200 ease-in-out;
+  }
+
+  .card-stepper-btn:focus-visible {
+    @apply relative z-10 outline-none ring-2 ring-primary-300 ring-inset;
+  }
+
+  .card-stepper-qty:focus-visible {
+    @apply relative z-10 outline-none ring-2 ring-white/85 ring-inset;
+  }
+
+  .card-qty-pop {
+    animation: cardQtyPop 0.24s ease-out;
+  }
+
+  .card-cart-control-enter {
+    animation: cardCartControlEnter 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @keyframes cardQtyPop {
+    0% {
+      transform: scale(0.7);
+      opacity: 0.45;
+    }
+    65% {
+      transform: scale(1.1);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes cardCartControlEnter {
+    from {
+      opacity: 0;
+      transform: scale(0.78) translateX(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateX(0);
+    }
+  }
+
+  .section-gap {
+    @apply py-6 md:py-8;
+  }
+
+  /* Google Places autocomplete dropdown — legacy widget */
+  .pac-container {
+    z-index: 10000 !important;
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 10px 25px rgb(15 23 42 / 0.12);
+    margin-top: 4px;
+    font-family: var(--font-sans);
+  }
+
+  .pac-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    line-height: 1.4;
+  }
+
+  .pac-item:hover,
+  .pac-item-selected {
+    background: var(--color-primary-50);
+  }
+
+  /* Places API (New) — PlaceAutocompleteElement web component */
+  .address-search-host gmp-place-autocomplete {
+    width: 100%;
+    color-scheme: light;
+  }
+
+  .address-search-widget gmp-place-autocomplete {
+    display: block;
+    width: 100%;
+  }
+
+  /* Support chat widget */
+  .support-chat-panel {
+    animation: supportChatPanelIn 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    transform-origin: bottom right;
+    min-height: 0;
+  }
+
+  [dir='rtl'] .support-chat-panel {
+    transform-origin: bottom left;
+  }
+
+  /* Mobile: full-screen chat sheet synced to visual viewport (iOS keyboard) */
+  @media (max-width: 767px) {
+    .support-chat-mobile-sheet {
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      max-height: none;
+    }
+
+    .support-chat-mobile-sheet-panel {
+      animation: none;
+    }
+
+    .support-chat-address-form-mobile {
+      padding-bottom: 0.75rem;
+    }
+  }
+
+  .support-chat-cart-notice {
+    animation: supportChatNoticeIn 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @keyframes supportChatNoticeIn {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes supportChatPanelIn {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .support-chat-fab-pulse {
+    animation: supportChatFabPulse 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes supportChatFabPulse {
+    0% {
+      transform: scale(1);
+      opacity: 0.5;
+    }
+    70% {
+      transform: scale(1.4);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1.4);
+      opacity: 0;
+    }
+  }
+
+  .support-chat-launcher {
+    background: linear-gradient(
+      145deg,
+      var(--color-primary-400) 0%,
+      var(--color-primary-600) 52%,
+      var(--color-primary-800) 100%
+    );
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.18) inset,
+      0 1px 2px rgb(15 23 42 / 0.08),
+      0 10px 28px -6px color-mix(in srgb, var(--color-primary-600) 55%, transparent);
+    transition:
+      transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.35s ease;
+  }
+
+  .support-chat-launcher:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.24) inset,
+      0 4px 8px rgb(15 23 42 / 0.1),
+      0 16px 40px -8px color-mix(in srgb, var(--color-primary-600) 62%, transparent);
+  }
+
+  .support-chat-launcher:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  .support-chat-launcher-shine {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      105deg,
+      transparent 38%,
+      rgb(255 255 255 / 0.16) 50%,
+      transparent 62%
+    );
+    animation: supportChatLauncherShine 5s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes supportChatLauncherShine {
+    0%,
+    100% {
+      transform: translateX(-130%) skewX(-12deg);
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    50% {
+      transform: translateX(130%) skewX(-12deg);
+      opacity: 1;
+    }
+    85% {
+      opacity: 0;
+    }
+  }
+
+  .support-chat-fab-orb {
+    background: linear-gradient(
+      145deg,
+      var(--color-primary-400) 0%,
+      var(--color-primary-600) 52%,
+      var(--color-primary-800) 100%
+    );
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.18) inset,
+      0 8px 24px -6px color-mix(in srgb, var(--color-primary-600) 55%, transparent);
+    transition:
+      transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.35s ease;
+  }
+
+  .support-chat-fab-orb:hover {
+    transform: translateY(-2px) scale(1.04);
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.24) inset,
+      0 14px 36px -8px color-mix(in srgb, var(--color-primary-600) 62%, transparent);
+  }
+
+  .support-chat-fab-orb:active {
+    transform: translateY(0) scale(0.96);
   }
 }

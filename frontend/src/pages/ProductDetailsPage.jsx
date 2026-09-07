@@ -1,39 +1,50 @@
 import { useParams, Link } from 'react-router-dom';
-import { useState, useMemo } from 'react';
-import { Minus, Plus, ShoppingCart } from 'lucide-react';
+import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
+import { Heart, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
-import { fetchProduct, fetchProductsByCategory } from '../services/productApi';
+import { useFavorites } from '../context/FavoritesContext';
+import { fetchProductsByCategory } from '../services/productApi';
+import { useProduct } from '../hooks/useProduct';
 import { useAsyncData } from '../hooks/useAsyncData';
-import { getDiscountPercent } from '../data/mockData';
+import { getDiscountPercent, getPromotionHighlight, getProductAvailableStock } from '../utils/productHelpers';
 import { formatPrice } from '../utils/formatters';
 import ProductGrid from '../components/product/ProductGrid';
+import ProductVariantPicker, { getSelectedVariantLine, buildCartProduct } from '../components/product/ProductVariantPicker';
 import Button from '../components/ui/Button';
+import ProductImage from '../components/ui/ProductImage';
+import { Skeleton } from '../components/ui/Skeleton';
+import { scrollToSection } from '../utils/scrollToTop';
+import { isVideoUrl } from '../utils/imageHelpers';
+import SecondItemPriceHighlight from '../components/promo/SecondItemPriceHighlight';
 
-function isImageUrl(src) {
-  return typeof src === 'string' && (src.startsWith('http') || src.startsWith('/'));
-}
+const ProductReviewsSection = lazy(() => import('../components/product/ProductReviewsSection'));
 
-function getGalleryImages(product) {
+function getGalleryMedia(product) {
   const raw = product.images?.length
     ? product.images
     : product.image
       ? [product.image]
       : [];
-  const urls = raw.filter(isImageUrl);
-  return urls.length ? urls : [];
+  const types = product.mediaTypes || [];
+  return raw
+    .filter((src) => typeof src === 'string' && (src.startsWith('http') || src.startsWith('/')))
+    .map((url, index) => ({
+      url,
+      type: types[index] || (isVideoUrl(url) ? 'video' : 'image'),
+    }));
 }
 
 function ProductDetailSkeleton() {
   return (
-    <div className="container-app animate-pulse py-8 pb-36 lg:pb-8">
+    <div className="container-app py-6 pb-36 lg:py-8 lg:pb-8">
       <div className="grid gap-8 lg:grid-cols-2">
-        <div className="aspect-square rounded-3xl bg-slate-200" />
+        <Skeleton className="aspect-square rounded-3xl" />
         <div className="space-y-4">
-          <div className="h-8 w-3/4 rounded bg-slate-200" />
-          <div className="h-4 w-1/2 rounded bg-slate-100" />
-          <div className="h-10 w-1/3 rounded bg-slate-200" />
-          <div className="hidden h-12 w-full rounded-xl bg-slate-200 lg:block" />
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-10 w-1/3" />
+          <Skeleton className="hidden h-12 w-full rounded-xl lg:block" />
         </div>
       </div>
     </div>
@@ -44,22 +55,59 @@ export default function ProductDetailsPage() {
   const { slug } = useParams();
   const { language } = useLanguage();
   const { addItem } = useCart();
-  const { data: product, loading } = useAsyncData(() => fetchProduct(slug), [slug]);
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const { product, loading, refetch } = useProduct(slug);
+  const needsCategoryFallback = Boolean(
+    product && !product.relatedProducts?.length && (product.category || product.categorySlug),
+  );
   const { data: relatedData } = useAsyncData(
-    () => product ? fetchProductsByCategory(product.category || product.categorySlug) : Promise.resolve({ products: [] }),
-    [product?.category, product?.categorySlug],
+    () => (needsCategoryFallback
+      ? fetchProductsByCategory(product.category || product.categorySlug, { limit: 8 })
+      : Promise.resolve({ products: [] })),
+    [needsCategoryFallback, product?.category, product?.categorySlug],
   );
   const [quantity, setQuantity] = useState(1);
+  const [selectedVariant, setSelectedVariant] = useState(null);
   const [added, setAdded] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const isAr = language === 'ar';
 
-  const galleryImages = useMemo(
-    () => (product ? getGalleryImages(product) : []),
+  useEffect(() => {
+    if (!product?.variants?.length) {
+      setSelectedVariant(null);
+      return;
+    }
+    const def = product.variants.find((v) => v.isDefault) || product.variants[0];
+    setSelectedVariant(def);
+  }, [product?._id, product?.variants]);
+
+  const line = useMemo(
+    () => (product ? getSelectedVariantLine(product, selectedVariant) : null),
+    [product, selectedVariant],
+  );
+
+  const displayPrice = line?.price ?? product?.price ?? 0;
+  const inStock = line?.inStock ?? product?.inStock;
+  const maxStock = line?.availableStock ?? getProductAvailableStock(product, line?.variantId);
+
+  useEffect(() => {
+    if (maxStock != null && maxStock > 0) {
+      setQuantity((current) => Math.min(current, maxStock));
+    }
+  }, [maxStock, product?._id, line?.variantId]);
+
+  const galleryMedia = useMemo(
+    () => (product ? getGalleryMedia(product) : []),
     [product],
   );
 
-  if (loading) return <ProductDetailSkeleton />;
+  const similar = useMemo(() => {
+    if (!product) return [];
+    if (product.relatedProducts?.length) return product.relatedProducts.slice(0, 6);
+    return (relatedData?.products || []).filter((p) => p._id !== product._id).slice(0, 6);
+  }, [product, relatedData]);
+
+  if (loading && !product) return <ProductDetailSkeleton />;
 
   if (!product) {
     return (
@@ -72,12 +120,16 @@ export default function ProductDetailsPage() {
 
   const name = isAr ? product.name : product.nameEn;
   const description = isAr ? product.descriptionAr || product.description : product.descriptionEn || product.description;
-  const discount = getDiscountPercent(product);
-  const related = (relatedData?.products || []).filter((p) => p._id !== product._id).slice(0, 6);
-  const mainImage = galleryImages[activeImage] || galleryImages[0];
+  const discount = getDiscountPercent({ ...product, price: displayPrice });
+  const promotion = getPromotionHighlight({ ...product, price: displayPrice }, language);
+  const compareAtPrice = product.compareAtPrice ?? product.oldPrice;
+  const fbt = (product.frequentlyBoughtTogetherProducts || []).slice(0, 4);
+  const mainMedia = galleryMedia[activeImage] || galleryMedia[0];
+  const mainImage = mainMedia?.type === 'image' ? mainMedia.url : null;
+  const favorited = isFavorite(product._id);
 
   const handleAdd = (openDrawer = true) => {
-    addItem(product, quantity, openDrawer);
+    addItem(buildCartProduct(product, line), quantity, openDrawer);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   };
@@ -95,8 +147,12 @@ export default function ProductDetailsPage() {
       <span className="w-10 text-center font-semibold">{quantity}</span>
       <button
         type="button"
-        onClick={() => setQuantity(quantity + 1)}
-        className="flex h-11 w-11 items-center justify-center hover:bg-surface active:bg-slate-100"
+        onClick={() => setQuantity((q) => {
+          const next = q + 1;
+          return maxStock != null ? Math.min(next, maxStock) : next;
+        })}
+        disabled={maxStock != null && quantity >= maxStock}
+        className="flex h-11 w-11 items-center justify-center hover:bg-surface active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
         aria-label={isAr ? 'زيادة' : 'Increase'}
       >
         <Plus className="h-5 w-5" />
@@ -108,28 +164,78 @@ export default function ProductDetailsPage() {
     <div className="container-app py-6 pb-36 lg:py-8 lg:pb-8">
       <div className="grid gap-8 lg:grid-cols-2">
         <div>
-          <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-slate-50 to-slate-100">
-            {mainImage ? (
-              <img src={mainImage} alt={name} className="h-full w-full object-contain p-6" loading="eager" />
+          <div className="relative aspect-square overflow-hidden rounded-3xl bg-slate-50">
+            {mainMedia?.type === 'video' ? (
+              <video
+                key={mainMedia.url}
+                src={mainMedia.url}
+                className="h-full w-full object-contain"
+                controls
+                playsInline
+                preload="metadata"
+              />
             ) : (
-              <span className="text-[120px]">{product.emoji || '🛍️'}</span>
+              <ProductImage
+                src={mainImage}
+                alt={name}
+                className="h-full w-full"
+                imgClassName="h-full w-full object-contain p-6"
+              />
             )}
-            {discount > 0 && (
+            {promotion && (
+              <span className={`absolute start-4 top-4 rounded-xl px-3 py-1.5 text-sm font-bold text-white shadow-md ${promotion.className}`}>
+                {promotion.icon ? `${promotion.icon} ` : ''}{promotion.label}
+              </span>
+            )}
+            {!promotion && discount > 0 && (
               <span className="absolute start-4 top-4 rounded-xl bg-red-500 px-3 py-1 text-sm font-bold text-white">-{discount}%</span>
             )}
+            <button
+              type="button"
+              onClick={() => toggleFavorite(product._id, product)}
+              className={[
+                'absolute end-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow-md',
+                'active:scale-95 transition-transform',
+                favorited ? 'text-red-500' : 'text-text-muted hover:text-red-400',
+              ].join(' ')}
+              aria-label={favorited ? (isAr ? 'إزالة من المفضلة' : 'Remove from favorites') : (isAr ? 'أضف للمفضلة' : 'Add to favorites')}
+            >
+              <Heart className={`h-5 w-5 ${favorited ? 'fill-current' : ''}`} />
+            </button>
           </div>
-          {galleryImages.length > 1 && (
+          {galleryMedia.length > 1 && (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {galleryImages.map((src, index) => (
+              {galleryMedia.map((item, index) => (
                 <button
-                  key={`${src}-${index}`}
+                  key={`${item.url}-${index}`}
                   type="button"
                   onClick={() => setActiveImage(index)}
-                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-white p-1 ${
+                  className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-white p-1 ${
                     activeImage === index ? 'border-primary-600' : 'border-border'
                   }`}
                 >
-                  <img src={src} alt="" loading="lazy" className="h-full w-full object-contain" />
+                  {item.type === 'video' ? (
+                    <>
+                      <video
+                        src={item.url}
+                        className="h-full w-full object-cover"
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+                      <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 text-[10px] font-bold text-white">
+                        ▶
+                      </span>
+                    </>
+                  ) : (
+                    <ProductImage
+                      src={item.url}
+                      alt=""
+                      className="h-full w-full"
+                      imgClassName="h-full w-full object-contain"
+                      placeholderClassName="scale-50"
+                    />
+                  )}
                 </button>
               ))}
             </div>
@@ -138,34 +244,104 @@ export default function ProductDetailsPage() {
         <div>
           <h1 className="text-2xl font-bold md:text-3xl">{name}</h1>
           <p className="mt-1 text-sm text-text-muted">{product.unit}</p>
-          <div className="mt-2 flex items-center gap-1 text-amber-500">
-            {'★'.repeat(Math.floor(product.rating || 0))}
-            <span className="text-sm text-text-muted">({product.rating})</span>
-          </div>
+          {product.reviewCount > 0 && product.rating > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <div className="flex items-center gap-1 text-amber-500">
+                {'★'.repeat(Math.floor(product.rating || 0))}
+                <span className="text-sm text-text-muted">
+                  ({Number(product.rating).toFixed(1)} · {product.reviewCount} {isAr ? 'تقييم' : 'reviews'})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => scrollToSection('product-reviews', 'smooth')}
+                className="text-sm font-semibold text-primary-600 underline-offset-2 transition-colors hover:text-primary-700 hover:underline"
+              >
+                {isAr ? 'عرض التعليقات' : 'See comments'}
+              </button>
+            </div>
+          )}
           {description && (
             <p className="mt-4 text-sm leading-relaxed text-text-muted">{description}</p>
           )}
-          <div className="mt-6 flex items-baseline gap-3">
-            <span className="text-3xl font-bold text-primary-700">{formatPrice(product.price)}</span>
-            {product.compareAtPrice && (
-              <span className="text-lg text-text-muted line-through">{formatPrice(product.compareAtPrice)}</span>
+          {product.sku && (
+            <p className="mt-2 text-xs text-text-muted">SKU: {line?.sku || product.sku}</p>
+          )}
+          <ProductVariantPicker
+            product={product}
+            selectedVariantId={selectedVariant?._id}
+            onSelect={setSelectedVariant}
+            isAr={isAr}
+          />
+          {product.specs?.length > 0 && (
+            <div className="mt-6 rounded-2xl border border-border bg-white p-4">
+              <h2 className="mb-3 text-sm font-bold">{isAr ? 'المواصفات' : 'Specifications'}</h2>
+              <dl className="divide-y divide-border text-sm">
+                {product.specs.map((spec, i) => (
+                  <div key={i} className="flex justify-between gap-4 py-2">
+                    <dt className="text-text-muted">{isAr ? spec.keyAr || spec.keyEn : spec.keyEn || spec.keyAr}</dt>
+                    <dd className="font-medium text-end">{isAr ? spec.valueAr || spec.valueEn : spec.valueEn || spec.valueAr}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+          <div className="mt-6 w-full text-right">
+            {promotion?.type === 'second_percent_off' ? (
+              <div className={`mb-3 ${isAr ? 'flex justify-end' : 'flex justify-start'}`}>
+                <SecondItemPriceHighlight item={{ ...product, price: displayPrice }} isAr={isAr} />
+              </div>
+            ) : promotion?.sublabel && (
+              <p className="mb-2 inline-flex rounded-xl bg-violet-50 px-3 py-1.5 text-sm font-semibold text-violet-800">
+                {promotion.sublabel}
+              </p>
             )}
+            <div className="inline-flex items-baseline gap-3 tabular-nums" dir="ltr">
+              {compareAtPrice != null && Number(compareAtPrice) > Number(displayPrice) && (
+                <span className="text-lg text-text-muted line-through">{formatPrice(compareAtPrice)}</span>
+              )}
+              <span className="text-3xl font-bold text-primary-700">{formatPrice(displayPrice)}</span>
+            </div>
           </div>
-          <div className="mt-6 hidden items-center gap-4 lg:flex">
+          <div className="mt-6 hidden items-center gap-3 lg:flex">
             {qtyControl}
-            <Button onClick={() => handleAdd(true)} disabled={!product.inStock} size="lg" className="flex-1">
+            <Button onClick={() => handleAdd(true)} disabled={!inStock} size="lg" className="flex-1">
               {added ? (isAr ? '✓ تمت الإضافة' : '✓ Added') : (isAr ? 'أضف للسلة' : 'Add to Cart')}
             </Button>
+            <button
+              type="button"
+              onClick={() => toggleFavorite(product._id, product)}
+              className={[
+                'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition-colors',
+                favorited
+                  ? 'border-red-200 bg-red-50 text-red-500'
+                  : 'border-border text-text-muted hover:border-red-200 hover:text-red-400',
+              ].join(' ')}
+              aria-label={favorited ? (isAr ? 'إزالة من المفضلة' : 'Remove from favorites') : (isAr ? 'أضف للمفضلة' : 'Add to favorites')}
+            >
+              <Heart className={`h-5 w-5 ${favorited ? 'fill-current' : ''}`} />
+            </button>
           </div>
         </div>
       </div>
 
-      {related.length > 0 && (
+      {fbt.length > 0 && (
         <section className="mt-14">
-          <h2 className="mb-6 text-xl font-bold">{isAr ? 'منتجات مشابهة' : 'Related Products'}</h2>
-          <ProductGrid products={related} />
+          <h2 className="mb-6 text-xl font-bold">{isAr ? 'يُشترى معاً بكثرة' : 'Frequently bought together'}</h2>
+          <ProductGrid products={fbt} />
         </section>
       )}
+
+      {similar.length > 0 && (
+        <section className="mt-14">
+          <h2 className="mb-6 text-xl font-bold">{isAr ? 'منتجات مشابهة' : 'Similar products'}</h2>
+          <ProductGrid products={similar} />
+        </section>
+      )}
+
+      <Suspense fallback={<Skeleton className="mt-14 h-48 rounded-2xl" />}>
+        <ProductReviewsSection product={product} isAr={isAr} onSubmitted={refetch} />
+      </Suspense>
 
       <div
         className="fixed inset-x-0 z-40 border-t border-border bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-md lg:hidden"
@@ -176,14 +352,16 @@ export default function ProductDetailsPage() {
           <button
             type="button"
             onClick={() => handleAdd(false)}
-            disabled={!product.inStock}
+            disabled={!inStock}
             className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3 text-sm font-bold text-white active:scale-[0.98] disabled:opacity-40"
           >
             <ShoppingCart className="h-5 w-5" aria-hidden />
             {added ? (isAr ? 'تمت الإضافة' : 'Added') : (isAr ? 'أضف للسلة' : 'Add to Cart')}
           </button>
         </div>
-        <p className="mt-1 text-center text-sm font-semibold text-primary-700">{formatPrice(product.price * quantity)}</p>
+        <p className="mt-1 w-full text-right text-sm font-semibold text-primary-700 tabular-nums">
+          {formatPrice(displayPrice * quantity)}
+        </p>
       </div>
     </div>
   );

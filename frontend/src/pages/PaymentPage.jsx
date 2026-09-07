@@ -3,7 +3,6 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { paymentService } from '../services/apiServices';
-import { formatPrice } from '../utils/formatters';
 import Loader from '../components/ui/Loader';
 import Button from '../components/ui/Button';
 

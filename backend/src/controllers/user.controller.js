@@ -1,18 +1,38 @@
 import User from '../models/User.js';
+import Order from '../models/Order.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { parsePagination, parseSort, paginationMeta } from '../utils/listQuery.js';
 import { STAFF_ROLES, canAssignRole } from '../constants/roles.js';
 import { logAudit, pickChanges } from '../services/auditLog.service.js';
+import { normalizePhone, formatPhoneDisplay } from '../utils/phone.js';
 
 const ADMIN_USER_SORT = ['createdAt', 'name', 'email'];
 
+function buildUserSummary(roleAgg) {
+  const byRole = Object.fromEntries(roleAgg.map((row) => [row._id, row.count]));
+  return {
+    total: roleAgg.reduce((sum, row) => sum + row.count, 0),
+    customers: byRole.user ?? 0,
+    staff: STAFF_ROLES.reduce((sum, role) => sum + (byRole[role] ?? 0), 0),
+    drivers: byRole.driver ?? 0,
+  };
+}
+
+function applyAccountTypeFilter(filter, accountType) {
+  if (accountType === 'customer') filter.role = 'user';
+  else if (accountType === 'staff') filter.role = { $in: STAFF_ROLES };
+  else if (accountType === 'driver') filter.role = 'driver';
+}
+
 export const getAdminUsers = asyncHandler(async (req, res) => {
-  const { role, q } = req.query;
+  const { role, q, accountType } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
   const filter = {};
 
   if (role) filter.role = role;
+  else applyAccountTypeFilter(filter, accountType);
+
   if (q) {
     filter.$or = [
       { name: { $regex: q, $options: 'i' } },
@@ -23,15 +43,63 @@ export const getAdminUsers = asyncHandler(async (req, res) => {
 
   const sort = parseSort(req.query, ADMIN_USER_SORT);
 
-  const [users, total] = await Promise.all([
+  const [users, total, roleAgg] = await Promise.all([
     User.find(filter).select('-password').sort(sort).skip(skip).limit(limit),
     User.countDocuments(filter),
+    User.aggregate([{ $group: { _id: '$role', count: { $sum: 1 } } }]),
   ]);
 
   res.json({
     success: true,
     data: users,
     pagination: paginationMeta(page, limit, total),
+    summary: buildUserSummary(roleAgg),
+  });
+});
+
+export const createAdminUser = asyncHandler(async (req, res) => {
+  const name = req.body.name?.trim();
+  const phone = normalizePhone(req.body.phone);
+  const role = req.body.role === 'driver' ? 'driver' : 'user';
+
+  if (!name) throw new AppError('Name is required', 400);
+  if (!phone) throw new AppError('Invalid Egyptian mobile number (e.g. 01xxxxxxxxx)', 400);
+
+  const existing = await User.findOne({ phone });
+  if (existing) {
+    throw new AppError('A user with this phone number already exists', 409);
+  }
+
+  const user = await User.create({
+    name,
+    phone,
+    role,
+    isPhoneVerified: true,
+    mfaEnabled: role === 'user',
+    isActive: true,
+    createdBy: req.user._id,
+  });
+
+  await logAudit({
+    req,
+    action: 'create',
+    entityType: 'user',
+    entityId: user._id,
+    entityLabel: user.name,
+    changes: { name: user.name, phone: user.phone, role: user.role, isPhoneVerified: true },
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      id: user._id,
+      name: user.name,
+      phone: user.phone,
+      phoneDisplay: formatPhoneDisplay(user.phone),
+      role: user.role,
+      isPhoneVerified: user.isPhoneVerified,
+      createdAt: user.createdAt,
+    },
   });
 });
 
@@ -63,7 +131,16 @@ export const bulkAdminUsers = asyncHandler(async (req, res) => {
 export const getAdminUserById = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id).select('-password');
   if (!user) throw new AppError('User not found', 404);
-  res.json({ success: true, data: user });
+
+  const orderCount = await Order.countDocuments({ user: user._id });
+
+  res.json({
+    success: true,
+    data: {
+      ...user.toObject(),
+      orderCount,
+    },
+  });
 });
 
 export const updateAdminUser = asyncHandler(async (req, res) => {

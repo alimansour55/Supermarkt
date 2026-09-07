@@ -3,6 +3,7 @@ import { AppError } from '../utils/AppError.js';
 import { getStripe } from '../config/stripe.js';
 import { notifyPaymentSuccessAfterPaid } from '../utils/sendEmail.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { awardPointsForOrder } from '../services/loyalty.service.js';
 
 const clientUrl = () => process.env.CLIENT_URL || 'http://localhost:5173';
 
@@ -20,13 +21,12 @@ export const markOrderPaid = async (orderId, stripeSessionId) => {
   if (order.paymentStatus === 'paid') return order;
 
   order.paymentStatus = 'paid';
-  if (order.orderStatus === 'pending') {
-    order.orderStatus = 'confirmed';
-  }
+  // Stay on «order received» until admin advances fulfillment
   if (stripeSessionId) {
     order.stripeSessionId = stripeSessionId;
   }
   await order.save();
+  await awardPointsForOrder(order);
   notifyPaymentSuccessAfterPaid(orderId);
   return order;
 };
@@ -69,7 +69,7 @@ const buildCheckoutLineItems = (order) => {
   );
   const expectedTotal = Math.round(order.total * 100);
 
-  if (order.discount > 0 && lineItemsTotal !== expectedTotal) {
+  if ((order.discount > 0 || order.pointsDiscount > 0) && lineItemsTotal !== expectedTotal) {
     return [
       {
         price_data: {
@@ -80,6 +80,7 @@ const buildCheckoutLineItems = (order) => {
               `${order.items.length} item(s)`,
               order.couponCode ? `Coupon: ${order.couponCode}` : null,
               order.discount > 0 ? `Discount: ${order.discount} EGP` : null,
+              order.pointsDiscount > 0 ? `Points: ${order.pointsDiscount} EGP` : null,
             ]
               .filter(Boolean)
               .join(' · '),
@@ -161,6 +162,7 @@ export const verifyCheckoutSession = asyncHandler(async (req, res) => {
         id: order._id,
         orderNumber: order.orderNumber,
         total: order.total,
+        pointsEarned: order.pointsEarned || 0,
         paymentStatus: order.paymentStatus,
         orderStatus: order.orderStatus,
       },
@@ -182,6 +184,7 @@ export const verifyCheckoutSession = asyncHandler(async (req, res) => {
         id: updated._id,
         orderNumber: updated.orderNumber,
         total: updated.total,
+        pointsEarned: updated.pointsEarned || 0,
         paymentStatus: updated.paymentStatus,
         orderStatus: updated.orderStatus,
       },

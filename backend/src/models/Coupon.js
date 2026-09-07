@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { getStoreDateKey } from '../utils/storeDate.js';
 
 const couponSchema = new mongoose.Schema(
   {
@@ -50,14 +51,22 @@ const couponSchema = new mongoose.Schema(
 
 couponSchema.methods.isValid = function isValid(subtotal = 0) {
   if (!this.isActive) return { valid: false, message: 'Coupon is inactive' };
-  if (this.expiryDate && this.expiryDate < new Date()) {
-    return { valid: false, message: 'Coupon has expired' };
+  if (this.expiryDate) {
+    const expiryDay = getStoreDateKey(this.expiryDate);
+    const today = getStoreDateKey(new Date());
+    if (today > expiryDay) {
+      return { valid: false, message: 'Coupon has expired' };
+    }
   }
   if (this.usageLimit && this.usedCount >= this.usageLimit) {
     return { valid: false, message: 'Coupon usage limit reached' };
   }
   if (subtotal < this.minSubtotal) {
-    return { valid: false, message: `Minimum order ${this.minSubtotal} EGP required` };
+    return {
+      valid: false,
+      message: `Minimum order ${this.minSubtotal} EGP required`,
+      minSubtotal: this.minSubtotal,
+    };
   }
   return { valid: true, coupon: this };
 };

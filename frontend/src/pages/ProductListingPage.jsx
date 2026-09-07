@@ -1,64 +1,56 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchProductsPaginated, fetchProductFilters } from '../services/productApi';
 import ProductGrid from '../components/product/ProductGrid';
-import ProductFilters, { ProductSortBar, ProductPagination } from '../components/product/ProductFilters';
+import ProductFilters, {
+  ProductSortBar,
+  ProductPagination,
+  ActiveFilterChips,
+} from '../components/product/ProductFilters';
 import SearchBar from '../components/search/SearchBar';
 import ProductGridSkeleton from '../components/product/ProductGridSkeleton';
+import {
+  DEFAULT_PRODUCT_FILTERS,
+  paramsToProductFilters,
+  productFiltersToParams,
+  productFiltersToApiParams,
+  countActiveProductFilters,
+} from '../utils/productFilterParams';
 
-const DEFAULT_FILTERS = {
-  category: '',
-  brand: '',
-  minPrice: '',
-  maxPrice: '',
-  minRating: '',
-  offers: '',
-  sort: '',
-  q: '',
-  page: 1,
-};
-
-function paramsToFilters(params) {
-  return {
-    category: params.get('category') || '',
-    brand: params.get('brand') || '',
-    minPrice: params.get('minPrice') || '',
-    maxPrice: params.get('maxPrice') || '',
-    minRating: params.get('minRating') || '',
-    offers: params.get('offers') || '',
-    sort: params.get('sort') || '',
-    q: params.get('q') || '',
-    page: Number(params.get('page')) || 1,
-  };
-}
-
-function filtersToParams(filters) {
-  const p = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => {
-    if (v && v !== 1 && !(k === 'page' && v === 1)) p.set(k, String(v));
-    if (k === 'page' && v > 1) p.set(k, String(v));
-  });
-  return p;
+function filtersForMeta(filters) {
+  const rest = { ...filters };
+  delete rest.page;
+  delete rest.sort;
+  return rest;
 }
 
 export default function ProductListingPage() {
   const { language } = useLanguage();
+  const isAr = language === 'ar';
   const [searchParams, setSearchParams] = useSearchParams();
-  const [filters, setFilters] = useState(() => paramsToFilters(searchParams));
+  const [filters, setFilters] = useState(() => paramsToProductFilters(searchParams));
   const [meta, setMeta] = useState(null);
   const [result, setResult] = useState({ data: [], pagination: null });
   const [loading, setLoading] = useState(true);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   useEffect(() => {
-    fetchProductFilters().then(setMeta);
-  }, []);
+    let active = true;
+    const timer = setTimeout(() => {
+      fetchProductFilters(filtersForMeta(filters))
+        .then((data) => { if (active) setMeta(data); });
+    }, 150);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [filters.mainCategory, filters.subCategory, filters.productSource, filters.brand, filters.minPrice, filters.maxPrice, filters.minRating, filters.minDiscount, filters.offers, filters.inStock, filters.q]);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchProductsPaginated(filters);
+      const res = await fetchProductsPaginated(productFiltersToApiParams(filters));
       setResult(res);
     } finally {
       setLoading(false);
@@ -67,19 +59,31 @@ export default function ProductListingPage() {
 
   useEffect(() => {
     loadProducts();
-    setSearchParams(filtersToParams(filters), { replace: true });
-  }, [filters, loadProducts, setSearchParams]);
+    const next = productFiltersToParams(filters).toString();
+    if (searchParams.toString() !== next) {
+      setSearchParams(productFiltersToParams(filters), { replace: true });
+    }
+  }, [filters, loadProducts, setSearchParams, searchParams]);
 
   const updateFilters = (next) => setFilters(next);
-  const clearFilters = () => setFilters({ ...DEFAULT_FILTERS });
+  const clearFilters = () => setFilters({
+    ...DEFAULT_PRODUCT_FILTERS,
+    q: filters.q,
+    sort: filters.sort,
+  });
+
+  const activeCount = useMemo(
+    () => countActiveProductFilters(filters),
+    [filters],
+  );
 
   return (
     <div className="container-app py-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold md:text-3xl">
           {filters.q
-            ? `${language === 'ar' ? 'نتائج البحث' : 'Search'}: "${filters.q}"`
-            : (language === 'ar' ? 'كل المنتجات' : 'All Products')}
+            ? `${isAr ? 'نتائج البحث' : 'Search'}: "${filters.q}"`
+            : (isAr ? 'كل المنتجات' : 'All Products')}
         </h1>
         <div className="mt-4 max-w-xl"><SearchBar /></div>
       </div>
@@ -88,18 +92,35 @@ export default function ProductListingPage() {
         <button
           type="button"
           onClick={() => setShowMobileFilters(!showMobileFilters)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white py-2.5 text-sm font-semibold"
+          aria-expanded={showMobileFilters}
+          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-border bg-white py-2.5 text-sm font-semibold shadow-sm"
         >
-          ⚙️ {language === 'ar' ? 'تصفية وترتيب' : 'Filters & Sort'}
+          {isAr ? 'تصفية وترتيب' : 'Filters & Sort'}
+          {activeCount > 0 && (
+            <span className="rounded-full bg-primary-600 px-2 py-0.5 text-xs text-white">{activeCount}</span>
+          )}
         </button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         <div className={`${showMobileFilters ? 'block' : 'hidden'} lg:block`}>
-          <ProductFilters filters={filters} meta={meta} onChange={updateFilters} onClear={clearFilters} />
+          <ProductFilters
+            filters={filters}
+            meta={meta}
+            onChange={updateFilters}
+            onClear={clearFilters}
+          />
         </div>
 
         <div className="space-y-4">
+          <ActiveFilterChips
+            filters={filters}
+            meta={meta}
+            language={language}
+            onChange={updateFilters}
+            onClear={clearFilters}
+          />
+
           <ProductSortBar
             sort={filters.sort}
             total={result.pagination?.total ?? result.data.length}
@@ -108,18 +129,25 @@ export default function ProductListingPage() {
           />
 
           {loading ? (
-            <ProductGridSkeleton count={12} />
+            <ProductGridSkeleton count={12} layout="grid" />
           ) : result.data.length === 0 ? (
             <div className="rounded-2xl border border-border bg-white py-20 text-center">
-              <span className="text-5xl">🔍</span>
-              <p className="mt-4 text-text-muted">{language === 'ar' ? 'لا توجد منتجات' : 'No products found'}</p>
+              <span className="text-5xl" aria-hidden>🔍</span>
+              <p className="mt-4 text-text-muted">{isAr ? 'لا توجد منتجات' : 'No products found'}</p>
+              {activeCount > 1 && (
+                <p className="mx-auto mt-2 max-w-md text-sm text-text-muted">
+                  {isAr
+                    ? 'لا يوجد منتج يطابق كل الفلاتر المفعّلة معاً. جرّب إزالة فلتر الماركة أو مسح الكل.'
+                    : 'No product matches all active filters together. Try removing the brand filter or clear all.'}
+                </p>
+              )}
               <button type="button" onClick={clearFilters} className="mt-4 text-sm font-semibold text-primary-600">
-                {language === 'ar' ? 'مسح الفلاتر' : 'Clear filters'}
+                {isAr ? 'مسح الفلاتر' : 'Clear filters'}
               </button>
             </div>
           ) : (
             <>
-              <ProductGrid products={result.data} />
+              <ProductGrid products={result.data} layout="grid" />
               <ProductPagination
                 pagination={result.pagination}
                 language={language}

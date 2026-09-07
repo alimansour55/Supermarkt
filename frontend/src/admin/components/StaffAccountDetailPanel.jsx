@@ -1,0 +1,260 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Calendar, Clock, Copy, Crown, KeyRound, Mail, Pencil, Phone, Shield, Trash2, User,
+} from 'lucide-react';
+import Button from '../../components/ui/Button';
+import Loader from '../../components/ui/Loader';
+import AdminSlidePanel from './AdminSlidePanel';
+import { adminApi } from '../adminApi';
+import {
+  PERMISSION_GROUPS,
+  ROLE_BADGE_STYLES,
+  ROLE_DESCRIPTIONS,
+  roleLabel,
+  resolveUserPermissions,
+} from '../adminPermissions';
+import { formatDate } from '../../utils/formatters';
+
+function RoleBadge({ role, isAr }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ROLE_BADGE_STYLES[role] || 'bg-slate-100 text-slate-700'}`}>
+      {role === 'super_admin' && <Crown className="h-3 w-3" />}
+      {roleLabel(role, isAr)}
+    </span>
+  );
+}
+
+function InfoBlock({ icon: Icon, label, children }) {
+  return (
+    <div className="flex gap-3 rounded-xl border border-border bg-white p-3">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-text-muted">{label}</p>
+        <div className="mt-0.5 text-sm text-text">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export default function StaffAccountDetailPanel({
+  accountId,
+  open,
+  onClose,
+  isAr,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  onToggleActive,
+}) {
+  const [account, setAccount] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !accountId) {
+      setAccount(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setLoading(true);
+    adminApi.getStaffAccount(accountId)
+      .then(({ data }) => { if (!cancelled) setAccount(data.data); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, accountId]);
+
+  const permissions = useMemo(
+    () => (account ? resolveUserPermissions(account) : []),
+    [account],
+  );
+
+  const groupedPermissions = useMemo(() => (
+    PERMISSION_GROUPS.map((group) => ({
+      ...group,
+      items: group.permissions.filter((p) => permissions.includes(p.key)),
+    })).filter((g) => g.items.length > 0)
+  ), [permissions]);
+
+  if (!open) return null;
+
+  return (
+    <AdminSlidePanel
+      open={open}
+      onClose={onClose}
+      isAr={isAr}
+      width="max-w-xl"
+      title={account?.name || (isAr ? 'تفاصيل الحساب' : 'Account details')}
+      subtitle={account ? `@${account.username}` : ''}
+    >
+      {loading ? (
+        <div className="flex justify-center py-16"><Loader size="md" /></div>
+      ) : account ? (
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-border bg-gradient-to-br from-slate-50 to-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-lg font-bold text-orange-800">
+                  {(account.name || '?').charAt(0).toUpperCase()}
+                </span>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-bold text-text">{account.name}</h3>
+                    {account.isSelf && (
+                      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase text-sky-800">
+                        {isAr ? 'أنت' : 'You'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-mono text-sm text-text-muted" dir="ltr">@{account.username}</p>
+                </div>
+              </div>
+              <RoleBadge role={account.role} isAr={isAr} />
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-text-muted">
+              {ROLE_DESCRIPTIONS[account.role]?.[isAr ? 'ar' : 'en']}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className={[
+                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium',
+                account.isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600',
+              ].join(' ')}>
+                <span className={`h-1.5 w-1.5 rounded-full ${account.isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                {account.isActive ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطّل' : 'Inactive')}
+              </span>
+              {(account.permissions?.length || 0) > 0 && account.role !== 'super_admin' && (
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900">
+                  {isAr ? 'صلاحيات مخصصة' : 'Custom permissions'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <InfoBlock icon={Calendar} label={isAr ? 'تاريخ الإنشاء' : 'Created'}>
+              {account.createdAt ? formatDate(account.createdAt, isAr ? 'ar-EG' : 'en-GB') : '—'}
+            </InfoBlock>
+            <InfoBlock icon={Clock} label={isAr ? 'آخر دخول' : 'Last login'}>
+              {account.lastLoginAt ? formatDate(account.lastLoginAt, isAr ? 'ar-EG' : 'en-GB') : (isAr ? 'لم يسجّل بعد' : 'Never')}
+            </InfoBlock>
+            {account.email && (
+              <InfoBlock icon={Mail} label={isAr ? 'البريد' : 'Email'}>
+                <span dir="ltr">{account.email}</span>
+              </InfoBlock>
+            )}
+            {account.phone && (
+              <InfoBlock icon={Phone} label={isAr ? 'الهاتف' : 'Phone'}>
+                <span dir="ltr">{account.phone}</span>
+              </InfoBlock>
+            )}
+            {account.createdBy?.name && (
+              <InfoBlock icon={User} label={isAr ? 'أنشأه' : 'Created by'}>
+                {account.createdBy.name}
+                {account.createdBy.username && (
+                  <span className="text-text-muted" dir="ltr"> @{account.createdBy.username}</span>
+                )}
+              </InfoBlock>
+            )}
+          </div>
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-text">
+                <Shield className="h-4 w-4 text-orange-600" />
+                {isAr ? 'الصلاحيات الفعّالة' : 'Effective access'}
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-text-muted">
+                  {permissions.length}
+                </span>
+              </h4>
+            </div>
+            {account.role === 'super_admin' ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                {isAr
+                  ? 'مسؤول أعلى — وصول كامل لكل أقسام لوحة التحكم وإدارة الفريق.'
+                  : 'Super admin — full access to every admin area and team management.'}
+              </div>
+            ) : account.role === 'driver' || account.isDriver ? (
+              <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-950">
+                <p>
+                  {isAr
+                    ? 'مندوب توصيل — يرى الطلبات المعيّنة له فقط عبر واجهة /driver'
+                    : 'Delivery driver — sees assigned orders only via /driver portal'}
+                </p>
+                <p className="mt-2 text-xs text-teal-900/80">
+                  {isAr
+                    ? 'بعد تعيين طلب له، يضغط «بدء التوصيل» لمشاركة موقعه المباشر مع العميل والإدارة.'
+                    : 'After an order is assigned, tap “Start delivery” to share live GPS with customer and admin.'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {groupedPermissions.map((group) => (
+                  <div key={group.id} className="rounded-xl border border-border bg-white p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+                      {isAr ? group.labelAr : group.labelEn}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {group.items.map((perm) => (
+                        <span
+                          key={perm.key}
+                          className="rounded-lg bg-orange-50 px-2 py-1 text-xs font-medium text-orange-900"
+                          title={perm.key}
+                        >
+                          {isAr ? perm.labelAr : perm.labelEn}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <div className="flex flex-col gap-2 border-t border-border pt-4">
+            <Button type="button" className="w-full" onClick={() => onEdit?.(account)}>
+              <Pencil className="h-4 w-4" />
+              {isAr ? 'تعديل الحساب' : 'Edit account'}
+            </Button>
+            {!account.isSelf && (
+              <Button type="button" variant="outline" className="w-full" onClick={() => onDuplicate?.(account)}>
+                <Copy className="h-4 w-4" />
+                {isAr ? 'نسخ الصلاحيات لعضو جديد' : 'Duplicate as new member'}
+              </Button>
+            )}
+            {account.canDeactivate && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => onToggleActive?.(account)}
+              >
+                <KeyRound className="h-4 w-4" />
+                {account.isActive
+                  ? (isAr ? 'تعطيل الحساب' : 'Deactivate account')
+                  : (isAr ? 'تفعيل الحساب' : 'Activate account')}
+              </Button>
+            )}
+            {account.canDelete && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-red-200 text-red-700 hover:bg-red-50"
+                onClick={() => onDelete?.(account)}
+              >
+                <Trash2 className="h-4 w-4" />
+                {account.isSuperAdmin
+                  ? (isAr ? 'حذف مسؤول أعلى' : 'Delete super admin')
+                  : (isAr ? 'حذف الحساب' : 'Delete account')}
+              </Button>
+            )}
+            {account.isSelf && (
+              <p className="rounded-xl bg-sky-50 px-3 py-2 text-center text-xs text-sky-900">
+                {isAr
+                  ? 'لا يمكنك حذف أو تعطيل حسابك. يمكن لمسؤول أعلى آخر إدارة حسابك.'
+                  : 'You cannot delete or deactivate your own account. Another super admin can manage it.'}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </AdminSlidePanel>
+  );
+}

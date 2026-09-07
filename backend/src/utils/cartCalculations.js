@@ -1,5 +1,22 @@
 import Coupon from '../models/Coupon.js';
 import { formatCoupon } from './formatters.js';
+import {
+  calculatePointsRedemption,
+  getLoyaltySettings,
+} from '../services/loyalty.service.js';
+import {
+  isFreeDeliveryForMethod,
+  isThresholdMet,
+  resolveDeliveryFee,
+  resolveFreeDeliveryMethods,
+} from './freeDelivery.js';
+import StoreSettings from '../models/StoreSettings.js';
+import { findDeliveryZone } from '../services/deliveryZone.service.js';
+import { calculateItemsSubtotal, calculatePromotionSavings } from './cartLinePricing.js';
+
+function roundMoney(n) {
+  return Math.round(Number(n) * 100) / 100;
+}
 
 export const FREE_DELIVERY_THRESHOLD = 500;
 export const SCHEDULED_DELIVERY_FEE = 29.99;
@@ -88,15 +105,18 @@ export async function calculateCartTotals({
   items = [],
   deliveryMethod = 'scheduled',
   discountCode = null,
+  pointsToRedeem = 0,
+  user = null,
+  deliveryZoneId = null,
 }) {
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const listSubtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = calculateItemsSubtotal(items);
+  const promotionSavings = calculatePromotionSavings(items);
+  const deliveryZone = await findDeliveryZone(deliveryZoneId);
+  const freeDeliveryThreshold = deliveryZone?.freeDeliveryThreshold ?? FREE_DELIVERY_THRESHOLD;
 
-  let deliveryFee = 0;
-  if (deliveryMethod === 'express') {
-    deliveryFee = EXPRESS_DELIVERY_FEE;
-  } else if (subtotal < FREE_DELIVERY_THRESHOLD) {
-    deliveryFee = SCHEDULED_DELIVERY_FEE;
-  }
+  const storeSettings = await StoreSettings.findOne({ key: 'main' }).lean();
+  const freeDeliveryMethods = resolveFreeDeliveryMethods(deliveryZone, storeSettings);
 
   let discountAmount = 0;
   let appliedCoupon = null;
@@ -114,22 +134,63 @@ export async function calculateCartTotals({
     }
   }
 
-  if (freeDeliveryFromCoupon) {
-    deliveryFee = 0;
+  const deliveryFee = resolveDeliveryFee({
+    deliveryMethod,
+    subtotal,
+    threshold: freeDeliveryThreshold,
+    freeDeliveryMethods,
+    freeDeliveryFromCoupon,
+    scheduledFee: deliveryZone?.scheduledFee ?? SCHEDULED_DELIVERY_FEE,
+    expressFee: deliveryZone?.expressFee ?? EXPRESS_DELIVERY_FEE,
+  });
+
+  let pointsRedeemed = 0;
+  let pointsDiscount = 0;
+  let loyalty = null;
+
+  if (pointsToRedeem > 0) {
+    loyalty = await getLoyaltySettings();
+    const redemption = calculatePointsRedemption({
+      requestedPoints: pointsToRedeem,
+      user,
+      subtotal,
+      couponDiscount: discountAmount,
+      loyalty,
+    });
+    pointsRedeemed = redemption.pointsRedeemed;
+    pointsDiscount = redemption.pointsDiscount;
+    loyalty = redemption.rules;
   }
 
-  const total = Math.max(0, subtotal + deliveryFee - discountAmount);
-  const freeDeliveryRemaining = Math.max(0, FREE_DELIVERY_THRESHOLD - subtotal);
+  const total = Math.max(0, subtotal + deliveryFee - discountAmount - pointsDiscount);
+  const freeDeliveryRemaining = Math.max(0, freeDeliveryThreshold - subtotal);
+  const thresholdMet = isThresholdMet(subtotal, freeDeliveryThreshold, freeDeliveryFromCoupon);
+  const freeDeliveryForCurrentMethod = isFreeDeliveryForMethod({
+    deliveryMethod,
+    subtotal,
+    threshold: freeDeliveryThreshold,
+    freeDeliveryMethods,
+    freeDeliveryFromCoupon,
+  });
 
   return {
     subtotal,
+    listSubtotal: roundMoney(listSubtotal),
+    promotionSavings,
     deliveryFee,
     discountAmount,
     discount: discountAmount,
+    pointsRedeemed,
+    pointsDiscount,
     total,
     appliedCoupon,
+    loyalty,
+    deliveryZone,
     freeDeliveryRemaining,
-    qualifiesForFreeDelivery: subtotal >= FREE_DELIVERY_THRESHOLD || freeDeliveryFromCoupon,
+    freeDeliveryMethods,
+    thresholdMet,
+    freeDeliveryForCurrentMethod,
+    qualifiesForFreeDelivery: thresholdMet,
   };
 }
 

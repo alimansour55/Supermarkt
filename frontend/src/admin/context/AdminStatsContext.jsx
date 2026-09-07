@@ -3,16 +3,28 @@ import { adminApi } from '../adminApi';
 
 const AdminStatsContext = createContext({
   pendingOrdersCount: 0,
+  pendingReviewsCount: 0,
+  ordersUnreadMessagesCount: 0,
+  pendingReturnsCount: 0,
+  outOfStockCount: 0,
   refreshStats: () => {},
 });
 
 export function AdminStatsProvider({ children }) {
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+  const [pendingReviewsCount, setPendingReviewsCount] = useState(0);
+  const [ordersUnreadMessagesCount, setOrdersUnreadMessagesCount] = useState(0);
+  const [pendingReturnsCount, setPendingReturnsCount] = useState(0);
+  const [outOfStockCount, setOutOfStockCount] = useState(0);
 
   const refreshStats = useCallback(() => {
     adminApi.getStats()
       .then(({ data }) => {
         setPendingOrdersCount(data.stats?.pendingOrdersCount ?? 0);
+        setPendingReviewsCount(data.stats?.pendingReviewsCount ?? 0);
+        setOrdersUnreadMessagesCount(data.stats?.ordersUnreadMessagesCount ?? 0);
+        setPendingReturnsCount(data.stats?.pendingReturnsCount ?? 0);
+        setOutOfStockCount(data.stats?.outOfStockCount ?? 0);
       })
       .catch(() => {});
   }, []);
@@ -24,7 +36,16 @@ export function AdminStatsProvider({ children }) {
   }, [refreshStats]);
 
   return (
-    <AdminStatsContext.Provider value={{ pendingOrdersCount, refreshStats }}>
+    <AdminStatsContext.Provider
+      value={{
+        pendingOrdersCount,
+        pendingReviewsCount,
+        ordersUnreadMessagesCount,
+        pendingReturnsCount,
+        outOfStockCount,
+        refreshStats,
+      }}
+    >
       {children}
     </AdminStatsContext.Provider>
   );

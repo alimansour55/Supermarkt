@@ -3,6 +3,7 @@
  */
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import routes from './routes/index.js';
 import { stripeWebhook } from './controllers/payment.controller.js';
@@ -11,6 +12,9 @@ import { corsOptions } from './config/cors.js';
 
 const app = express();
 
+// This is a JSON-only API (the React app is served separately), so the HTML-oriented
+// CSP directives are unnecessary here and can be safely disabled.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 app.use(cors(corsOptions));
 
 app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), stripeWebhook);

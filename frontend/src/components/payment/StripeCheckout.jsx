@@ -4,6 +4,9 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
+import { useStoreSettings } from '../../context/StoreSettingsContext';
+import { getThemePrimaryColor } from '../../constants/siteThemes';
+import { getActiveSiteTheme } from '../../utils/applySiteTheme';
 import { paymentService } from '../../services/apiServices';
 import Button from '../ui/Button';
 import Loader from '../ui/Loader';
@@ -61,6 +64,9 @@ function StripeForm({ orderId, orderNumber, total }) {
 
 export default function StripeCheckout({ orderId, orderNumber, total, clientSecret }) {
   const { language } = useLanguage();
+  useStoreSettings();
+  const activeTheme = getActiveSiteTheme();
+  const colorPrimary = getThemePrimaryColor(activeTheme.key, activeTheme.shade);
 
   if (!clientSecret) {
     return (
@@ -70,7 +76,7 @@ export default function StripeCheckout({ orderId, orderNumber, total, clientSecr
     );
   }
 
-  const options = { clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#059669' } } };
+  const options = { clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary } } };
 
   return (
     <Elements stripe={stripePromise} options={options}>

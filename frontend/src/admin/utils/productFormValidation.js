@@ -1,4 +1,27 @@
-export function validateProductForm(form, isAr) {
+import { categoryHasChildren, isRootCategory } from '../../utils/categoryHelpers';
+import { productCategoryError } from '../constants/productCategoryErrors';
+
+/** Validate a product leaf category id (missing, inactive, or parent with children). */
+export function validateProductCategoryLeaf(leafId, categories = [], isAr) {
+  if (!leafId) {
+    return productCategoryError('required', isAr);
+  }
+  const leaf = categories.find((c) => String(c._id) === String(leafId));
+  if (!leaf) {
+    return productCategoryError('notFound', isAr);
+  }
+  if (leaf.isActive === false) {
+    return productCategoryError('inactive', isAr);
+  }
+  if (categoryHasChildren(categories, leafId)) {
+    return isRootCategory(leaf)
+      ? productCategoryError('hasChildrenMain', isAr)
+      : productCategoryError('hasChildren', isAr);
+  }
+  return '';
+}
+
+export function validateProductForm(form, isAr, categories = []) {
   const errors = {};
 
   if (!form.nameAr?.trim()) {
@@ -7,8 +30,10 @@ export function validateProductForm(form, isAr) {
   if (!form.nameEn?.trim()) {
     errors.nameEn = isAr ? 'الاسم الإنجليزي مطلوب' : 'English name is required';
   }
-  if (!form.category) {
-    errors.category = isAr ? 'اختر القسم' : 'Category is required';
+
+  const subCategoryError = validateProductCategoryLeaf(form.subCategory, categories, isAr);
+  if (subCategoryError) {
+    errors.subCategory = subCategoryError;
   }
   if (form.price === '' || form.price == null) {
     errors.price = isAr ? 'سعر البيع مطلوب' : 'Selling price is required';

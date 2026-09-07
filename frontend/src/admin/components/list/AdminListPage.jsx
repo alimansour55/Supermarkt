@@ -1,7 +1,6 @@
 import { Search } from 'lucide-react';
 import Input from '../../../components/ui/Input';
 import Pagination from '../Pagination';
-import BulkActionsBar from './BulkActionsBar';
 import AdminDataTable from './AdminDataTable';
 
 export default function AdminListPage({
@@ -50,7 +49,7 @@ export default function AdminListPage({
             />
           </div>
           {filters && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-end gap-3">
               {filters}
             </div>
           )}

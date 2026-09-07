@@ -10,8 +10,8 @@ import {
 } from 'recharts';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
+import { useAdminPanel } from '../context/AdminPanelContext';
 import { formatPrice } from '../../utils/formatters';
-import Loader from '../../components/ui/Loader';
 import { EmptyState } from '../components';
 import { Skeleton } from '../components/Skeleton';
 
@@ -24,19 +24,24 @@ const PERIODS = [
 export default function ReportsPage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
+  const { showRevenue, loading: panelLoading } = useAdminPanel();
   const [period, setPeriod] = useState('30');
   const [reports, setReports] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!showRevenue) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     adminApi.getReports({ period: `${period}d` })
       .then(({ data }) => setReports(data.reports))
       .catch(() => setReports(null))
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [period, showRevenue]);
 
-  if (loading) {
+  if (panelLoading || loading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-48" />
@@ -45,6 +50,26 @@ export default function ReportsPage() {
         </div>
         <Skeleton className="h-80 rounded-2xl" />
       </div>
+    );
+  }
+
+  if (!showRevenue) {
+    return (
+      <EmptyState
+        title={isAr ? 'الإيرادات مخفية' : 'Revenue is hidden'}
+        description={isAr
+          ? 'فعّل «عرض الإيرادات في لوحة التحكم» من إعدادات المتجر.'
+          : 'Enable “Show revenue in admin panel” in Store settings.'}
+      />
+    );
+  }
+
+  if (!reports) {
+    return (
+      <EmptyState
+        title={isAr ? 'تعذر تحميل التقارير' : 'Could not load reports'}
+        description={isAr ? 'تحقق من الاتصال بالخادم' : 'Check your server connection'}
+      />
     );
   }
 

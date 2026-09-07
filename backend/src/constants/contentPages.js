@@ -1,24 +1,38 @@
-/** CMS-style content for footer / info pages (bilingual). */
-export const STATIC_PAGES = {
+/** Built-in content page slugs (footer / info pages). */
+export const CONTENT_PAGE_SLUGS = [
+  'contact',
+  'faq',
+  'about',
+  'terms',
+  'returns',
+  'privacy',
+  'careers',
+];
+
+export const DEFAULT_CONTENT_PAGES = {
   contact: {
+    slug: 'contact',
     titleAr: 'اتصل بنا',
     titleEn: 'Contact Us',
+    seoTitleAr: 'اتصل بنا — سوق+',
+    seoTitleEn: 'Contact Us — MarketPlus',
+    seoDescriptionAr: 'تواصل مع فريق سوق+ للدعم والاستفسارات.',
+    seoDescriptionEn: 'Contact MarketPlus customer support.',
     sections: [
       {
-        bodyAr: 'نحن هنا لمساعدتك. تواصل معنا عبر الهاتف أو البريد الإلكتروني وسنرد في أقرب وقت.',
-        bodyEn: 'We are here to help. Reach us by phone or email and we will respond as soon as possible.',
-      },
-      {
-        headingAr: 'خدمة العملاء',
-        headingEn: 'Customer Service',
-        bodyAr: 'الهاتف: 16XXX (مجاني)\nالبريد: support@marketplus.com\nساعات العمل: على مدار الساعة',
-        bodyEn: 'Phone: 16XXX (toll-free)\nEmail: support@marketplus.com\nHours: 24/7',
+        bodyAr: 'نحن هنا لمساعدتك في أي استفسار عن الطلبات، التوصيل، أو المنتجات. استخدم بيانات التواصل أدناه للوصول إلى فريق الدعم.',
+        bodyEn: 'We are here to help with orders, delivery, or product questions. Use the contact details below to reach our support team.',
       },
     ],
   },
   faq: {
+    slug: 'faq',
     titleAr: 'الأسئلة الشائعة',
     titleEn: 'FAQ',
+    seoTitleAr: 'الأسئلة الشائعة — سوق+',
+    seoTitleEn: 'FAQ — MarketPlus',
+    seoDescriptionAr: 'إجابات على الأسئلة الشائعة حول الطلبات والتوصيل والدفع.',
+    seoDescriptionEn: 'Answers to common questions about orders, delivery, and payment.',
     sections: [
       {
         headingAr: 'كيف أتتبع طلبي؟',
@@ -41,8 +55,13 @@ export const STATIC_PAGES = {
     ],
   },
   about: {
+    slug: 'about',
     titleAr: 'من نحن',
     titleEn: 'About Us',
+    seoTitleAr: 'من نحن — سوق+',
+    seoTitleEn: 'About Us — MarketPlus',
+    seoDescriptionAr: 'تعرف على سوق+ ورسالتنا في توصيل البقالة بسرعة وموثوقية.',
+    seoDescriptionEn: 'Learn about MarketPlus and our grocery delivery mission.',
     sections: [
       {
         bodyAr: 'سوق+ (MarketPlus) متجر إلكتروني مصري يوصل البقالة والمنتجات اليومية إلى باب منزلك بسرعة وموثوقية.',
@@ -57,8 +76,13 @@ export const STATIC_PAGES = {
     ],
   },
   privacy: {
+    slug: 'privacy',
     titleAr: 'سياسة الخصوصية',
     titleEn: 'Privacy Policy',
+    seoTitleAr: 'سياسة الخصوصية — سوق+',
+    seoTitleEn: 'Privacy Policy — MarketPlus',
+    seoDescriptionAr: 'كيف نحمي بياناتك الشخصية في سوق+.',
+    seoDescriptionEn: 'How MarketPlus protects your personal data.',
     sections: [
       {
         bodyAr: 'نحترم خصوصيتك. نجمع بيانات الحساب (الاسم، رقم الهاتف) وعنوان التوصيل لتنفيذ الطلبات فقط.',
@@ -73,8 +97,13 @@ export const STATIC_PAGES = {
     ],
   },
   terms: {
+    slug: 'terms',
     titleAr: 'الشروط والأحكام',
     titleEn: 'Terms & Conditions',
+    seoTitleAr: 'الشروط والأحكام — سوق+',
+    seoTitleEn: 'Terms & Conditions — MarketPlus',
+    seoDescriptionAr: 'شروط استخدام موقع وتطبيق سوق+.',
+    seoDescriptionEn: 'Terms of use for the MarketPlus website and app.',
     sections: [
       {
         bodyAr: 'باستخدامك لموقع سوق+ فإنك توافق على هذه الشروط. الأسعار والعروض قابلة للتغيير دون إشعار مسبق.',
@@ -89,8 +118,13 @@ export const STATIC_PAGES = {
     ],
   },
   returns: {
+    slug: 'returns',
     titleAr: 'الاسترجاع والاستبدال',
     titleEn: 'Returns & Exchange',
+    seoTitleAr: 'الاسترجاع والاستبدال — سوق+',
+    seoTitleEn: 'Returns & Exchange — MarketPlus',
+    seoDescriptionAr: 'سياسة الاسترجاع والاستبدال في سوق+.',
+    seoDescriptionEn: 'MarketPlus returns and exchange policy.',
     sections: [
       {
         bodyAr: 'إذا وصل منتج تالف أو غير مطابق للطلب، تواصل معنا خلال 24 ساعة من الاستلام.',
@@ -105,8 +139,13 @@ export const STATIC_PAGES = {
     ],
   },
   careers: {
+    slug: 'careers',
     titleAr: 'الوظائف',
     titleEn: 'Careers',
+    seoTitleAr: 'الوظائف — سوق+',
+    seoTitleEn: 'Careers — MarketPlus',
+    seoDescriptionAr: 'انضم إلى فريق سوق+.',
+    seoDescriptionEn: 'Join the MarketPlus team.',
     sections: [
       {
         bodyAr: 'نبحث عن مواهب في التوصيل، خدمة العملاء، والتقنية. أرسل سيرتك إلى careers@marketplus.com',
@@ -115,7 +154,3 @@ export const STATIC_PAGES = {
     ],
   },
 };
-
-export function getStaticPage(slug) {
-  return STATIC_PAGES[slug] || null;
-}

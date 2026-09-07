@@ -5,6 +5,7 @@ import PhoneInput from '../ui/PhoneInput';
 import Button from '../ui/Button';
 import Loader from '../ui/Loader';
 import { localToEgyptPhone, formatLocalPhoneDisplay } from '../../utils/phoneHelpers';
+import { isMobileLanAccess, isLikelyMobileDevice } from '../../utils/mobileAccess';
 import { isStaffRole } from '../../admin/adminPermissions';
 
 const RESEND_SECONDS = 60;
@@ -67,10 +68,26 @@ export default function PhoneAuthForm({
   };
 
   const formatApiError = (err) => {
+    const status = err.response?.status;
     if (!err.response) {
+      if (isMobileLanAccess() || (isLikelyMobileDevice() && import.meta.env.DEV)) {
+        return isAr
+          ? 'لا يمكن الاتصال بالخادم من الموبايل. تأكد أن: (1) الكمبيوتر والموبايل على نفس الواي‑فاي، (2) فتحت الرابط من الطرفية (مثل http://192.168.x.x:5173) وليس localhost، (3) npm run dev يعمل على الكمبيوتر.'
+          : 'Cannot reach the server from your phone. Use the LAN URL from the terminal (e.g. http://192.168.x.x:5173), same Wi‑Fi, and run npm run dev on your PC.';
+      }
       return isAr
-        ? 'لا يمكن الاتصال بالخادم. شغّل: npm run dev'
-        : 'Cannot reach server. Run: npm run dev';
+        ? 'لا يمكن الاتصال بالخادم. من مجلد المشروع شغّل: npm run dev'
+        : 'Cannot reach server. From the project root run: npm run dev';
+    }
+    if (status === 503 && String(err.response?.data?.message || '').includes('SMS')) {
+      return isAr
+        ? 'خدمة SMS غير مفعّلة. في التطوير استخدم الرقم التجريبي 1098765432 — الرمز يظهر على الشاشة.'
+        : 'SMS is not configured. In dev use demo number 1098765432 — the code appears on screen.';
+    }
+    if (status === 502 || status === 503 || status === 504) {
+      return isAr
+        ? 'الخادم غير متاح (502). تأكد أن الـ Backend يعمل على المنفذ 5001 — من مجلد المشروع: npm run dev'
+        : 'Server unavailable (502). Start the backend on port 5001 — from project root: npm run dev';
     }
     return err.response?.data?.message || (isAr ? 'حدث خطأ' : 'Something went wrong');
   };
@@ -166,12 +183,13 @@ export default function PhoneAuthForm({
         <Input
           label={isAr ? 'رمز التحقق (SMS)' : 'SMS verification code'}
           labelClassName={labelClass}
-          inputClassName={isDark ? 'border-slate-600 bg-slate-900 text-white' : ''}
-          type="text"
+          inputClassName={isDark ? 'border-slate-600 bg-slate-900 text-white text-base' : 'text-base'}
+          type="tel"
           inputMode="numeric"
           autoComplete="one-time-code"
           autoFocus
           maxLength={6}
+          pattern="[0-9]*"
           value={form.code}
           onChange={(e) => setForm({ ...form, code: e.target.value.replace(/\D/g, '').slice(0, 6) })}
           required

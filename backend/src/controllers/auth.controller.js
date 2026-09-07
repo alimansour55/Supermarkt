@@ -4,8 +4,43 @@ import { generateToken } from '../utils/generateToken.js';
 import { normalizePhone, formatPhoneDisplay } from '../utils/phone.js';
 import { sendSmsOtp } from '../utils/sms.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { isStaffRole } from '../constants/roles.js';
+import { resolveUserPermissions } from '../constants/permissions.js';
+import { pickGeoFields } from '../utils/addressGeo.js';
+import { enrichAndValidateAddress } from '../services/addressEnrichment.service.js';
+import crypto from 'crypto';
 
 const OTP_RESEND_SECONDS = 60;
+const DEMO_SHOPPER_PHONE = normalizePhone('01098765432');
+const DEMO_ADMIN_OTP_PHONE = normalizePhone('01012345678');
+
+const getConfiguredAdminPassword = () => {
+  const fromEnv = process.env.ADMIN_PASSWORD?.trim();
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV !== 'production') return 'admin123';
+  return null;
+};
+
+const isDevDemoPhone = (phone) => {
+  if (process.env.NODE_ENV === 'production') return false;
+  return phone === DEMO_SHOPPER_PHONE || phone === DEMO_ADMIN_OTP_PHONE;
+};
+
+const defaultDemoNameForPhone = (phone) => {
+  if (phone === DEMO_SHOPPER_PHONE) return 'Demo Shopper';
+  if (phone === DEMO_ADMIN_OTP_PHONE) return 'Demo Admin';
+  return 'Demo User';
+};
+
+const safePasswordMatch = (input, expected) => {
+  const inputBuf = Buffer.from(String(input));
+  const expectedBuf = Buffer.from(String(expected));
+  if (inputBuf.length !== expectedBuf.length) {
+    crypto.timingSafeEqual(inputBuf, inputBuf);
+    return false;
+  }
+  return crypto.timingSafeEqual(inputBuf, expectedBuf);
+};
 
 const devOtpFields = (code) => {
   const isDev = process.env.NODE_ENV !== 'production';
@@ -19,13 +54,42 @@ const devOtpFields = (code) => {
 const formatUserResponse = (user) => ({
   id: user._id,
   name: user.name,
+  username: user.username || null,
   phone: user.phone,
-  phoneDisplay: formatPhoneDisplay(user.phone),
+  phoneDisplay: user.phone ? formatPhoneDisplay(user.phone) : null,
   role: user.role,
+  permissions: user.permissions || [],
+  effectivePermissions: resolveUserPermissions(user),
   isPhoneVerified: user.isPhoneVerified,
   isVerified: user.isPhoneVerified,
   mfaEnabled: user.mfaEnabled,
+  pointsBalance: user.pointsBalance || 0,
 });
+
+const formatUserWithDetails = (user) => ({
+  ...formatUserResponse(user),
+  addresses: user.addresses || [],
+  pointsHistory: user.pointsHistory || [],
+});
+
+function setDefaultAddress(user, addressId) {
+  user.addresses.forEach((address) => {
+    address.isDefault = String(address._id) === String(addressId);
+  });
+}
+
+function applyAddressPayload(address, payload) {
+  const fields = ['label', 'street', 'building', 'floor', 'city', 'governorate', 'area', 'postalCode'];
+  fields.forEach((field) => {
+    if (payload[field] !== undefined) {
+      address[field] = String(payload[field] || '').trim();
+    }
+  });
+  Object.assign(address, pickGeoFields(payload));
+  if (payload.isDefault !== undefined) {
+    address.isDefault = Boolean(payload.isDefault);
+  }
+}
 
 const sendAuthResponse = (user, res, statusCode = 200) => {
   const token = generateToken(user._id);
@@ -56,11 +120,13 @@ export const sendOtp = asyncHandler(async (req, res) => {
   let isNewUser = false;
 
   if (!user) {
-    if (!name?.trim()) {
+    const trimmedName = name?.trim();
+    const effectiveName = trimmedName || (isDevDemoPhone(phone) ? defaultDemoNameForPhone(phone) : '');
+    if (!effectiveName) {
       throw new AppError('Name is required to create a new account', 400);
     }
     user = new User({
-      name: name.trim(),
+      name: effectiveName,
       phone,
       isPhoneVerified: false,
       mfaEnabled: true,
@@ -71,7 +137,7 @@ export const sendOtp = asyncHandler(async (req, res) => {
     user.name = name.trim();
   }
 
-  if (user.lastOtpSentAt) {
+  if (user.lastOtpSentAt && !isDevDemoPhone(phone)) {
     const elapsed = (Date.now() - user.lastOtpSentAt.getTime()) / 1000;
     if (elapsed < OTP_RESEND_SECONDS) {
       throw new AppError(
@@ -85,7 +151,7 @@ export const sendOtp = asyncHandler(async (req, res) => {
   await user.save({ validateBeforeSave: false });
 
   const lang = req.body.lang === 'en' ? 'en' : 'ar';
-  const smsResult = await sendSmsOtp(phone, code, lang);
+  await sendSmsOtp(phone, code, lang);
 
   res.json({
     success: true,
@@ -152,7 +218,7 @@ export const resendOtp = asyncHandler(async (req, res) => {
     throw new AppError('No account found. Enter your name to create an account.', 404);
   }
 
-  if (user.lastOtpSentAt) {
+  if (user.lastOtpSentAt && !isDevDemoPhone(phone)) {
     const elapsed = (Date.now() - user.lastOtpSentAt.getTime()) / 1000;
     if (elapsed < OTP_RESEND_SECONDS) {
       throw new AppError(
@@ -166,7 +232,7 @@ export const resendOtp = asyncHandler(async (req, res) => {
   await user.save({ validateBeforeSave: false });
 
   const lang = req.body.lang === 'en' ? 'en' : 'ar';
-  const smsResult = await sendSmsOtp(phone, code, lang);
+  await sendSmsOtp(phone, code, lang);
 
   res.json({
     success: true,
@@ -179,6 +245,94 @@ export const resendOtp = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Admin panel — sign in with username + password, or legacy shared ADMIN_PASSWORD.
+ */
+export const adminLogin = asyncHandler(async (req, res) => {
+  const { username, password } = req.body;
+  if (!password || typeof password !== 'string') {
+    throw new AppError('Password is required', 400);
+  }
+
+  const trimmedPassword = password.trim();
+  const normalizedUsername = username ? String(username).trim().toLowerCase() : '';
+
+  if (normalizedUsername) {
+    const staffUser = await User.findOne({
+      username: normalizedUsername,
+      role: { $in: ['manager', 'admin', 'super_admin'] },
+    }).select('+password');
+
+    if (!staffUser || staffUser.isActive === false) {
+      throw new AppError('Invalid username or password', 401);
+    }
+    if (!staffUser.password) {
+      throw new AppError('This account does not have a password set', 401);
+    }
+    const match = await staffUser.comparePassword(trimmedPassword);
+    if (!match) {
+      throw new AppError('Invalid username or password', 401);
+    }
+
+    staffUser.lastLoginAt = new Date();
+    await staffUser.save({ validateBeforeSave: false });
+    return sendAuthResponse(staffUser, res);
+  }
+
+  const configuredPassword = getConfiguredAdminPassword();
+  if (!configuredPassword) {
+    throw new AppError('Admin password login is not configured on the server', 503);
+  }
+
+  if (!safePasswordMatch(trimmedPassword, configuredPassword)) {
+    throw new AppError('Invalid admin password', 401);
+  }
+
+  const adminUser = await User.findOne({ role: 'super_admin' })
+    || await User.findOne({ role: 'admin' })
+    || await User.findOne({ role: 'manager' });
+
+  if (!adminUser || !isStaffRole(adminUser.role)) {
+    throw new AppError('No admin account found. Run npm run seed from the project root.', 503);
+  }
+
+  adminUser.lastLoginAt = new Date();
+  await adminUser.save({ validateBeforeSave: false });
+  sendAuthResponse(adminUser, res);
+});
+
+/**
+ * Delivery driver portal — sign in with username + password.
+ */
+export const driverLogin = asyncHandler(async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    throw new AppError('Username and password are required', 400);
+  }
+
+  const normalizedUsername = String(username).trim().toLowerCase();
+  const driverUser = await User.findOne({
+    username: normalizedUsername,
+    role: 'driver',
+  }).select('+password');
+
+  if (!driverUser || driverUser.isActive === false) {
+    throw new AppError('Invalid username or password', 401);
+  }
+  if (!driverUser.password) {
+    throw new AppError('This account does not have a password set', 401);
+  }
+
+  const match = await driverUser.comparePassword(String(password).trim());
+  if (!match) {
+    throw new AppError('Invalid username or password', 401);
+  }
+
+  driverUser.lastLoginAt = new Date();
+  await driverUser.save({ validateBeforeSave: false });
+  sendAuthResponse(driverUser, res);
+});
+
 export const logout = asyncHandler(async (_req, res) => {
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 });
@@ -186,10 +340,7 @@ export const logout = asyncHandler(async (_req, res) => {
 export const getMe = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
-    user: {
-      ...formatUserResponse(req.user),
-      addresses: req.user.addresses,
-    },
+    user: formatUserWithDetails(req.user),
   });
 });
 
@@ -208,10 +359,118 @@ export const updateMe = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    user: {
-      ...formatUserResponse(req.user),
-      addresses: req.user.addresses,
-    },
+    user: formatUserWithDetails(req.user),
+  });
+});
+
+export const addMyAddress = asyncHandler(async (req, res) => {
+  const lang = req.body.lang === 'ar' ? 'ar' : 'en';
+  const enriched = await enrichAndValidateAddress(req.body, {
+    deliveryZoneId: req.body.deliveryZoneId,
+    lang,
+  });
+
+  const makeDefault = Boolean(enriched.isDefault) || req.user.addresses.length === 0;
+  if (makeDefault) {
+    req.user.addresses.forEach((address) => {
+      address.isDefault = false;
+    });
+  }
+
+  req.user.addresses.push({
+    label: String(enriched.label || 'Home').trim() || 'Home',
+    street: enriched.street,
+    building: enriched.building,
+    floor: enriched.floor,
+    city: enriched.city,
+    governorate: enriched.governorate,
+    area: enriched.area,
+    postalCode: enriched.postalCode,
+    isDefault: makeDefault,
+    lat: enriched.lat,
+    lng: enriched.lng,
+    formattedAddress: enriched.formattedAddress,
+    placeId: enriched.placeId,
+  });
+
+  await req.user.save();
+
+  res.status(201).json({
+    success: true,
+    user: formatUserWithDetails(req.user),
+  });
+});
+
+export const updateMyAddress = asyncHandler(async (req, res) => {
+  const address = req.user.addresses.id(req.params.id);
+  if (!address) throw new AppError('Address not found', 404);
+
+  const onlyDefaultToggle = Object.keys(req.body).every((key) => ['isDefault', 'lang'].includes(key));
+
+  if (!onlyDefaultToggle) {
+    const lang = req.body.lang === 'ar' ? 'ar' : 'en';
+    const merged = {
+      label: req.body.label ?? address.label,
+      street: req.body.street ?? address.street,
+      building: req.body.building ?? address.building,
+      floor: req.body.floor ?? address.floor,
+      city: req.body.city ?? address.city,
+      governorate: req.body.governorate ?? address.governorate,
+      area: req.body.area ?? address.area,
+      postalCode: req.body.postalCode ?? address.postalCode,
+      isDefault: req.body.isDefault,
+      ...pickGeoFields({
+        lat: req.body.lat ?? address.lat,
+        lng: req.body.lng ?? address.lng,
+        formattedAddress: req.body.formattedAddress ?? address.formattedAddress,
+        placeId: req.body.placeId ?? address.placeId,
+      }),
+    };
+
+    const enriched = await enrichAndValidateAddress(merged, {
+      deliveryZoneId: req.body.deliveryZoneId,
+      lang,
+    });
+
+    applyAddressPayload(address, enriched);
+    Object.assign(address, pickGeoFields(enriched));
+  } else if (req.body.isDefault !== undefined) {
+    address.isDefault = Boolean(req.body.isDefault);
+  }
+
+  if (req.body.isDefault === true) {
+    setDefaultAddress(req.user, address._id);
+  } else if (req.body.isDefault === false && address.isDefault) {
+    address.isDefault = false;
+    if (!req.user.addresses.some((item) => item.isDefault) && req.user.addresses.length > 0) {
+      req.user.addresses[0].isDefault = true;
+    }
+  }
+
+  await req.user.save();
+
+  res.status(200).json({
+    success: true,
+    user: formatUserWithDetails(req.user),
+  });
+});
+
+export const deleteMyAddress = asyncHandler(async (req, res) => {
+  const address = req.user.addresses.id(req.params.id);
+  if (!address) throw new AppError('Address not found', 404);
+
+  const wasDefault = address.isDefault;
+  req.user.addresses.pull(req.params.id);
+
+  if (wasDefault && req.user.addresses.length > 0) {
+    req.user.addresses[0].isDefault = true;
+  }
+
+  await req.user.save();
+
+  res.status(200).json({
+    success: true,
+    user: formatUserWithDetails(req.user),
   });
 });
 

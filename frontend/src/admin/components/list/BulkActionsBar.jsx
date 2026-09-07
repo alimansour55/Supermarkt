@@ -6,6 +6,9 @@ export default function BulkActionsBar({
   onActivate,
   onDeactivate,
   onDelete,
+  onChangeCategory,
+  onMarkOurProduct,
+  onUnmarkOurProduct,
   showActivate = true,
   onClear,
 }) {
@@ -16,6 +19,21 @@ export default function BulkActionsBar({
       <span className="text-sm font-medium text-primary-800">
         {isAr ? `${count} محدد` : `${count} selected`}
       </span>
+      {onChangeCategory && (
+        <Button size="sm" variant="secondary" onClick={onChangeCategory}>
+          {isAr ? 'تغيير القسم' : 'Change category'}
+        </Button>
+      )}
+      {onMarkOurProduct && (
+        <Button size="sm" variant="secondary" onClick={onMarkOurProduct}>
+          {isAr ? 'تعيين كمنتجنا' : 'Mark as our product'}
+        </Button>
+      )}
+      {onUnmarkOurProduct && (
+        <Button size="sm" variant="secondary" onClick={onUnmarkOurProduct}>
+          {isAr ? 'إلغاء منتجنا' : 'Unmark our product'}
+        </Button>
+      )}
       {showActivate && onActivate && (
         <Button size="sm" variant="secondary" onClick={onActivate}>
           {isAr ? 'تفعيل' : 'Activate'}

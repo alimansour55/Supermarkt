@@ -1,35 +1,51 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, ShoppingCart } from 'lucide-react';
+import { Menu, ShoppingBag } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
-import { useCart } from '../../context/CartContext';
+import { useLocation } from '../../context/LocationContext';
+import { useStoreSettings } from '../../context/StoreSettingsContext';
+import { useAuth } from '../../context/AuthContext';
 import { APP_NAME, APP_NAME_EN } from '../../utils/constants';
 import SearchBar from '../search/SearchBar';
 import LocationSelector from './LocationSelector';
-import CategoriesDropdown from './CategoriesDropdown';
-import AccountMenu from './AccountMenu';
+import HeaderToolbar from './HeaderToolbar';
 import MobileMenu from './MobileMenu';
+import MobileHeaderSearch from './MobileHeaderSearch';
 import NavMenu from './NavMenu';
+import UserNotificationBell from './UserNotificationBell';
 
 export default function Header() {
   const { language, toggleLanguage } = useLanguage();
-  const { totalItems, openDrawer } = useCart();
+  const { location } = useLocation();
+  const { settings } = useStoreSettings();
+  const { isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const storeName = language === 'ar'
+    ? (settings?.storeNameAr || APP_NAME)
+    : (settings?.storeNameEn || APP_NAME_EN);
+  const storeSubtitle = language === 'ar'
+    ? (settings?.storeNameEn || APP_NAME_EN)
+    : (settings?.storeNameAr || APP_NAME);
+  const announcement = language === 'ar'
+    ? settings?.navigation?.announcementAr
+    : settings?.navigation?.announcementEn;
+  const freeThreshold = settings?.freeDeliveryThreshold ?? location?.freeDeliveryThreshold ?? 500;
+  const deliveryText = announcement || (language === 'ar'
+    ? `${location?.estimatedExpress || location?.estimatedScheduled || 'توصيل سريع'} · مجاني فوق ${freeThreshold} ج.م`
+    : `${location?.estimatedExpress || location?.estimatedScheduled || 'Fast delivery'} · Free over ${freeThreshold} EGP`);
 
   return (
     <>
       <header className="sticky top-0 z-50 bg-white shadow-sm">
         <div className="hidden bg-primary-700 text-white md:block">
           <div className="container-app flex items-center justify-between py-2 text-xs">
-            <span>
-              {language === 'ar' ? 'توصيل خلال ساعتين · مجاني فوق 500 ج.م' : '2h delivery · Free over 500 EGP'}
-            </span>
+            <span>{deliveryText}</span>
             <div className="flex items-center gap-3">
               <LocationSelector />
               <button
                 type="button"
                 onClick={toggleLanguage}
-                className="rounded-md px-2 py-0.5 font-medium hover:bg-white/10 transition-colors"
+                className="rounded-md px-2 py-0.5 font-medium transition-colors hover:bg-white/10"
               >
                 {language === 'ar' ? 'English' : 'العربية'}
               </button>
@@ -37,51 +53,75 @@ export default function Header() {
           </div>
         </div>
 
-        <div className="container-app py-2.5 md:py-3">
-          <div className="flex items-center gap-2 md:gap-4">
-            <button
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl hover:bg-surface md:hidden"
-              aria-label={language === 'ar' ? 'القائمة' : 'Menu'}
-            >
-              <Menu className="h-6 w-6 text-text" />
-            </button>
+        {/* Mobile: delivery strip + two-row header */}
+        <div className="md:hidden">
+          <div className="border-b border-primary-100 bg-primary-50 px-4 py-1.5">
+            <p className="truncate text-center text-[11px] font-medium text-primary-800">
+              {deliveryText}
+            </p>
+          </div>
+          <div className="container-app py-2.5">
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setMenuOpen(true)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-text transition-colors hover:bg-surface"
+                aria-label={language === 'ar' ? 'القائمة' : 'Menu'}
+              >
+                <Menu className="h-6 w-6" aria-hidden />
+              </button>
 
+              <Link to="/" className="flex min-w-0 flex-1 items-center gap-2.5">
+                {settings?.logoUrl ? (
+                  <img
+                    src={settings.logoUrl}
+                    alt={storeName}
+                    className="h-10 w-10 shrink-0 rounded-xl object-contain"
+                  />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-600 text-white shadow-md">
+                    <ShoppingBag className="h-5 w-5" aria-hidden />
+                  </span>
+                )}
+                <span className="min-w-0 truncate text-base font-bold leading-tight text-primary-700">
+                  {storeName}
+                </span>
+              </Link>
+
+              <LocationSelector variant="mobile" />
+              {isAuthenticated && <UserNotificationBell />}
+            </div>
+            <div className="mt-2.5">
+              <MobileHeaderSearch />
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop: single-row header */}
+        <div className="container-app hidden py-3 md:block">
+          <div className="flex items-center gap-4">
             <Link to="/" className="flex shrink-0 items-center gap-2">
-              <span className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-xl bg-primary-600 text-lg font-bold text-white shadow-md">
-                +
-              </span>
-              <div className="leading-tight hidden sm:block">
-                <span className="block text-lg font-bold text-primary-700">{APP_NAME}</span>
-                <span className="block text-[10px] text-text-muted">{APP_NAME_EN}</span>
+              {settings?.logoUrl ? (
+                <img src={settings.logoUrl} alt={storeName} className="h-11 w-11 rounded-xl object-contain" />
+              ) : (
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-600 text-white shadow-md">
+                  <ShoppingBag className="h-5 w-5" aria-hidden />
+                </span>
+              )}
+              <div className="leading-tight">
+                <span className="block text-lg font-bold text-primary-700">{storeName}</span>
+                <span className="block text-[10px] text-text-muted">{storeSubtitle}</span>
               </div>
             </Link>
 
-            <div className="hidden md:block">
-              <CategoriesDropdown />
-            </div>
+            <HeaderToolbar zone="start" />
 
             <div className="min-w-0 flex-1">
               <SearchBar />
             </div>
 
-            <div className="hidden md:flex items-center gap-1 sm:gap-2 shrink-0">
-              <AccountMenu />
-              <button
-                type="button"
-                onClick={openDrawer}
-                className="relative flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-text hover:bg-surface transition-colors min-h-[44px]"
-              >
-                <ShoppingCart className="h-5 w-5 shrink-0" aria-hidden />
-                <span className="hidden sm:inline">{language === 'ar' ? 'السلة' : 'Cart'}</span>
-                {totalItems > 0 && (
-                  <span className="absolute -top-1 -start-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-bold text-white">
-                    {totalItems > 99 ? '99+' : totalItems}
-                  </span>
-                )}
-              </button>
-            </div>
+            {isAuthenticated && <UserNotificationBell />}
+            <HeaderToolbar zone="end" />
           </div>
         </div>
 

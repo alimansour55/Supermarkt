@@ -9,7 +9,7 @@ export default function AdminHeader({ title, breadcrumbs, onMenuClick, menuOpen 
   const { language, toggleLanguage } = useLanguage();
   const { user } = useAuth();
   const isAr = language === 'ar';
-  const showNotifications = hasPermission(user?.role, 'notifications:read');
+  const showNotifications = hasPermission(user, 'notifications:read');
 
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-white shadow-sm">

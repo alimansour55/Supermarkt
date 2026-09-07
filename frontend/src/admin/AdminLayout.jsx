@@ -5,8 +5,10 @@ import { useAuth } from '../context/AuthContext';
 import AdminUIProvider from './components/AdminUIProvider';
 import AdminSidebar from './components/AdminSidebar';
 import AdminHeader from './components/AdminHeader';
-import { getAdminPageMeta } from './adminRouteMeta';
+import { getAdminPageMeta } from './adminRouteMeta.js';
 import { AdminStatsProvider } from './context/AdminStatsContext';
+import { AdminPanelProvider } from './context/AdminPanelContext';
+import ScrollToTop from '../components/layout/ScrollToTop';
 
 function AdminShell() {
   const { language } = useLanguage();
@@ -46,6 +48,7 @@ function AdminShell() {
 
   return (
     <div className="flex min-h-screen bg-slate-100">
+      <ScrollToTop />
       <AdminSidebar
         isAr={isAr}
         user={user}
@@ -56,14 +59,14 @@ function AdminShell() {
         onLogout={handleLogout}
       />
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:ps-64">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:ps-72">
         <AdminHeader
           title={title}
           breadcrumbs={breadcrumbs}
           menuOpen={sidebarOpen}
           onMenuClick={() => setSidebarOpen(true)}
         />
-        <main className="flex-1 p-4 lg:p-8">
+        <main data-scroll-root className="flex-1 p-4 lg:p-8">
           <Outlet />
         </main>
       </div>
@@ -74,9 +77,11 @@ function AdminShell() {
 export default function AdminLayout() {
   return (
     <AdminUIProvider>
-      <AdminStatsProvider>
-        <AdminShell />
-      </AdminStatsProvider>
+      <AdminPanelProvider>
+        <AdminStatsProvider>
+          <AdminShell />
+        </AdminStatsProvider>
+      </AdminPanelProvider>
     </AdminUIProvider>
   );
 }

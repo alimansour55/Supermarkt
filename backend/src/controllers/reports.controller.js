@@ -1,8 +1,13 @@
 import Order from '../models/Order.js';
 import Coupon from '../models/Coupon.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
-
-const NON_CANCELLED = { orderStatus: { $ne: 'cancelled' } };
+import {
+  fillRevenueByDay,
+  parseRevenuePeriod,
+  revenueOrderMatch,
+  PAYMENT_LABELS,
+  storeDateGroupField,
+} from '../utils/revenueReport.js';
 
 /** Attach unit wholesale cost from line snapshot or current product */
 const itemCostFields = [
@@ -39,21 +44,10 @@ const itemCostFields = [
   },
 ];
 
-function parsePeriod(period = '30d') {
-  const days = parseInt(period, 10) || 30;
-  const since = new Date();
-  since.setHours(0, 0, 0, 0);
-  since.setDate(since.getDate() - (days - 1));
-  return { since, days };
-}
-
 export const getReports = asyncHandler(async (req, res) => {
-  const { since } = parsePeriod(req.query.period || '30d');
+  const { since, days } = parseRevenuePeriod(req.query.period || '30d');
 
-  const orderMatch = {
-    createdAt: { $gte: since },
-    ...NON_CANCELLED,
-  };
+  const orderMatch = revenueOrderMatch({ createdAt: { $gte: since } });
 
   const [
     revenueSummary,
@@ -62,6 +56,9 @@ export const getReports = asyncHandler(async (req, res) => {
     topProductsRaw,
     coupons,
     ordersWithCoupons,
+    revenueByDayRaw,
+    revenueByPaymentRaw,
+    totalAllTimeAgg,
   ] = await Promise.all([
     Order.aggregate([
       { $match: orderMatch },
@@ -147,6 +144,38 @@ export const getReports = asyncHandler(async (req, res) => {
       },
       { $sort: { uses: -1 } },
     ]),
+    Order.aggregate([
+      { $match: orderMatch },
+      {
+        $group: {
+          _id: storeDateGroupField(),
+          revenue: { $sum: '$total' },
+          orders: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]),
+    Order.aggregate([
+      { $match: orderMatch },
+      {
+        $group: {
+          _id: '$paymentMethod',
+          revenue: { $sum: '$total' },
+          orders: { $sum: 1 },
+        },
+      },
+      { $sort: { revenue: -1 } },
+    ]),
+    Order.aggregate([
+      { $match: revenueOrderMatch() },
+      {
+        $group: {
+          _id: null,
+          revenue: { $sum: '$total' },
+          orders: { $sum: 1 },
+        },
+      },
+    ]),
   ]);
 
   const summary = revenueSummary[0] || { revenue: 0, orders: 0, discountTotal: 0 };
@@ -210,6 +239,29 @@ export const getReports = asyncHandler(async (req, res) => {
     };
   });
 
+  const revenueByDay = fillRevenueByDay(
+    revenueByDayRaw.map((row) => ({
+      date: row._id,
+      revenue: row.revenue,
+      orders: row.orders,
+    })),
+    days,
+  );
+
+  const revenueByPayment = revenueByPaymentRaw.map((row) => {
+    const key = row._id || 'other';
+    const labels = PAYMENT_LABELS[key] || { ar: key, en: key };
+    return {
+      method: key,
+      labelAr: labels.ar,
+      labelEn: labels.en,
+      revenue: row.revenue,
+      orders: row.orders,
+    };
+  });
+
+  const totalAllTime = totalAllTimeAgg[0] || { revenue: 0, orders: 0 };
+
   res.json({
     success: true,
     reports: {
@@ -224,7 +276,11 @@ export const getReports = asyncHandler(async (req, res) => {
         costOfGoods: profitRow.itemCost,
         grossProfit,
         grossMarginPercent,
+        totalAllTimeRevenue: totalAllTime.revenue,
+        totalAllTimeOrders: totalAllTime.orders,
       },
+      revenueByDay,
+      revenueByPayment,
       salesByCategory,
       topProducts,
       couponUsage,

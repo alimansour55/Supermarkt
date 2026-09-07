@@ -1,4 +1,4 @@
-/** Brand logos row on homepage (links to /products?brand=). */
+/** Brand logos row on homepage — «view all» → /brands, each tile → /products?brand= */
 export const SHOP_BRANDS = [
   { slug: 'juhayna', query: 'Juhayna', nameEn: 'Juhayna', nameAr: 'جهينا', emoji: '🥛' },
   { slug: 'coca-cola', query: 'Coca-Cola', nameEn: 'Coca-Cola', nameAr: 'كوكاكولا', emoji: '🥤' },

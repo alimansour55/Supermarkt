@@ -5,6 +5,7 @@ import { ADMIN_PAGE_SIZE } from '../adminConstants';
 export function useAdminListPage({
   fetchFn,
   initialFilters = {},
+  initialSort = { field: 'createdAt', order: 'desc' },
   pageSize = ADMIN_PAGE_SIZE,
 }) {
   const [data, setData] = useState([]);
@@ -12,7 +13,7 @@ export function useAdminListPage({
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState(initialFilters);
-  const [sort, setSort] = useState({ field: 'createdAt', order: 'desc' });
+  const [sort, setSort] = useState(initialSort);
   const [selectedIds, setSelectedIds] = useState([]);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -47,7 +48,7 @@ export function useAdminListPage({
       .then(({ data: res }) => {
         setData(res.data ?? []);
         setPagination(res.pagination ?? { page: 1, pages: 1, total: 0, limit: pageSize });
-        setSelectedIds((prev) => prev.filter((id) => res.data?.some((row) => row._id === id)));
+        setSelectedIds((prev) => prev.filter((id) => res.data?.some((row) => (row._id ?? row.id ?? row.code) === id)));
       })
       .catch((err) => {
         setData([]);
@@ -78,6 +79,10 @@ export function useAdminListPage({
     setFilters((prev) => ({ ...prev, [key]: value }));
   }, []);
 
+  const patchFilters = useCallback((patch) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+  }, []);
+
   const toggleSort = useCallback((field) => {
     setSort((prev) => {
       if (prev.field !== field) return { field, order: 'asc' };
@@ -94,7 +99,7 @@ export function useAdminListPage({
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
-      const allIds = data.map((row) => row._id);
+      const allIds = data.map((row) => row._id ?? row.id ?? row.code).filter(Boolean);
       if (prev.length === allIds.length && allIds.length > 0) return [];
       return allIds;
     });
@@ -113,6 +118,7 @@ export function useAdminListPage({
     setPage,
     filters,
     setFilter,
+    patchFilters,
     sort,
     toggleSort,
     pagination,

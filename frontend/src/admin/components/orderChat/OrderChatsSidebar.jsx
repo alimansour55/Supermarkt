@@ -1,0 +1,198 @@
+import { MessageCircle, RefreshCw, Search } from 'lucide-react';
+import { formatRelativeTime } from '../../../utils/formatters';
+import { getOrderStatusLabel, getOrderStatusColor } from '../../../utils/orderStatus';
+import Loader from '../../../components/ui/Loader';
+import Pagination from '../Pagination';
+
+function customerInitials(name, phone) {
+  const base = (name || phone || '?').trim();
+  const parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return base.slice(0, 2).toUpperCase();
+}
+
+export default function OrderChatsSidebar({
+  isAr,
+  conversations,
+  loading,
+  selectedId,
+  onSelect,
+  q,
+  onSearchChange,
+  filter,
+  onFilterChange,
+  unreadTotal,
+  pagination,
+  onPageChange,
+  onRefresh,
+  refreshing,
+  className = 'flex',
+}) {
+  const filters = [
+    { id: 'all', label: isAr ? 'الكل' : 'All' },
+    { id: 'unread', label: isAr ? 'غير مقروء' : 'Unread' },
+  ];
+
+  const sorted = [...conversations].sort((a, b) => {
+    const ua = a.unreadCustomerMessages > 0 ? 1 : 0;
+    const ub = b.unreadCustomerMessages > 0 ? 1 : 0;
+    if (ub !== ua) return ub - ua;
+    const ta = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+    const tb = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+    return tb - ta;
+  });
+
+  return (
+    <aside className={`${className} w-full shrink-0 flex-col border-e border-border bg-white md:w-[340px] lg:w-[380px]`}>
+      <div className="border-b border-border px-4 py-4">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-text">
+              {isAr ? 'المحادثات' : 'Conversations'}
+            </h2>
+            {unreadTotal > 0 && (
+              <p className="mt-0.5 text-xs font-medium text-rose-600">
+                {isAr ? `${unreadTotal} بانتظار الرد` : `${unreadTotal} awaiting reply`}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="rounded-lg border border-border p-2 text-text-muted transition-colors hover:bg-slate-50 hover:text-text"
+            aria-label={isAr ? 'تحديث' : 'Refresh'}
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        <div className="relative mt-3">
+          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder={isAr ? 'بحث برقم الطلب أو الهاتف...' : 'Search order # or phone...'}
+            className="w-full rounded-xl border border-border py-2.5 ps-10 pe-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/15"
+          />
+        </div>
+
+        <div className="mt-3 flex gap-1 rounded-xl bg-slate-100 p-1">
+          {filters.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onFilterChange(f.id)}
+              className={[
+                'flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors',
+                filter === f.id ? 'bg-white text-primary-700 shadow-sm' : 'text-text-muted hover:text-text',
+              ].join(' ')}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Loader size="md" />
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="px-6 py-16 text-center">
+            <MessageCircle className="mx-auto h-10 w-10 text-slate-300" strokeWidth={1.5} />
+            <p className="mt-3 text-sm font-medium text-text">
+              {isAr ? 'لا توجد محادثات' : 'No conversations'}
+            </p>
+            <p className="mt-1 text-xs text-text-muted">
+              {filter === 'unread'
+                ? (isAr ? 'لا رسائل غير مقروءة حالياً' : 'No unread messages right now')
+                : (isAr ? 'ستظهر هنا عندما يكتب عميل رسالة' : 'Shows when a customer sends a message')}
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border/80">
+            {sorted.map((row) => {
+              const active = selectedId === row._id;
+              const unread = row.unreadCustomerMessages > 0;
+              const name = row.user?.name || row.phone || '—';
+              const status = row.orderStatus;
+
+              return (
+                <li key={row._id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(row)}
+                    className={[
+                      'flex w-full gap-3 px-4 py-3.5 text-start transition-colors',
+                      active ? 'bg-primary-50' : 'hover:bg-slate-50',
+                      unread && !active ? 'bg-rose-50/40' : '',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={[
+                        'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+                        unread ? 'bg-rose-100 text-rose-800' : 'bg-primary-100 text-primary-800',
+                      ].join(' ')}
+                    >
+                      {customerInitials(name, row.phone)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="truncate font-semibold text-text">{name}</span>
+                        <span className="shrink-0 text-[10px] text-text-muted">
+                          {row.lastMessage?.createdAt
+                            ? formatRelativeTime(row.lastMessage.createdAt, isAr)
+                            : ''}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-2">
+                        <span className="truncate text-xs font-medium text-primary-700">
+                          {row.orderNumber}
+                        </span>
+                        {status && (
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${getOrderStatusColor(status)}`}>
+                            {getOrderStatusLabel(status, isAr)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-1 line-clamp-2 text-xs text-text-muted">
+                        {unread && (
+                          <span className="me-1 font-bold text-rose-600">
+                            {isAr ? 'جديد: ' : 'New: '}
+                          </span>
+                        )}
+                        {row.lastMessage?.body || (isAr ? '—' : '—')}
+                      </span>
+                    </span>
+                    {unread > 0 && (
+                      <span className="mt-1 flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+                        {row.unreadCustomerMessages}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {pagination && pagination.pages > 1 && (
+        <div className="border-t border-border px-2 py-2">
+          <Pagination
+            isAr={isAr}
+            page={pagination.page}
+            pages={pagination.pages}
+            total={pagination.total}
+            limit={pagination.limit}
+            onPageChange={onPageChange}
+            className="border-0 rounded-none shadow-none"
+          />
+        </div>
+      )}
+    </aside>
+  );
+}

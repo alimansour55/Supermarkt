@@ -1,11 +1,40 @@
 import { useRef, useState } from 'react';
-import { GripVertical, ImagePlus, X } from 'lucide-react';
+import { GripVertical, ImagePlus, Play, X } from 'lucide-react';
 
 function reorderList(list, fromIndex, toIndex) {
   const next = [...list];
   const [removed] = next.splice(fromIndex, 1);
   next.splice(toIndex, 0, removed);
   return next;
+}
+
+function fileMediaType(file) {
+  return file?.type?.startsWith('video/') ? 'video' : 'image';
+}
+
+function MediaPreview({ item, isAr }) {
+  if (item.type === 'video') {
+    return (
+      <div className="relative h-full w-full bg-slate-900">
+        <video
+          src={item.url}
+          className="h-full w-full object-cover"
+          muted
+          playsInline
+          preload="metadata"
+          draggable={false}
+        />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30">
+          <Play className="h-6 w-6 fill-white text-white" />
+        </div>
+        <span className="absolute bottom-0 start-0 end-0 bg-slate-900/80 py-0.5 text-center text-[9px] font-medium text-white">
+          {isAr ? 'فيديو' : 'Video'}
+        </span>
+      </div>
+    );
+  }
+
+  return <img src={item.url} alt="" className="h-full w-full object-cover" draggable={false} />;
 }
 
 export default function ProductImageGallery({
@@ -26,12 +55,18 @@ export default function ProductImageGallery({
   const pendingPreviews = pendingFiles.map((file, index) => ({
     id: `pending-${index}-${file.name}`,
     url: URL.createObjectURL(file),
+    type: fileMediaType(file),
     isPending: true,
     fileIndex: index,
   }));
 
   const allItems = [
-    ...images.map((img, index) => ({ ...img, id: img.url || `saved-${index}`, isPending: false })),
+    ...images.map((img, index) => ({
+      ...img,
+      type: img.type || 'image',
+      id: img.url || `saved-${index}`,
+      isPending: false,
+    })),
     ...pendingPreviews,
   ];
 
@@ -58,7 +93,9 @@ export default function ProductImageGallery({
     const to = index;
     const reordered = reorderList(allItems, from, to);
 
-    const newImages = reordered.filter((item) => !item.isPending).map(({ url, publicId }) => ({ url, publicId }));
+    const newImages = reordered
+      .filter((item) => !item.isPending)
+      .map(({ url, publicId, type }) => ({ url, publicId, type: type || 'image' }));
     const newFiles = reordered
       .filter((item) => item.isPending)
       .map((item) => pendingFiles[item.fileIndex]);
@@ -104,7 +141,7 @@ export default function ProductImageGallery({
               item.isPending ? 'border-dashed border-primary-300' : '',
             ].join(' ')}
           >
-            <img src={item.url} alt="" className="h-full w-full object-cover" draggable={false} />
+            <MediaPreview item={item} isAr={isAr} />
             <div className="absolute start-1 top-1 rounded bg-black/50 p-0.5 text-white opacity-80">
               <GripVertical className="h-3.5 w-3.5" />
             </div>
@@ -118,7 +155,7 @@ export default function ProductImageGallery({
               disabled={disabled || (!item.isPending && removingId === item.publicId)}
               onClick={() => {
                 if (item.isPending) removePending(item.fileIndex);
-                else onRemoveImage({ url: item.url, publicId: item.publicId });
+                else onRemoveImage({ url: item.url, publicId: item.publicId, type: item.type });
               }}
               className="absolute -end-1 -top-1 rounded-full bg-red-600 p-1 text-white shadow-sm hover:bg-red-700"
               aria-label={isAr ? 'إزالة' : 'Remove'}
@@ -142,7 +179,7 @@ export default function ProductImageGallery({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/mp4,video/webm,video/quicktime"
         multiple
         className="hidden"
         onChange={handleFilesAdded}
@@ -150,8 +187,8 @@ export default function ProductImageGallery({
 
       <p className="text-xs text-text-muted">
         {isAr
-          ? 'اسحب الصور لإعادة الترتيب · تُرفع الصور الجديدة عند الحفظ'
-          : 'Drag images to reorder · New images upload on save'}
+          ? 'اسحب الصور والفيديو لإعادة الترتيب · تُرفع الملفات الجديدة عند الحفظ (صور: حتى 5 م.ب · فيديو: حتى 50 م.ب)'
+          : 'Drag images and videos to reorder · New files upload on save (images: up to 5 MB · video: up to 50 MB)'}
       </p>
     </div>
   );

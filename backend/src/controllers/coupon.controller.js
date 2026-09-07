@@ -4,8 +4,14 @@ import { formatCoupon } from '../utils/formatters.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { AppError } from '../utils/AppError.js';
 import { parsePagination, parseSort, paginationMeta } from '../utils/listQuery.js';
+import { endOfStoreDay } from '../utils/storeDate.js';
 
 const ADMIN_COUPON_SORT = ['createdAt', 'code', 'expiryDate'];
+
+function normalizeExpiryDate(value) {
+  if (!value) return null;
+  return endOfStoreDay(value);
+}
 
 export const validateDiscountCode = asyncHandler(async (req, res) => {
   const { code, subtotal = 0 } = req.body;
@@ -66,7 +72,7 @@ export const createCoupon = asyncHandler(async (req, res) => {
     code: normalized,
     discountType,
     discountValue,
-    expiryDate,
+    expiryDate: normalizeExpiryDate(expiryDate),
     usageLimit,
     isActive: isActive ?? true,
     minSubtotal,
@@ -93,10 +99,14 @@ export const getAdminCoupons = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
   const filter = buildAdminCouponFilter(req.query);
   const sort = parseSort(req.query, ADMIN_COUPON_SORT);
+  const now = new Date();
 
-  const [coupons, total] = await Promise.all([
+  const [coupons, total, activeCount, expiredCount, totalRedemptions] = await Promise.all([
     Coupon.find(filter).sort(sort).skip(skip).limit(limit),
     Coupon.countDocuments(filter),
+    Coupon.countDocuments({ isActive: true, expiryDate: { $gte: now } }),
+    Coupon.countDocuments({ expiryDate: { $lt: now } }),
+    Coupon.aggregate([{ $group: { _id: null, total: { $sum: '$usedCount' } } }]),
   ]);
 
   res.json({
@@ -110,6 +120,12 @@ export const getAdminCoupons = asyncHandler(async (req, res) => {
       isActive: c.isActive,
     })),
     pagination: paginationMeta(page, limit, total),
+    summary: {
+      total,
+      active: activeCount,
+      expired: expiredCount,
+      redemptions: totalRedemptions[0]?.total || 0,
+    },
   });
 });
 
@@ -134,6 +150,7 @@ export const updateCoupon = asyncHandler(async (req, res) => {
 
   const updates = { ...req.body };
   if (updates.code) updates.code = updates.code.toUpperCase().trim();
+  if (updates.expiryDate) updates.expiryDate = normalizeExpiryDate(updates.expiryDate);
 
   Object.assign(coupon, updates);
   await coupon.save();

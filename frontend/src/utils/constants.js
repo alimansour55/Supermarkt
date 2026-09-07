@@ -1,15 +1,21 @@
+import { resolveApiBaseUrl } from './resolveApiBaseUrl.js';
+
+export { resolveApiBaseUrl } from './resolveApiBaseUrl.js';
+export const API_URL = resolveApiBaseUrl();
+
 export const APP_NAME = 'سوق+';
 export const APP_NAME_EN = 'MarketPlus';
-
-export const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export const STORAGE_KEYS = {
   TOKEN: 'marketplus_token',
   CART: 'marketplus_cart',
   LANGUAGE: 'marketplus_lang',
   DISCOUNT: 'marketplus_discount',
+  APPLIED_COUPON: 'marketplus_applied_coupon',
   DELIVERY_METHOD: 'marketplus_delivery',
+  PENDING_CART_MERGE: 'marketplus_pending_cart_merge',
   FAVORITES: 'marketplus_favorites',
+  FAVORITE_PRODUCTS: 'marketplus_favorite_products',
   RECENT_SEARCHES: 'marketplus_recent_searches',
 };
 

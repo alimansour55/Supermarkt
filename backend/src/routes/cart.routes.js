@@ -11,6 +11,7 @@ import {
   applyDiscount,
   removeDiscount,
 } from '../controllers/cart.controller.js';
+import { reserveCheckoutInventory } from '../controllers/inventory.controller.js';
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.delete('/clear', clearCart);
 
 router.put('/sync', syncCart);
 router.post('/merge', mergeCart);
+router.post('/reserve', reserveCheckoutInventory);
 router.post('/discount', applyDiscount);
 router.delete('/discount', removeDiscount);
 
