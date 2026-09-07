@@ -338,9 +338,9 @@ export function CartProvider({ children }) {
     setDiscountError('');
   }, [discountCode, appliedCoupon, items, isAr]);
 
-  const openDrawer = () => setIsDrawerOpen(true);
-  const closeDrawer = () => setIsDrawerOpen(false);
-  const toggleDrawer = () => setIsDrawerOpen((p) => !p);
+  const openDrawer = useCallback(() => setIsDrawerOpen(true), []);
+  const closeDrawer = useCallback(() => setIsDrawerOpen(false), []);
+  const toggleDrawer = useCallback(() => setIsDrawerOpen((p) => !p), []);
 
   const showCartAddedToast = useCallback((product, totalQuantity) => {
     const template = isAr
@@ -362,7 +362,7 @@ export function CartProvider({ children }) {
     );
   }, [isAr, toast]);
 
-  const addItem = (product, quantity = 1, openDrawerOnAdd = true) => {
+  const addItem = useCallback((product, quantity = 1, openDrawerOnAdd = true) => {
     const lastQuery = getLastSearchQuery();
     if (lastQuery) trackSearchConversion(lastQuery);
 
@@ -430,13 +430,13 @@ export function CartProvider({ children }) {
     } catch {
       // ignore toast errors
     }
-  };
+  }, [items, isAr, toast, updateItems, showStockLimitToast, showCartAddedToast, openDrawer]);
 
-  const removeItem = (cartKeyOrProductId) => {
+  const removeItem = useCallback((cartKeyOrProductId) => {
     updateItems((prev) => prev.filter((item) => itemKey(item) !== cartKeyOrProductId && item.productId !== cartKeyOrProductId));
-  };
+  }, [updateItems]);
 
-  const updateQuantity = (cartKeyOrProductId, quantity) => {
+  const updateQuantity = useCallback((cartKeyOrProductId, quantity) => {
     if (quantity <= 0) {
       removeItem(cartKeyOrProductId);
       return;
@@ -465,9 +465,9 @@ export function CartProvider({ children }) {
           : item,
       ),
     );
-  };
+  }, [items, removeItem, showStockLimitToast, updateItems]);
 
-  const clearCart = async () => {
+  const clearCart = useCallback(async () => {
     setItems([]);
     clearCoupon();
     if (isAuthenticated) {
@@ -477,7 +477,7 @@ export function CartProvider({ children }) {
         // ignore
       }
     }
-  };
+  }, [setItems, clearCoupon, isAuthenticated]);
 
   const applyDiscountCode = useCallback(async (code) => {
     setDiscountError('');
@@ -527,7 +527,7 @@ export function CartProvider({ children }) {
     }
   }, [items, isAuthenticated, deliveryMethod, location?.id, isAr, persistCoupon]);
 
-  const removeDiscountCode = async () => {
+  const removeDiscountCode = useCallback(async () => {
     clearCoupon();
     if (isAuthenticated) {
       try {
@@ -537,12 +537,12 @@ export function CartProvider({ children }) {
       }
     }
     scheduleSync(items, null, deliveryMethod);
-  };
+  }, [clearCoupon, isAuthenticated, scheduleSync, items, deliveryMethod]);
 
-  const setDelivery = (method) => {
+  const setDelivery = useCallback((method) => {
     setDeliveryMethod(method);
     if (isAuthenticated) scheduleSync(items, discountCode, method);
-  };
+  }, [setDeliveryMethod, isAuthenticated, scheduleSync, items, discountCode]);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const cartPromoSummary = useMemo(

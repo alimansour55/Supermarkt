@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -8,7 +9,7 @@ import { pickProductImage } from '../../utils/imageHelpers';
 import ProductImage from '../ui/ProductImage';
 import CartPromoLine from './CartPromoLine';
 
-export default function CartItemRow({ item, onUpdateQuantity, onRemove, compact = false }) {
+function CartItemRow({ item, onUpdateQuantity, onRemove, compact = false }) {
   const { language } = useLanguage();
   const isAr = language === 'ar';
   const name = isAr ? item.name : item.nameEn || item.name;
@@ -176,3 +177,5 @@ export default function CartItemRow({ item, onUpdateQuantity, onRemove, compact 
     </div>
   );
 }
+
+export default memo(CartItemRow);

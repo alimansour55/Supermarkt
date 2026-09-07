@@ -40,11 +40,23 @@ const cartItemMatch = (item, productId, variantId) =>
 const resolveCartItems = async (rawItems = []) => {
   const resolved = [];
 
+  // Batch-load every referenced product in a single query instead of one
+  // findById per line — resolveCartItems runs on every debounced cart sync.
+  const ids = [
+    ...new Set(
+      rawItems
+        .map((item) => String(item.product || item.productId || ''))
+        .filter((id) => mongoose.Types.ObjectId.isValid(id)),
+    ),
+  ];
+  const products = ids.length ? await Product.find({ _id: { $in: ids } }) : [];
+  const productById = new Map(products.map((p) => [p._id.toString(), p]));
+
   for (const item of rawItems) {
     const productId = item.product || item.productId;
     if (!productId || !mongoose.Types.ObjectId.isValid(productId)) continue;
 
-    const product = await Product.findById(productId);
+    const product = productById.get(String(productId));
     if (!product || !product.isActive) continue;
 
     const variantId = normalizeVariantId(item.variantId);
@@ -216,14 +228,15 @@ export const syncCart = asyncHandler(async (req, res) => {
 
   await cart.save();
 
+  const responseCart = await formatCartResponse(cart, { discountCode, deliveryMethod, deliveryZoneId });
+
   if (reserve && cart.items.length) {
-    const populated = await formatCartResponse(cart, { discountCode, deliveryMethod, deliveryZoneId });
-    await syncInventoryReservations(req.user._id, populated.items);
+    await syncInventoryReservations(req.user._id, responseCart.items);
   }
 
   res.json({
     success: true,
-    cart: await formatCartResponse(cart, { discountCode, deliveryMethod, deliveryZoneId }),
+    cart: responseCart,
   });
 });
 

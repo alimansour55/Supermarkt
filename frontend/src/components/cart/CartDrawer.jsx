@@ -138,7 +138,12 @@ export default function CartDrawer() {
                 </Link>
                 <button
                   type="button"
-                  onClick={clearCart}
+                  onClick={() => {
+                    const ok = window.confirm(
+                      isAr ? 'هل تريد إفراغ السلة بالكامل؟' : 'Empty the entire cart?',
+                    );
+                    if (ok) clearCart();
+                  }}
                   className="shrink-0 rounded-xl px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50"
                 >
                   {isAr ? 'إفراغ' : 'Clear'}
