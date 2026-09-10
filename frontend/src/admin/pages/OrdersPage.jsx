@@ -63,12 +63,18 @@ export default function OrdersPage() {
       const { data } = await adminApi.getOrder(orderId);
       setSelected(data.order);
       setSelectedId(orderId);
-      setHighlightChat(Boolean(data.hadUnreadCustomerMessages));
+      const hadUnread = Boolean(data.hadUnreadCustomerMessages);
+      setHighlightChat(hadUnread);
       if (updateUrl) {
         setSearchParams({ order: orderId }, { replace: true });
       }
-      list.reload();
-      refreshStats();
+      // Opening an order only mutates server state when it clears unread
+      // customer messages — skip the list/stats refetch otherwise so the
+      // list doesn't flash on every click.
+      if (hadUnread) {
+        list.reload();
+        refreshStats();
+      }
     } catch {
       setSelected(null);
       setSelectedId(null);
@@ -273,6 +279,10 @@ export default function OrdersPage() {
     });
   };
 
+  const ordersTotal = list.pagination?.total ?? 0;
+  const hasQueryOrFilters = Boolean(list.q) || Object.values(list.filters).some(Boolean);
+  const noOrdersAtAll = !list.loading && ordersTotal === 0 && !hasQueryOrFilters;
+
   return (
     <div className="flex h-[calc(100vh-7.5rem)] min-h-[560px] flex-col">
       {(pendingOrdersCount > 0 || ordersUnreadMessagesCount > 0) && (
@@ -346,34 +356,39 @@ export default function OrdersPage() {
           <div className="flex-1 p-4 lg:p-5">
             {!selected && !detailLoading ? (
               <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-6 py-12 text-center">
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 rounded-2xl bg-primary-100/50 blur-xl" />
-                  <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-50 to-primary-100 text-primary-600 shadow-sm">
-                    <Package className="h-9 w-9" strokeWidth={1.5} />
-                  </div>
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-50 text-primary-600 ring-1 ring-inset ring-primary-100">
+                  <Package className="h-8 w-8" strokeWidth={1.5} />
                 </div>
                 <h3 className="text-lg font-bold text-text">
-                  {isAr ? 'اختر طلباً من القائمة' : 'Select an order from the list'}
+                  {noOrdersAtAll
+                    ? (isAr ? 'لا توجد طلبات بعد' : 'No orders yet')
+                    : (isAr ? 'اختر طلباً من القائمة' : 'Select an order')}
                 </h3>
                 <p className="mt-2 max-w-md text-sm leading-relaxed text-text-muted">
-                  {isAr
-                    ? 'انقر على أي طلب لعرض التفاصيل وتحديث الحالة والدفع والمحادثة والمرتجعات.'
-                    : 'Click any order to view details and manage status, payment, chat, and returns.'}
+                  {noOrdersAtAll
+                    ? (isAr
+                      ? 'ستظهر الطلبات الجديدة هنا فور استلامها، ويمكنك حينها إدارة الحالة والدفع والمحادثة والمرتجعات.'
+                      : 'New orders show up here the moment they come in — you can then manage status, payment, chat, and returns.')
+                    : (isAr
+                      ? 'انقر على أي طلب لعرض التفاصيل وتحديث الحالة والدفع والمحادثة والمرتجعات.'
+                      : 'Click any order to view details and manage status, payment, chat, and returns.')}
                 </p>
-                <div className="mt-8 grid max-w-sm grid-cols-3 gap-4 text-center">
-                  {[
-                    { icon: ShoppingCart, labelAr: 'تحديث الحالة', labelEn: 'Update status' },
-                    { icon: MessageCircle, labelAr: 'المحادثة', labelEn: 'Chat' },
-                    { icon: Package, labelAr: 'المرتجعات', labelEn: 'Returns' },
-                  ].map(({ icon: Icon, labelAr, labelEn }) => (
-                    <div key={labelEn} className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-border/60">
-                      <Icon className="mx-auto h-5 w-5 text-primary-600" strokeWidth={1.5} />
-                      <p className="mt-1.5 text-[11px] font-medium text-text-muted">
-                        {isAr ? labelAr : labelEn}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+                {!noOrdersAtAll && (
+                  <div className="mt-8 grid max-w-sm grid-cols-3 gap-3 text-center">
+                    {[
+                      { icon: ShoppingCart, labelAr: 'تحديث الحالة', labelEn: 'Update status' },
+                      { icon: MessageCircle, labelAr: 'المحادثة', labelEn: 'Chat' },
+                      { icon: Package, labelAr: 'المرتجعات', labelEn: 'Returns' },
+                    ].map(({ icon: Icon, labelAr, labelEn }) => (
+                      <div key={labelEn} className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-border/60">
+                        <Icon className="mx-auto h-5 w-5 text-primary-600" strokeWidth={1.5} />
+                        <p className="mt-1.5 text-[11px] font-medium text-text-muted">
+                          {isAr ? labelAr : labelEn}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="mx-auto w-full max-w-4xl">

@@ -27,6 +27,7 @@ export default function CouponEditorPanel({
 }) {
   const [labelsEdited, setLabelsEdited] = useState(isEdit);
   const [usageUnlimited, setUsageUnlimited] = useState(() => form.usageLimit === '' || form.usageLimit == null);
+  const [perUserUnlimited, setPerUserUnlimited] = useState(() => form.perUserLimit === '' || form.perUserLimit == null);
   const initialized = useRef(false);
 
   const preview = {
@@ -112,6 +113,11 @@ export default function CouponEditorPanel({
   const handleUsageUnlimitedChange = (checked) => {
     setUsageUnlimited(checked);
     patchForm({ usageLimit: checked ? '' : (form.usageLimit || '100') });
+  };
+
+  const handlePerUserUnlimitedChange = (checked) => {
+    setPerUserUnlimited(checked);
+    patchForm({ perUserLimit: checked ? '' : (form.perUserLimit || '1') });
   };
 
   const showLabelSyncHint = !labelsEdited && labelsMatchSuggestion(form.labelAr, form.labelEn, form.discountType, form.discountValue);
@@ -310,6 +316,29 @@ export default function CouponEditorPanel({
               )}
             </div>
           </div>
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-border bg-slate-50 px-3 py-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500"
+              checked={perUserUnlimited}
+              onChange={(e) => handlePerUserUnlimitedChange(e.target.checked)}
+            />
+            <span className="flex items-center gap-1.5 font-medium text-text">
+              <Users className="h-3.5 w-3.5 text-text-muted" aria-hidden />
+              {isAr ? 'بدون حد لكل عميل' : 'No per-customer limit'}
+            </span>
+          </label>
+          {!perUserUnlimited && (
+            <Input
+              label={isAr ? 'الحد الأقصى لكل عميل' : 'Max uses per customer'}
+              type="number"
+              min="1"
+              value={form.perUserLimit}
+              onChange={(e) => patchForm({ perUserLimit: e.target.value })}
+              placeholder={isAr ? 'مثال: 1 (مرة واحدة لكل عميل)' : 'e.g. 1 (once per customer)'}
+              required
+            />
+          )}
           <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 px-3 py-2.5 text-sm">
             <input
               type="checkbox"

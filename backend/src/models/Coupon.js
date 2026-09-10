@@ -34,6 +34,12 @@ const couponSchema = new mongoose.Schema(
       default: null,
       min: 1,
     },
+    // Max redemptions per individual customer (null = unlimited per customer).
+    perUserLimit: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
     usedCount: {
       type: Number,
       default: 0,
@@ -48,6 +54,16 @@ const couponSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+couponSchema.pre('validate', function normalizeDiscount(next) {
+  if (this.discountType === 'percent' && this.discountValue > 100) {
+    this.discountValue = 100;
+  }
+  if (this.discountType === 'free_delivery') {
+    this.discountValue = 0;
+  }
+  next();
+});
 
 couponSchema.methods.isValid = function isValid(subtotal = 0) {
   if (!this.isActive) return { valid: false, message: 'Coupon is inactive' };

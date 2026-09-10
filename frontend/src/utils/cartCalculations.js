@@ -13,12 +13,6 @@ export const EXPRESS_DELIVERY_FEE = 49.99;
 
 const useApi = import.meta.env.VITE_USE_API !== 'false';
 
-export const COUPONS = {
-  FIRST20: { code: 'FIRST20', type: 'percent', value: 20, minSubtotal: 100, labelAr: 'خصم 20%', labelEn: '20% off' },
-  SAVE50: { code: 'SAVE50', type: 'fixed', value: 50, minSubtotal: 300, labelAr: 'خصم 50 ج.م', labelEn: '50 EGP off' },
-  FREESHIP: { code: 'FREESHIP', type: 'free_delivery', value: 0, minSubtotal: 0, labelAr: 'توصيل مجاني', labelEn: 'Free delivery' },
-};
-
 export function normalizeCoupon(coupon) {
   if (!coupon) return null;
   return {
@@ -31,57 +25,45 @@ export function normalizeCoupon(coupon) {
   };
 }
 
-function validateCouponLocal(code, subtotal) {
-  if (!code) return { valid: false, message: 'No code provided' };
-  const normalized = String(code).toUpperCase().trim();
-  const coupon = COUPONS[normalized];
-  if (!coupon) return { valid: false, message: 'Invalid discount code' };
-  if (subtotal < coupon.minSubtotal) {
-    return {
-      valid: false,
-      message: `Minimum order ${coupon.minSubtotal} EGP required`,
-      minSubtotal: coupon.minSubtotal,
-    };
-  }
-  return { valid: true, coupon: normalizeCoupon(coupon) };
-}
-
-/** Sync validation — local demo codes only */
-export function validateCoupon(code, subtotal) {
-  return validateCouponLocal(code, subtotal);
-}
-
-/** Validate against API (admin-created coupons) or local fallback */
+/**
+ * Coupons are validated server-side only (admin-created, with live expiry / usage /
+ * per-customer checks). There are no client-side demo codes — this keeps the cart
+ * total honest and prevents a stale local code from ever showing a phantom discount.
+ */
 export async function validateCouponAsync(code, subtotal) {
   if (!code) return { valid: false, message: 'No code provided' };
 
   const normalized = String(code).toUpperCase().trim();
 
-  if (useApi) {
-    try {
-      const { data } = await couponService.validate(normalized, subtotal);
-      const coupon = normalizeCoupon(data.coupon);
-      if (!coupon?.code) {
-        return { valid: false, message: 'Invalid discount code' };
-      }
-      return { valid: true, coupon };
-    } catch (err) {
-      return {
-        valid: false,
-        message: err.response?.data?.message || 'Invalid discount code',
-      };
-    }
+  if (!useApi) {
+    return { valid: false, message: 'Invalid discount code' };
   }
 
-  return validateCouponLocal(normalized, subtotal);
+  try {
+    const { data } = await couponService.validate(normalized, subtotal);
+    const coupon = normalizeCoupon(data.coupon);
+    if (!coupon?.code) {
+      return { valid: false, message: 'Invalid discount code' };
+    }
+    return { valid: true, coupon };
+  } catch (err) {
+    return {
+      valid: false,
+      message: err.response?.data?.message || 'Invalid discount code',
+    };
+  }
 }
 
 export function calculateDiscount(subtotal, coupon) {
   if (!coupon) return 0;
   const type = coupon.type || coupon.discountType;
-  const value = Number(coupon.value ?? coupon.discountValue ?? 0);
-  if (type === 'percent') return Math.round((subtotal * value) / 100 * 100) / 100;
-  if (type === 'fixed') return Math.min(value, subtotal);
+  const rawValue = Number(coupon.value ?? coupon.discountValue ?? 0) || 0;
+  const safeSubtotal = Math.max(0, Number(subtotal) || 0);
+  if (type === 'percent') {
+    const pct = Math.min(Math.max(rawValue, 0), 100);
+    return Math.min(Math.round((safeSubtotal * pct) / 100 * 100) / 100, safeSubtotal);
+  }
+  if (type === 'fixed') return Math.min(Math.max(rawValue, 0), safeSubtotal);
   return 0;
 }
 
@@ -93,16 +75,13 @@ function resolveDeliveryThreshold(deliveryZone) {
 function resolveActiveCoupon(discountCode, cachedCoupon, subtotal) {
   const normalizedCode = discountCode ? String(discountCode).toUpperCase().trim() : '';
 
+  // Display-only: reuse the coupon the server already validated for this cart.
+  // The authoritative discount is always recomputed by the backend at checkout.
   if (cachedCoupon?.code) {
     const cachedCode = String(cachedCoupon.code).toUpperCase();
     if (!normalizedCode || cachedCode === normalizedCode) {
       if (subtotal >= (cachedCoupon.minSubtotal || 0)) return cachedCoupon;
     }
-  }
-
-  if (normalizedCode) {
-    const local = validateCouponLocal(normalizedCode, subtotal);
-    if (local.valid) return local.coupon;
   }
 
   return null;

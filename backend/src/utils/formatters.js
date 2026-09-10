@@ -247,6 +247,8 @@ export const formatCoupon = (coupon) => ({
   labelEn: coupon.labelEn,
   expiryDate: coupon.expiryDate,
   usageLimit: coupon.usageLimit,
+  perUserLimit: coupon.perUserLimit ?? null,
+  usedCount: coupon.usedCount ?? 0,
   isActive: coupon.isActive,
 });
 

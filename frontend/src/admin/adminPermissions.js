@@ -8,46 +8,79 @@ export const ROLE_LABELS = {
   driver: { en: 'Delivery driver', ar: 'مندوب توصيل' },
 };
 
+/**
+ * Every role managed from the Admin Team page, in the order the UI shows them
+ * (owner first, like Microsoft admin center). `driver` is a field role — it has
+ * NO admin panel access — so the UI presents it separately from the panel roles.
+ */
+export const TEAM_ROLES = ['super_admin', 'admin', 'manager', 'driver'];
+
+/** Admin-panel roles only (a member picks exactly one of these, or Custom). */
+export const TEAM_PANEL_ROLES = ['super_admin', 'admin', 'manager'];
+
+export const TEAM_ROLE_META = {
+  super_admin: { kind: 'panel', tone: 'amber' },
+  admin: { kind: 'panel', tone: 'purple' },
+  manager: { kind: 'panel', tone: 'blue' },
+  driver: { kind: 'field', tone: 'teal' },
+};
+
 /** Plain-language guide for the team account role picker (not duplicates — 3 levels + custom). */
 export const ROLE_GUIDE = {
   manager: {
     en: {
-      summary: 'Handles orders and products. Cannot change store settings, coupons, or homepage.',
+      summary: 'Handles the day-to-day order desk and product catalog.',
       bestFor: 'Order desk, stock & fulfillment staff',
+      can: ['View the dashboard', 'Process orders, chats & returns', 'Add and edit products & stock', 'View notifications'],
+      cannot: ['Delete products', 'Edit categories, brands, coupons or offers', 'Change store, delivery or loyalty settings', 'See revenue reports or the audit log', 'Manage team accounts'],
     },
     ar: {
-      summary: 'يتعامل مع الطلبات والمنتجات. لا يغيّر إعدادات المتجر أو الكوبونات أو الصفحة الرئيسية.',
+      summary: 'يدير مكتب الطلبات اليومي وكتالوج المنتجات.',
       bestFor: 'موظف طلبات، مخزون، وتجهيز',
+      can: ['عرض لوحة التحكم', 'معالجة الطلبات والمحادثات والمرتجعات', 'إضافة وتعديل المنتجات والمخزون', 'عرض الإشعارات'],
+      cannot: ['حذف المنتجات', 'تعديل الأقسام أو العلامات أو الكوبونات أو العروض', 'تغيير إعدادات المتجر أو التوصيل أو الولاء', 'رؤية تقارير الإيرادات أو سجل التدقيق', 'إدارة حسابات الفريق'],
     },
   },
   admin: {
     en: {
-      summary: 'Runs the whole store — catalog, offers, settings & reports. Cannot add/remove team logins.',
+      summary: 'Runs the whole store — catalog, offers, content, settings & reports.',
       bestFor: 'Store manager, marketing, catalog lead',
+      can: ['Everything Operations can do', 'Categories, brands, coupons, offers & banners', 'Homepage & content pages', 'Delivery zones & store / loyalty settings', 'Revenue reports & audit log', 'Moderate reviews'],
+      cannot: ['Create, edit or remove team logins', 'Assign roles or reset other members’ passwords'],
     },
     ar: {
-      summary: 'يدير المتجر بالكامل — منتجات وعروض وإعدادات وتقارير. لا ينشئ أو يحذف حسابات الفريق.',
+      summary: 'يدير المتجر بالكامل — منتجات وعروض ومحتوى وإعدادات وتقارير.',
       bestFor: 'مدير متجر، تسويق، مسؤول كتالوج',
+      can: ['كل ما يفعله دور التشغيل', 'الأقسام والعلامات والكوبونات والعروض والبانرات', 'الصفحة الرئيسية وصفحات المحتوى', 'مناطق التوصيل وإعدادات المتجر والولاء', 'تقارير الإيرادات وسجل التدقيق', 'إدارة التقييمات'],
+      cannot: ['إنشاء أو تعديل أو حذف حسابات الفريق', 'تعيين الأدوار أو إعادة تعيين كلمات مرور الأعضاء'],
     },
   },
   super_admin: {
     en: {
-      summary: 'Full access including Admin team — create accounts, assign roles, remove other admins.',
-      bestFor: 'Business owner or IT lead (keep 1–2 accounts only)',
+      summary: 'Full access, including this Team page.',
+      bestFor: 'Business owner or IT lead — keep 1–2 accounts only',
+      can: ['Everything a Store admin can do', 'Create & delete team accounts', 'Assign roles & custom permissions', 'Reset any member’s password', 'Activate / deactivate members'],
+      cannot: ['Delete or deactivate their own account (another owner must)'],
     },
     ar: {
-      summary: 'صلاحيات كاملة بما فيها فريق الإدارة — إنشاء الحسابات وتعيين الأدوار وحذف المسؤولين الآخرين.',
-      bestFor: 'صاحب المتجر أو مسؤول تقنية (احتفظ بحساب أو اثنين فقط)',
+      summary: 'صلاحيات كاملة، بما في ذلك صفحة الفريق هذه.',
+      bestFor: 'صاحب المتجر أو مسؤول التقنية — احتفظ بحساب أو اثنين فقط',
+      can: ['كل ما يفعله مسؤول المتجر', 'إنشاء وحذف حسابات الفريق', 'تعيين الأدوار والصلاحيات المخصصة', 'إعادة تعيين كلمة مرور أي عضو', 'تفعيل / تعطيل الأعضاء'],
+      cannot: ['حذف أو تعطيل حسابه الشخصي (يقوم بذلك مالك آخر)'],
     },
   },
   driver: {
     en: {
-      summary: 'Delivery driver only — sees assigned orders, shares live GPS, no admin panel access.',
+      summary: 'Field role — no admin panel. Signs in to the driver app only.',
       bestFor: 'Courier / delivery staff on the road',
+      can: ['Sign in at /driver/login', 'See only orders assigned to them', 'Share live GPS with customer & admin', 'Mark deliveries done or failed'],
+      cannot: ['Open the admin panel', 'See other drivers’ orders, products, customers or settings'],
     },
     ar: {
-      summary: 'مندوب توصيل فقط — يرى الطلبات المعيّنة ويشارك الموقع المباشر، بدون دخول لوحة التحكم.',
+      summary: 'دور ميداني — بدون لوحة تحكم. يدخل إلى تطبيق المندوب فقط.',
       bestFor: 'مندوب توصيل / سائق',
+      can: ['الدخول من /driver/login', 'رؤية الطلبات المعيّنة له فقط', 'مشاركة الموقع المباشر مع العميل والإدارة', 'تحديد التوصيل كمكتمل أو فاشل'],
+      cannot: ['فتح لوحة التحكم', 'رؤية طلبات المناديب الآخرين أو المنتجات أو العملاء أو الإعدادات'],
     },
   },
   custom: {

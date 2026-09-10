@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requirePermission, staffOnly } from '../middleware/auth.js';
-import { validate, createAdminUserValidation } from '../middleware/validate.js';
+import { validate, createAdminUserValidation, bulkAdminUsersValidation } from '../middleware/validate.js';
 import { getAdminReturns } from '../controllers/orderReturn.controller.js';
 import { getDashboardStats } from '../controllers/admin.controller.js';
 import { getReports } from '../controllers/reports.controller.js';
@@ -41,6 +41,7 @@ import {
   getStaffAccountById,
   createStaffAccount,
   updateStaffAccount,
+  resetStaffPassword,
   deleteStaffAccount,
   getStaffPermissionMeta,
 } from '../controllers/staff.controller.js';
@@ -74,7 +75,7 @@ router.patch('/notifications/:id/read', ...requirePermission('notifications:read
 
 router.get('/audit-logs', ...requirePermission('audit:read'), getAuditLogs);
 
-router.post('/users/bulk', ...requirePermission('users:write'), bulkAdminUsers);
+router.post('/users/bulk', ...requirePermission('users:write'), validate(bulkAdminUsersValidation), bulkAdminUsers);
 router.post('/users', ...requirePermission('users:write'), validate(createAdminUserValidation), createAdminUser);
 router.get('/users', ...requirePermission('users:read'), getAdminUsers);
 router.get('/users/:id', ...requirePermission('users:read'), getAdminUserById);
@@ -86,6 +87,7 @@ router.get('/staff', ...requirePermission('users:read'), getStaffAccounts);
 router.post('/staff', ...requirePermission('users:write'), createStaffAccount);
 router.get('/staff/:id', ...requirePermission('users:read'), getStaffAccountById);
 router.put('/staff/:id', ...requirePermission('users:write'), updateStaffAccount);
+router.post('/staff/:id/reset-password', ...requirePermission('users:write'), resetStaffPassword);
 router.delete('/staff/:id', ...requirePermission('users:write'), deleteStaffAccount);
 
 export default router;

@@ -9,14 +9,31 @@ export function getStoreDateKey(date = new Date()) {
   }).format(date);
 }
 
+/**
+ * UTC offset (e.g. "+03:00") the store timezone is on for a given calendar day.
+ * Africa/Cairo observes DST, so this is not a constant — hardcoding "+02:00"
+ * shifts day boundaries by an hour every summer (coupons expiring a day late, etc.).
+ */
+export function getStoreOffset(dateKey) {
+  const probe = new Date(`${dateKey}T12:00:00Z`);
+  const label = new Intl.DateTimeFormat('en-US', {
+    timeZone: STORE_TIMEZONE,
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(probe)
+    .find((p) => p.type === 'timeZoneName')?.value || 'GMT+02:00';
+  const match = label.match(/GMT([+-]\d{2}:\d{2})/);
+  return match ? match[1] : '+02:00';
+}
+
 export function endOfStoreDay(dateInput) {
   const key = getStoreDateKey(dateInput instanceof Date ? dateInput : new Date(dateInput));
-  return new Date(`${key}T23:59:59.999+02:00`);
+  return new Date(`${key}T23:59:59.999${getStoreOffset(key)}`);
 }
 
 export function startOfStoreDay(dateInput) {
   const key = getStoreDateKey(dateInput instanceof Date ? dateInput : new Date(dateInput));
-  return new Date(`${key}T00:00:00.000+02:00`);
+  return new Date(`${key}T00:00:00.000${getStoreOffset(key)}`);
 }
 
 /** Append store UTC offset to wall-clock datetime (matches frontend storeSchedule). */

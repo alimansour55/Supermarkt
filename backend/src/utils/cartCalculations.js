@@ -22,33 +22,6 @@ export const FREE_DELIVERY_THRESHOLD = 500;
 export const SCHEDULED_DELIVERY_FEE = 29.99;
 export const EXPRESS_DELIVERY_FEE = 49.99;
 
-const FALLBACK_COUPONS = {
-  FIRST20: {
-    code: 'FIRST20',
-    discountType: 'percent',
-    discountValue: 20,
-    minSubtotal: 100,
-    labelAr: 'خصم 20%',
-    labelEn: '20% off',
-  },
-  SAVE50: {
-    code: 'SAVE50',
-    discountType: 'fixed',
-    discountValue: 50,
-    minSubtotal: 300,
-    labelAr: 'خصم 50 ج.م',
-    labelEn: '50 EGP off',
-  },
-  FREESHIP: {
-    code: 'FREESHIP',
-    discountType: 'free_delivery',
-    discountValue: 0,
-    minSubtotal: 0,
-    labelAr: 'توصيل مجاني',
-    labelEn: 'Free delivery',
-  },
-};
-
 const toCalcCoupon = (coupon) => ({
   code: coupon.code,
   type: coupon.discountType || coupon.type,
@@ -62,41 +35,31 @@ export async function validateCoupon(code, subtotal) {
   if (!code) return { valid: false, message: 'No code provided' };
 
   const normalized = code.toUpperCase().trim();
-  let coupon = await Coupon.findOne({ code: normalized, isActive: true });
+  const coupon = await Coupon.findOne({ code: normalized, isActive: true });
 
-  if (coupon) {
-    const result = coupon.isValid(subtotal);
-    if (!result.valid) return result;
-    return { valid: true, coupon: toCalcCoupon(coupon) };
-  }
-
-  const fallback = FALLBACK_COUPONS[normalized];
-  if (!fallback) {
+  if (!coupon) {
     return { valid: false, message: 'Invalid discount code' };
   }
 
-  if (subtotal < fallback.minSubtotal) {
-    return {
-      valid: false,
-      message: `Minimum order ${fallback.minSubtotal} EGP required`,
-      minSubtotal: fallback.minSubtotal,
-    };
-  }
-
-  return { valid: true, coupon: toCalcCoupon(fallback) };
+  const result = coupon.isValid(subtotal);
+  if (!result.valid) return result;
+  return { valid: true, coupon: toCalcCoupon(coupon) };
 }
 
 export function calculateDiscount(subtotal, coupon) {
   if (!coupon) return 0;
 
   const type = coupon.type || coupon.discountType;
-  const value = coupon.value ?? coupon.discountValue;
+  const rawValue = Number(coupon.value ?? coupon.discountValue) || 0;
+  const safeSubtotal = Math.max(0, Number(subtotal) || 0);
 
   if (type === 'percent') {
-    return Math.round((subtotal * value) / 100 * 100) / 100;
+    const pct = Math.min(Math.max(rawValue, 0), 100);
+    const discount = Math.round((safeSubtotal * pct) / 100 * 100) / 100;
+    return Math.min(discount, safeSubtotal);
   }
   if (type === 'fixed') {
-    return Math.min(value, subtotal);
+    return Math.min(Math.max(rawValue, 0), safeSubtotal);
   }
   return 0;
 }

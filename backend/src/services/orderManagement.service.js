@@ -70,8 +70,10 @@ export async function reverseOrderLoyalty(order) {
 
 export async function reverseCouponUsage(order) {
   if (!order.couponCode) return;
+  // Guard against driving usedCount negative (double cancel, or a coupon whose
+  // redemption was never counted).
   await Coupon.findOneAndUpdate(
-    { code: order.couponCode },
+    { code: order.couponCode, usedCount: { $gt: 0 } },
     { $inc: { usedCount: -1 } },
   );
 }

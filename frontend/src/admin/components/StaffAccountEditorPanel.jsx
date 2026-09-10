@@ -6,13 +6,13 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Loader from '../../components/ui/Loader';
 import AdminSlidePanel from './AdminSlidePanel';
+import StaffCredentialsCard from './StaffCredentialsCard';
 import { adminApi } from '../adminApi';
 import {
   PERMISSION_GROUPS,
   ROLE_DESCRIPTIONS,
   ROLE_GUIDE,
   ROLE_PRESET_PERMISSIONS,
-  STAFF_ACCOUNT_ROLES,
   roleLabel,
 } from '../adminPermissions';
 
@@ -357,35 +357,16 @@ export default function StaffAccountEditorPanel({
         </div>
       ) : createdCredentials ? (
         <div className="space-y-5">
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-            <div className="mb-3 flex items-center gap-2 text-emerald-800">
-              <Check className="h-5 w-5" />
-              <h3 className="font-semibold">{isAr ? 'تم إنشاء الحساب' : 'Account created'}</h3>
-            </div>
-            <p className="mb-4 text-sm text-emerald-900/80">
-              {isAr
-                ? 'انسخ بيانات الدخول وأرسلها للعضو بشكل آمن. لن تُعرض كلمة المرور مرة أخرى.'
-                : 'Copy these credentials and share them securely. The password will not be shown again.'}
-            </p>
-            <div className="space-y-3 rounded-xl bg-white p-4 font-mono text-sm">
-              <div>
-                <p className="text-xs text-text-muted">{isAr ? 'اسم المستخدم' : 'Username'}</p>
-                <p className="mt-0.5 font-semibold text-text" dir="ltr">{createdCredentials.username}</p>
-              </div>
-              <div>
-                <p className="text-xs text-text-muted">{isAr ? 'كلمة المرور' : 'Password'}</p>
-                <p className="mt-0.5 font-semibold text-text" dir="ltr">{createdCredentials.password}</p>
-              </div>
-              <div>
-                <p className="text-xs text-text-muted">{isAr ? 'رابط الدخول' : 'Login URL'}</p>
-                <p className="mt-0.5 break-all text-text" dir="ltr">
-                  {createdCredentials.portal === 'driver'
-                    ? `${window.location.origin}/driver/login`
-                    : `${window.location.origin}/admin/login`}
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center gap-2 text-emerald-800">
+            <Check className="h-5 w-5" />
+            <h3 className="font-semibold">{isAr ? 'تم إنشاء الحساب' : 'Account created'}</h3>
           </div>
+          <StaffCredentialsCard
+            username={createdCredentials.username}
+            password={createdCredentials.password}
+            portal={createdCredentials.portal}
+            isAr={isAr}
+          />
           <Button type="button" className="w-full" onClick={handleDoneAfterCreate}>
             {isAr ? 'تم' : 'Done'}
           </Button>
@@ -500,14 +481,17 @@ export default function StaffAccountEditorPanel({
 
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-text-muted">
               {isAr
-                ? 'أربعة مستويات جاهزة (تشغيل، إدارة، مالك، مندوب) + خيار مخصص للموظفين الإداريين.'
-                : 'Four ready-made levels (operations, store admin, owner, driver) + custom for admin staff.'}
+                ? 'اختر دور لوحة تحكم واحد، أو «مندوب» لوصول ميداني بدون لوحة تحكم. راجع صفحة «الأدوار والصلاحيات» لتفاصيل كل دور.'
+                : 'Pick one admin-panel role, or “Driver” for field access with no panel. See the Roles & permissions tab for what each one can do.'}
             </p>
 
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+              {isAr ? 'دور لوحة التحكم' : 'Admin panel role'}
+            </p>
             <div className="space-y-2">
-              {STAFF_ACCOUNT_ROLES.map((role) => {
+              {['manager', 'admin', 'super_admin'].map((role) => {
                 const guide = ROLE_GUIDE[role][isAr ? 'ar' : 'en'];
-                const count = role === 'driver' ? null : (ROLE_PRESET_PERMISSIONS[role]?.length ?? 0);
+                const count = ROLE_PRESET_PERMISSIONS[role]?.length ?? 0;
                 return (
                   <RoleOptionCard
                     key={role}
@@ -536,6 +520,22 @@ export default function StaffAccountEditorPanel({
                     ? form.permissions
                     : ROLE_PRESET_PERMISSIONS[form.role] || [],
                 })}
+              />
+            </div>
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+              {isAr ? 'وصول ميداني' : 'Field access'}
+            </p>
+            <div className="space-y-2">
+              <RoleOptionCard
+                selected={isDriverRole}
+                disabled={isEdit && accountMeta.isSelf}
+                title={roleLabel('driver', isAr)}
+                summary={ROLE_GUIDE.driver[isAr ? 'ar' : 'en'].summary}
+                bestFor={ROLE_GUIDE.driver[isAr ? 'ar' : 'en'].bestFor}
+                permCount={null}
+                permLabel=""
+                onClick={() => applyRolePreset('driver')}
               />
             </div>
 

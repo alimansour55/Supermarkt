@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, Truck, User } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -12,10 +12,20 @@ export default function DriverLoginPage() {
   const navigate = useNavigate();
   const isAr = language === 'ar';
 
+  const [searchParams] = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const passwordRef = useRef(null);
+
+  useEffect(() => {
+    const prefill = (searchParams.get('u') || searchParams.get('username') || '').trim().toLowerCase();
+    if (prefill) {
+      setUsername(prefill);
+      passwordRef.current?.focus();
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!loading && isAuthenticated && user?.role === 'driver') {
@@ -98,6 +108,7 @@ export default function DriverLoginPage() {
             <div className="relative">
               <Lock className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
               <input
+                ref={passwordRef}
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

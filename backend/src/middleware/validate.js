@@ -32,6 +32,12 @@ export const createAdminUserValidation = [
   body('role').optional().isIn(['user', 'driver']).withMessage('Role must be customer or driver'),
 ];
 
+export const bulkAdminUsersValidation = [
+  body('ids').isArray({ min: 1 }).withMessage('Select at least one user'),
+  body('ids.*').trim().notEmpty().withMessage('Invalid user id'),
+  body('action').trim().equals('delete').withMessage('Invalid bulk action'),
+];
+
 export const adminLoginValidation = [
   body('username')
     .optional({ values: 'falsy' })
@@ -149,6 +155,90 @@ export const driverTrackingLocationValidation = [
 export const driverFailDeliveryValidation = [
   body('deliveryFailureReasonKey').optional().trim(),
   body('deliveryFailureReason').optional().trim(),
+];
+
+const COUPON_DISCOUNT_TYPES = ['percent', 'fixed', 'free_delivery'];
+
+/** Shared discount-value rule: percent 1–100, fixed > 0, free_delivery ignored. */
+const couponDiscountValueRule = (getType) =>
+  body('discountValue').custom((value, { req }) => {
+    const type = getType(req);
+    if (type === 'free_delivery') return true;
+    const num = Number(value);
+    if (!Number.isFinite(num)) throw new Error('Discount value must be a number');
+    if (type === 'percent') {
+      if (num < 1 || num > 100) throw new Error('Percentage discount must be between 1 and 100');
+    } else if (type === 'fixed') {
+      if (num <= 0) throw new Error('Fixed discount must be greater than 0');
+    }
+    return true;
+  });
+
+const couponExpiryRule = (optional) => {
+  const chain = body('expiryDate');
+  const base = optional ? chain.optional({ nullable: true, checkFalsy: true }) : chain.notEmpty().withMessage('Expiry date is required');
+  return base.custom((value) => {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) throw new Error('Expiry date is invalid');
+    // Compare on calendar day so "today" is still allowed.
+    const dayEnd = new Date(d);
+    dayEnd.setHours(23, 59, 59, 999);
+    if (dayEnd.getTime() < Date.now()) throw new Error('Expiry date must be in the future');
+    return true;
+  });
+};
+
+export const createCouponValidation = [
+  body('code')
+    .trim()
+    .notEmpty().withMessage('Coupon code is required')
+    .matches(/^[A-Za-z0-9_-]{3,32}$/).withMessage('Code must be 3–32 letters, digits, - or _'),
+  body('discountType')
+    .notEmpty().withMessage('Discount type is required')
+    .isIn(COUPON_DISCOUNT_TYPES).withMessage('Invalid discount type'),
+  couponDiscountValueRule((req) => req.body.discountType),
+  body('minSubtotal').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Minimum order must be 0 or more'),
+  couponExpiryRule(false),
+  body('usageLimit').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1 }).withMessage('Usage limit must be a whole number ≥ 1'),
+  body('perUserLimit').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1 }).withMessage('Per-customer limit must be a whole number ≥ 1'),
+  body('isActive').optional().isBoolean().withMessage('isActive must be true or false'),
+  body('labelAr').optional({ nullable: true }).isString().trim().isLength({ max: 120 }),
+  body('labelEn').optional({ nullable: true }).isString().trim().isLength({ max: 120 }),
+];
+
+export const updateCouponValidation = [
+  body('code')
+    .optional()
+    .trim()
+    .matches(/^[A-Za-z0-9_-]{3,32}$/).withMessage('Code must be 3–32 letters, digits, - or _'),
+  body('discountType')
+    .optional()
+    .isIn(COUPON_DISCOUNT_TYPES).withMessage('Invalid discount type'),
+  body('discountValue')
+    .optional({ nullable: true })
+    .custom((value, { req }) => {
+      // Only enforce when a value is actually being changed.
+      if (value === undefined) return true;
+      const type = req.body.discountType || 'percent';
+      const num = Number(value);
+      if (type === 'free_delivery') return true;
+      if (!Number.isFinite(num)) throw new Error('Discount value must be a number');
+      if (type === 'percent' && (num < 1 || num > 100)) throw new Error('Percentage discount must be between 1 and 100');
+      if (type === 'fixed' && num <= 0) throw new Error('Fixed discount must be greater than 0');
+      return true;
+    }),
+  body('minSubtotal').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Minimum order must be 0 or more'),
+  couponExpiryRule(true),
+  body('usageLimit').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1 }).withMessage('Usage limit must be a whole number ≥ 1'),
+  body('perUserLimit').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1 }).withMessage('Per-customer limit must be a whole number ≥ 1'),
+  body('isActive').optional().isBoolean().withMessage('isActive must be true or false'),
+  body('labelAr').optional({ nullable: true }).isString().trim().isLength({ max: 120 }),
+  body('labelEn').optional({ nullable: true }).isString().trim().isLength({ max: 120 }),
+];
+
+export const validateDiscountCodeValidation = [
+  body('code').trim().notEmpty().withMessage('Discount code is required'),
+  body('subtotal').optional().isFloat({ min: 0 }).withMessage('Subtotal must be 0 or more'),
 ];
 
 export const validate = (validations) => async (req, res, next) => {

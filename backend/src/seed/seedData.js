@@ -117,6 +117,7 @@ export const SEED_COUPONS = [
     minSubtotal: 100,
     expiryDate: new Date('2027-12-31'),
     usageLimit: 1000,
+    perUserLimit: 1,
     labelAr: 'خصم 20%',
     labelEn: '20% off',
   },

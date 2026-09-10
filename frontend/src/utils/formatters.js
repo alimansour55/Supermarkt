@@ -34,6 +34,11 @@ export function formatDate(date, locale = 'ar-EG') {
   }).format(new Date(date));
 }
 
+/** Whole-number count with thousands separators and Latin digits (matches formatPrice). */
+export function formatCount(value) {
+  return latinizeDigits(new Intl.NumberFormat('en-US').format(Number(value) || 0));
+}
+
 export function formatRelativeTime(date, isAr = false) {
   const then = new Date(date).getTime();
   const diffSec = Math.floor((Date.now() - then) / 1000);

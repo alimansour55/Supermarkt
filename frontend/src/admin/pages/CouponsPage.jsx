@@ -36,6 +36,7 @@ const emptyCoupon = {
   minSubtotal: 0,
   expiryDate: '',
   usageLimit: '',
+  perUserLimit: '',
   labelAr: '',
   labelEn: '',
   isActive: true,
@@ -210,6 +211,7 @@ export default function CouponsPage() {
       minSubtotal: coupon.minSubtotal || 0,
       expiryDate: formatExpiryInput(coupon.expiryDate),
       usageLimit: coupon.usageLimit || '',
+      perUserLimit: coupon.perUserLimit || '',
       labelAr: coupon.labelAr || '',
       labelEn: coupon.labelEn || '',
       isActive: coupon.isActive !== false,
@@ -254,6 +256,7 @@ export default function CouponsPage() {
         discountValue: Number(form.discountValue),
         minSubtotal: Number(form.minSubtotal) || 0,
         usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
+        perUserLimit: form.perUserLimit ? Number(form.perUserLimit) : null,
       };
       if (editId) await adminApi.updateCoupon(editId, payload);
       else await adminApi.createCoupon(payload);

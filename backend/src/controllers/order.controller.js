@@ -1,6 +1,5 @@
 import Order from '../models/Order.js';
 import Cart from '../models/Cart.js';
-import Coupon from '../models/Coupon.js';
 import Product from '../models/Product.js';
 import { resolveProductLine } from '../utils/productCatalog.js';
 import {
@@ -8,7 +7,12 @@ import {
   commitOrderInventory,
 } from '../services/inventoryReservation.service.js';
 import { AppError } from '../utils/AppError.js';
-import { calculateCartTotals, validateCoupon } from '../utils/cartCalculations.js';
+import { calculateCartTotals } from '../utils/cartCalculations.js';
+import {
+  assertCouponRedeemable,
+  reserveCouponRedemption,
+  releaseCouponRedemption,
+} from '../services/coupon.service.js';
 import { calculateItemsSubtotal } from '../utils/cartLinePricing.js';
 import { formatOrder } from '../utils/formatters.js';
 import { notifyOrderCreated, notifyOrderStatusChange } from '../utils/sendEmail.js';
@@ -16,6 +20,7 @@ import { notifyOrderTimeline } from '../services/orderNotification.service.js';
 import { notifyCustomerOrderStatus } from '../services/orderTrackingNotify.service.js';
 import { pushStatusHistory } from '../services/orderManagement.service.js';
 import { ORDER_STATUS_VALUES } from '../constants/orderStatuses.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 import {
   applyDeliveryFailureReason,
   clearDeliveryFailureReason,
@@ -89,7 +94,13 @@ const ADMIN_ORDER_SORT = ['createdAt', 'total', 'orderNumber'];
 
 function buildAdminOrderFilter(query) {
   const filter = {};
-  if (query.orderStatus) filter.orderStatus = query.orderStatus;
+  if (query.orderStatus) {
+    // `confirmed` is a legacy alias of `preparing` (see orderStatuses.js) — keep
+    // the "Preparing" filter matching both so old orders don't disappear.
+    filter.orderStatus = query.orderStatus === 'preparing'
+      ? { $in: ['preparing', 'confirmed'] }
+      : query.orderStatus;
+  }
   if (query.paymentStatus) filter.paymentStatus = query.paymentStatus;
 
   if (query.dateFrom || query.dateTo) {
@@ -103,7 +114,7 @@ function buildAdminOrderFilter(query) {
   }
 
   if (query.q) {
-    const rx = { $regex: query.q, $options: 'i' };
+    const rx = { $regex: escapeRegex(String(query.q).trim()), $options: 'i' };
     filter.$or = [
       { orderNumber: rx },
       { phone: rx },
@@ -204,10 +215,15 @@ export const createOrder = asyncHandler(async (req, res) => {
   const subtotal = calculateItemsSubtotal(items);
 
   if (discountCode) {
-    const validation = await validateCoupon(discountCode, subtotal);
-    if (!validation.valid) {
-      throw new AppError(validation.message, 400);
-    }
+    // Read-only preflight — throws a customer-facing AppError on expiry / min-order /
+    // usage-limit / per-customer-limit. The redemption slot is claimed atomically
+    // later (reserveCouponRedemption), just before the order is persisted.
+    await assertCouponRedeemable({
+      code: discountCode,
+      userId: req.user._id,
+      subtotal,
+      lang,
+    });
   }
 
   const deliveryZone = await findDeliveryZone(deliveryZoneId || area);
@@ -354,6 +370,24 @@ export const createOrder = asyncHandler(async (req, res) => {
     };
   });
 
+  // Claim the coupon redemption slot atomically BEFORE persisting the order.
+  // reserveCouponRedemption only increments while usedCount < usageLimit, so two
+  // concurrent checkouts can never drive a limited coupon past its cap. If a later
+  // step fails, releaseCouponRedemption hands the slot back.
+  let couponClaimed = null;
+  if (totals.appliedCoupon?.code) {
+    const reserved = await reserveCouponRedemption(totals.appliedCoupon.code);
+    if (!reserved) {
+      throw new AppError(
+        lang === 'ar'
+          ? 'نفدت صلاحية كود الخصم — لم يعد متاحاً'
+          : 'This discount code is no longer available',
+        409,
+      );
+    }
+    couponClaimed = totals.appliedCoupon.code;
+  }
+
   const order = await Order.create({
     orderNumber: generateOrderNumber(),
     user: req.user._id,
@@ -419,53 +453,55 @@ export const createOrder = asyncHandler(async (req, res) => {
       pointsDiscount: totals.pointsDiscount,
     });
     if (!updatedUser) {
+      if (couponClaimed) await releaseCouponRedemption(couponClaimed);
       await Order.findByIdAndDelete(order._id);
       throw new AppError('Your points balance changed. Please review checkout again.', 409);
     }
   }
 
-  if (totals.appliedCoupon?.code) {
-    await Coupon.findOneAndUpdate(
-      { code: totals.appliedCoupon.code },
-      { $inc: { usedCount: 1 } },
-    );
-  }
-
   if (deliveryMethod === 'recurring') {
-    const subscription = await createRecurringSubscription({
-      userId: req.user._id,
-      sourceOrderId: order._id,
-      items: orderItems.map((item) => ({
-        product: item.product,
-        variantId: item.variantId,
-        quantity: item.quantity,
-        nameAr: item.nameAr,
-        nameEn: item.nameEn,
-        price: item.price,
-        unit: item.unit,
-        image: item.image,
-      })),
-      shippingAddress: order.shippingAddress,
-      phone: order.phone,
-      deliveryZone,
-      deliveryTimeSlot: order.deliveryTimeSlot,
-      frequency: recurringFrequency,
-      preferredWeekday: Number(recurringPreferredWeekday),
-      preferredDayOfMonth: Number(recurringPreferredDayOfMonth),
-      startDate: parsedScheduledDate,
-      paymentMethod,
-      notes,
-    });
-    order.recurringDelivery = {
-      frequency: recurringFrequency,
-      preferredWeekday: subscription.preferredWeekday,
-      preferredDayOfMonth: subscription.preferredDayOfMonth,
-      scheduleSummaryAr: subscription.scheduleSummaryAr,
-      scheduleSummaryEn: subscription.scheduleSummaryEn,
-      subscriptionId: subscription._id,
-      isFirstDelivery: true,
-    };
-    await order.save();
+    try {
+      const subscription = await createRecurringSubscription({
+        userId: req.user._id,
+        sourceOrderId: order._id,
+        items: orderItems.map((item) => ({
+          product: item.product,
+          variantId: item.variantId,
+          quantity: item.quantity,
+          nameAr: item.nameAr,
+          nameEn: item.nameEn,
+          price: item.price,
+          unit: item.unit,
+          image: item.image,
+        })),
+        shippingAddress: order.shippingAddress,
+        phone: order.phone,
+        deliveryZone,
+        deliveryTimeSlot: order.deliveryTimeSlot,
+        frequency: recurringFrequency,
+        preferredWeekday: Number(recurringPreferredWeekday),
+        preferredDayOfMonth: Number(recurringPreferredDayOfMonth),
+        startDate: parsedScheduledDate,
+        paymentMethod,
+        notes,
+      });
+      order.recurringDelivery = {
+        frequency: recurringFrequency,
+        preferredWeekday: subscription.preferredWeekday,
+        preferredDayOfMonth: subscription.preferredDayOfMonth,
+        scheduleSummaryAr: subscription.scheduleSummaryAr,
+        scheduleSummaryEn: subscription.scheduleSummaryEn,
+        subscriptionId: subscription._id,
+        isFirstDelivery: true,
+      };
+      await order.save();
+    } catch (err) {
+      // Roll back the just-created order so a failed subscription can't leave a
+      // charged order behind, and hand the coupon slot back.
+      if (couponClaimed) await releaseCouponRedemption(couponClaimed);
+      await Order.findByIdAndDelete(order._id);
+      throw err;
+    }
   }
 
   await Cart.findOneAndUpdate(
@@ -704,7 +740,7 @@ export const getAdminOrderChats = asyncHandler(async (req, res) => {
   let filter = hasCustomerMessages;
 
   if (q) {
-    const rx = { $regex: q, $options: 'i' };
+    const rx = { $regex: escapeRegex(q), $options: 'i' };
     filter = {
       $and: [
         hasCustomerMessages,

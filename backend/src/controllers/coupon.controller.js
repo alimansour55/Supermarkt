@@ -54,6 +54,7 @@ export const createCoupon = asyncHandler(async (req, res) => {
     discountValue,
     expiryDate,
     usageLimit,
+    perUserLimit,
     isActive,
     minSubtotal,
     labelAr,
@@ -71,11 +72,12 @@ export const createCoupon = asyncHandler(async (req, res) => {
   const coupon = await Coupon.create({
     code: normalized,
     discountType,
-    discountValue,
+    discountValue: discountType === 'free_delivery' ? 0 : Number(discountValue),
     expiryDate: normalizeExpiryDate(expiryDate),
-    usageLimit,
+    usageLimit: usageLimit ? Number(usageLimit) : null,
+    perUserLimit: perUserLimit ? Number(perUserLimit) : null,
     isActive: isActive ?? true,
-    minSubtotal,
+    minSubtotal: minSubtotal ? Number(minSubtotal) : 0,
     labelAr,
     labelEn,
   });
@@ -144,13 +146,50 @@ export const bulkAdminCoupons = asyncHandler(async (req, res) => {
   res.json({ success: true, affected: ids.length });
 });
 
+// Only these fields can be changed through the admin API — never usedCount,
+// createdAt, or arbitrary extra keys from the request body.
+const COUPON_UPDATABLE_FIELDS = [
+  'code',
+  'discountType',
+  'discountValue',
+  'minSubtotal',
+  'expiryDate',
+  'usageLimit',
+  'perUserLimit',
+  'isActive',
+  'labelAr',
+  'labelEn',
+];
+
 export const updateCoupon = asyncHandler(async (req, res) => {
   const coupon = await Coupon.findById(req.params.id);
   if (!coupon) throw new AppError('Coupon not found', 404);
 
-  const updates = { ...req.body };
-  if (updates.code) updates.code = updates.code.toUpperCase().trim();
+  const updates = {};
+  for (const field of COUPON_UPDATABLE_FIELDS) {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+
+  if (updates.code) {
+    updates.code = updates.code.toUpperCase().trim();
+    if (updates.code !== coupon.code) {
+      const clash = await Coupon.findOne({ code: updates.code, _id: { $ne: coupon._id } });
+      if (clash) throw new AppError('Coupon code already exists', 400);
+    }
+  }
   if (updates.expiryDate) updates.expiryDate = normalizeExpiryDate(updates.expiryDate);
+  if (updates.usageLimit !== undefined) updates.usageLimit = updates.usageLimit ? Number(updates.usageLimit) : null;
+  if (updates.perUserLimit !== undefined) updates.perUserLimit = updates.perUserLimit ? Number(updates.perUserLimit) : null;
+  if (updates.minSubtotal !== undefined) updates.minSubtotal = updates.minSubtotal ? Number(updates.minSubtotal) : 0;
+  if (updates.discountValue !== undefined) updates.discountValue = Number(updates.discountValue);
+
+  // Don't let a shrunk usage limit fall below what's already been redeemed.
+  if (updates.usageLimit != null && updates.usageLimit < coupon.usedCount) {
+    throw new AppError(
+      `Usage limit can't be below redemptions already made (${coupon.usedCount})`,
+      400,
+    );
+  }
 
   Object.assign(coupon, updates);
   await coupon.save();

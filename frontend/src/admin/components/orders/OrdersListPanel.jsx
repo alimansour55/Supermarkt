@@ -17,7 +17,7 @@ import { ListFilterSelect } from '../list';
 import Pagination from '../Pagination';
 import Loader from '../../../components/ui/Loader';
 import Button from '../../../components/ui/Button';
-import { formatPrice, formatRelativeTime } from '../../../utils/formatters';
+import { formatCount, formatPrice, formatRelativeTime } from '../../../utils/formatters';
 
 const QUICK_TABS = [
   { id: '', labelAr: 'الكل', labelEn: 'All' },
@@ -111,7 +111,8 @@ export default function OrdersListPanel({
   const totalLabel = useMemo(() => {
     if (loading) return '…';
     const total = pagination?.total ?? 0;
-    return total.toLocaleString(isAr ? 'ar-EG' : 'en-US');
+    if (total === 0) return isAr ? 'لا توجد طلبات' : 'No orders';
+    return isAr ? `${formatCount(total)} طلب` : `${formatCount(total)} orders`;
   }, [loading, pagination?.total, isAr]);
 
   return (
@@ -127,9 +128,7 @@ export default function OrdersListPanel({
             <h2 className="text-sm font-bold text-text">
               {isAr ? 'قائمة الطلبات' : 'Orders'}
             </h2>
-            <p className="text-[11px] text-text-muted">
-              {isAr ? `${totalLabel} طلب` : `${totalLabel} orders`}
-            </p>
+            <p className="text-[11px] text-text-muted">{totalLabel}</p>
           </div>
           <div className="flex items-center gap-1">
             <button

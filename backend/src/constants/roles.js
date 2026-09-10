@@ -1,6 +1,12 @@
 /** Staff roles that can access the admin panel. */
 export const STAFF_ROLES = ['manager', 'admin', 'super_admin'];
 
+/**
+ * Every role managed from the Admin Team page — the admin-panel roles plus `driver`
+ * (a field role with no panel access). Single source of truth; do not re-declare locally.
+ */
+export const TEAM_ROLES = ['manager', 'admin', 'super_admin', 'driver'];
+
 export const ROLE_LABELS = {
   user: { en: 'Customer', ar: 'عميل' },
   manager: { en: 'Manager', ar: 'مدير' },
