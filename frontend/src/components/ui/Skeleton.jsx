@@ -14,12 +14,16 @@ export function SkeletonText({ lines = 3, className = '' }) {
 
 export function HeroSkeleton() {
   return (
-    <section className="relative overflow-hidden">
-      <Skeleton className="h-[200px] sm:h-[260px] md:h-[320px] w-full rounded-none" />
-      <div className="absolute bottom-4 start-1/2 flex -translate-x-1/2 gap-2 rtl:translate-x-1/2">
-        {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className={`h-2 rounded-full ${i === 1 ? 'w-8' : 'w-2'}`} />
-        ))}
+    <section className="bg-surface-muted py-3 md:py-4">
+      <div className="container-app">
+        <div className="relative overflow-hidden rounded-2xl">
+          <Skeleton className="h-[190px] w-full rounded-none sm:h-[260px] md:h-[330px] lg:h-[390px]" />
+          <div className="absolute bottom-4 start-1/2 flex -translate-x-1/2 gap-2 rtl:translate-x-1/2">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className={`h-2 rounded-full ${i === 1 ? 'w-8' : 'w-2'}`} />
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );

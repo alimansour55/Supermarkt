@@ -69,7 +69,7 @@ const buildCheckoutLineItems = (order) => {
   );
   const expectedTotal = Math.round(order.total * 100);
 
-  if ((order.discount > 0 || order.pointsDiscount > 0) && lineItemsTotal !== expectedTotal) {
+  if ((order.discount > 0 || order.pointsDiscount > 0 || order.walletAmount > 0) && lineItemsTotal !== expectedTotal) {
     return [
       {
         price_data: {
@@ -81,6 +81,7 @@ const buildCheckoutLineItems = (order) => {
               order.couponCode ? `Coupon: ${order.couponCode}` : null,
               order.discount > 0 ? `Discount: ${order.discount} EGP` : null,
               order.pointsDiscount > 0 ? `Points: ${order.pointsDiscount} EGP` : null,
+              order.walletAmount > 0 ? `Wallet: ${order.walletAmount} EGP` : null,
             ]
               .filter(Boolean)
               .join(' · '),

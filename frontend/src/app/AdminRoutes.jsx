@@ -45,6 +45,7 @@ export default function AdminRoutes() {
         <Route path="fulfillment-locations" element={withSuspense(<P.AdminPermissionRoute permission="delivery:write"><P.FulfillmentLocationsPage /></P.AdminPermissionRoute>)} />
         <Route path="reviews" element={withSuspense(<P.AdminPermissionRoute permission="reviews:moderate"><P.ReviewsPage /></P.AdminPermissionRoute>)} />
         <Route path="loyalty" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.LoyaltyPage /></P.AdminPermissionRoute>)} />
+        <Route path="wallet" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.WalletPage /></P.AdminPermissionRoute>)} />
         <Route path="payments" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.PaymentMethodsPage /></P.AdminPermissionRoute>)} />
         <Route path="notifications" element={withSuspense(<P.AdminPermissionRoute permission="notifications:write"><P.NotificationTemplatesPage /></P.AdminPermissionRoute>)} />
         <Route path="settings">

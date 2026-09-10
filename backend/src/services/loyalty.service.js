@@ -19,17 +19,21 @@ export const DEFAULT_LOYALTY = {
 const roundMoney = (value) => Math.round(Number(value || 0) * 100) / 100;
 
 export const normalizeLoyaltySettings = (settings = {}) => {
-  const legacyMinOrder = settings?.minOrderToEarn === 100;
-  const legacyMinRedeem = settings?.minRedeemPoints === 100;
+  // Callers pass either a plain object (`.lean()`) or a live Mongoose
+  // subdocument — spreading the latter would leak `$__`, `$__parent`, `_doc`…
+  // into the API response, so flatten it and keep only the known fields.
+  const src = settings?.toObject?.({ depopulate: true }) ?? settings ?? {};
+  const legacyMinOrder = src.minOrderToEarn === 100;
+  const legacyMinRedeem = src.minRedeemPoints === 100;
 
   return {
-    ...DEFAULT_LOYALTY,
-    ...(settings || {}),
-    enabled: settings?.enabled !== false,
-    earnPointsPerEGP: Number(settings?.earnPointsPerEGP ?? DEFAULT_LOYALTY.earnPointsPerEGP),
-    redemptionEGPPerPoint: Number(settings?.redemptionEGPPerPoint ?? DEFAULT_LOYALTY.redemptionEGPPerPoint),
-    minOrderToEarn: legacyMinOrder ? 0 : Number(settings?.minOrderToEarn ?? DEFAULT_LOYALTY.minOrderToEarn),
-    minRedeemPoints: legacyMinRedeem ? 10 : Number(settings?.minRedeemPoints ?? DEFAULT_LOYALTY.minRedeemPoints),
+    enabled: src.enabled !== false,
+    earnPointsPerEGP: Number(src.earnPointsPerEGP ?? DEFAULT_LOYALTY.earnPointsPerEGP),
+    redemptionEGPPerPoint: Number(src.redemptionEGPPerPoint ?? DEFAULT_LOYALTY.redemptionEGPPerPoint),
+    expiryDays: Number(src.expiryDays ?? DEFAULT_LOYALTY.expiryDays),
+    minOrderToEarn: legacyMinOrder ? 0 : Number(src.minOrderToEarn ?? DEFAULT_LOYALTY.minOrderToEarn),
+    minRedeemPoints: legacyMinRedeem ? 10 : Number(src.minRedeemPoints ?? DEFAULT_LOYALTY.minRedeemPoints),
+    maxRedeemPercent: Number(src.maxRedeemPercent ?? DEFAULT_LOYALTY.maxRedeemPercent),
   };
 };
 
@@ -55,19 +59,30 @@ export function buildLoyaltySummary(loyalty, lang = 'ar') {
   const rules = normalizeLoyaltySettings(loyalty);
   const percent = getCashbackPercent(rules);
   const isAr = lang === 'ar';
+
+  // "every N points = 1 EGP" reads far clearer than "1 point = 0.1 EGP".
+  const egpPerPoint = Number(rules.redemptionEGPPerPoint) || 0;
+  const pointsPerEgp = egpPerPoint > 0 ? Math.round(1 / egpPerPoint) : 0;
+
   return {
     cashbackPercent: percent,
+    pointsPerEgp,
     earnDescription: isAr
-      ? `استرداد نقدي ${percent}% على كل طلب — ${rules.earnPointsPerEGP} نقطة لكل جنيه`
-      : `${percent}% cashback on every order — ${rules.earnPointsPerEGP} points per EGP`,
+      ? `استرداد نقدي ${percent}% على كل طلب — تُضاف النقاط بعد توصيل الطلب`
+      : `${percent}% cashback on every order — points are added once it is delivered`,
     redeemDescription: isAr
-      ? `كل نقطة = ${rules.redemptionEGPPerPoint} ج.م · الحد الأدنى للاستبدال ${rules.minRedeemPoints} نقطة`
-      : `Each point = ${rules.redemptionEGPPerPoint} EGP · Min redeem ${rules.minRedeemPoints} points`,
+      ? `كل ${pointsPerEgp} نقطة = 1 ج.م · استبدلها عند الدفع (الحد الأدنى ${rules.minRedeemPoints} نقطة)`
+      : `Every ${pointsPerEgp} points = EGP 1 · redeem at checkout (min ${rules.minRedeemPoints} points)`,
+    expiryDescription: rules.expiryDays > 0
+      ? (isAr
+        ? `تنتهي صلاحية النقاط بعد ${rules.expiryDays} يوماً من اكتسابها`
+        : `Points expire ${rules.expiryDays} days after they are earned`)
+      : (isAr ? 'النقاط لا تنتهي صلاحيتها' : 'Points never expire'),
   };
 }
 
 export async function getLoyaltySettings() {
-  const settings = await StoreSettings.findOne({ key: 'main' }).select('loyalty');
+  const settings = await StoreSettings.findOne({ key: 'main' }).select('loyalty').lean();
   return normalizeLoyaltySettings(settings?.loyalty);
 }
 
@@ -124,7 +139,7 @@ export async function redeemPointsForOrder({ userId, order, pointsRedeemed, poin
           points: -pointsRedeemed,
           order: order._id,
           amount: pointsDiscount,
-          note: `Redeemed on order ${order.orderNumber}`,
+          note: '',
         },
       },
     },
@@ -144,7 +159,6 @@ export async function awardPointsForOrder(order) {
   const points = calculateEarnPointsFromTotal(order.total, loyalty);
   if (points <= 0) return 0;
 
-  const cashValue = pointsToCashValue(points, loyalty);
   const expiresAt = loyalty.expiryDays > 0
     ? new Date(Date.now() + loyalty.expiryDays * 24 * 60 * 60 * 1000)
     : null;
@@ -169,7 +183,7 @@ export async function awardPointsForOrder(order) {
         points,
         order: awardedOrder._id,
         amount: awardedOrder.total,
-        note: `Cashback ${getCashbackPercent(loyalty)}% — order ${awardedOrder.orderNumber} (+${cashValue} EGP)`,
+        note: '',
         expiresAt,
       },
     },

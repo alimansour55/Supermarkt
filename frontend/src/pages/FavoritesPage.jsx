@@ -17,7 +17,7 @@ export default function FavoritesPage() {
   }, [favoriteProducts, favorites]);
 
   return (
-    <div className="container-app py-6 pb-24 md:pb-6">
+    <div className="min-w-0 pb-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-500">

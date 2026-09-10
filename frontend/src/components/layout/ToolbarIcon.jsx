@@ -60,14 +60,14 @@ export const ICON_MAP = {
 };
 
 export const TOOLBAR_PILL_CLASS = [
-  'flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5',
+  'flex items-center gap-2 rounded-field border border-border bg-white px-4 py-2.5',
   'text-sm font-semibold text-text transition-colors',
   'hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700',
 ].join(' ');
 
 export const TOOLBAR_PLAIN_CLASS = [
-  'relative flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-text',
-  'transition-colors hover:bg-surface',
+  'relative flex min-h-[44px] items-center gap-2 rounded-field px-2 py-2 text-sm font-medium text-primary-700',
+  'transition-colors hover:bg-primary-50',
 ].join(' ');
 
 export function getToolbarIconComponent(icon, itemKey) {
@@ -75,7 +75,7 @@ export function getToolbarIconComponent(icon, itemKey) {
   return ICON_MAP[key] || LayoutGrid;
 }
 
-export default function ToolbarIcon({ icon, itemKey, className = 'h-5 w-5 shrink-0' }) {
+export default function ToolbarIcon({ icon, itemKey, className = 'h-[22px] w-[22px] shrink-0' }) {
   const Icon = getToolbarIconComponent(icon, itemKey);
-  return <Icon className={className} aria-hidden />;
+  return <Icon className={className} strokeWidth={1.75} aria-hidden />;
 }

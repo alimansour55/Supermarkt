@@ -134,7 +134,9 @@ export function formatShortMethodsList(methods, isAr) {
 export function formatMethodsOnlyPhrase(methods, isAr) {
   const list = formatShortMethodsList(methods, isAr);
   if (list === '—') return isAr ? 'لا توصيل مجاني.' : 'No free delivery.';
-  return isAr ? `ل${list} فقط.` : `${list} only.`;
+  if (!isAr) return `${list} only.`;
+  // Arabic: the lām preposition elides with a following definite article — لـ + العادي ⇒ للعادي.
+  return `${list.startsWith('ال') ? `لل${list.slice(2)}` : `لـ${list}`} فقط.`;
 }
 
 export function mergeFreeDeliveryBanner(settings = {}) {

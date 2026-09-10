@@ -5,6 +5,7 @@ import {
   assertProductCategoryAssignment,
   getRootCategoryId,
   getCategoryChainFromId,
+  getCategoryPathIds,
   getCanonicalSlugPath,
   parseSlugPathParam,
   resolveCategoryChainBySlugs,
@@ -23,28 +24,38 @@ export async function resolveCategoryRef(categoryRef) {
 }
 
 /**
- * Resolve and validate product category fields so mainCategory, subCategory, and category
- * always reference the same leaf category and its root main category.
+ * Resolve and validate a product's category link.
+ *
+ * The product's editable link is a single category at any depth (`category`).
+ * `subCategory` mirrors it and `mainCategory` is the root of its chain — both are
+ * kept written for backward compatibility. `categoryAncestors` is the ordered
+ * root → self path used for fast category product listings.
  */
 export async function resolveProductCategoryFields({ mainCategory, subCategory, category }) {
-  const subId = await resolveCategoryRef(subCategory || category);
-  if (!subId) {
+  const targetId = await resolveCategoryRef(subCategory || category);
+  if (!targetId) {
     throw new AppError(productCategoryError('required'), 400);
   }
 
+  const pathIds = await getCategoryPathIds(targetId);
   let mainId = mainCategory ? await resolveCategoryRef(mainCategory) : null;
   if (!mainId) {
-    mainId = await getRootCategoryId(subId);
+    mainId = pathIds[0] || await getRootCategoryId(targetId);
   }
   if (!mainId) {
     throw new AppError(productCategoryError('mainUnresolved'), 400);
   }
 
-  await assertProductCategoryAssignment(subId, mainId);
-  return { mainCategory: mainId, subCategory: subId, category: subId };
+  await assertProductCategoryAssignment(targetId, mainId);
+  return {
+    mainCategory: mainId,
+    subCategory: targetId,
+    category: targetId,
+    categoryAncestors: pathIds.length ? pathIds : [targetId],
+  };
 }
 
-async function assertImportLeafCategory(category, slugLabel) {
+async function assertImportTargetCategory(category, slugLabel) {
   const label = slugLabel || category?.slug || 'unknown';
   if (!category) {
     throw new AppError(`Category not found: "${label}"`, 400);
@@ -52,13 +63,6 @@ async function assertImportLeafCategory(category, slugLabel) {
   if (!category.isActive) {
     throw new AppError(
       `Category "${label}" is inactive — activate it first or choose another.`,
-      400,
-    );
-  }
-  const childCount = await Category.countDocuments({ parentCategory: category._id });
-  if (childCount > 0) {
-    throw new AppError(
-      `Category "${label}" has subcategories — set categoryPathSlugs to the full path ending at the deepest subcategory.`,
       400,
     );
   }
@@ -74,7 +78,7 @@ async function resolveLeafCategoryBySlug(slug) {
     return Category.findById(fields.subCategory);
   }
   const category = await Category.findOne({ slug: trimmed });
-  await assertImportLeafCategory(category, trimmed);
+  await assertImportTargetCategory(category, trimmed);
   return category;
 }
 
@@ -97,7 +101,7 @@ export async function resolveProductCategoryFieldsFromImport(row = {}) {
       throw new AppError(`Invalid category path "${pathValue}"`, 400);
     }
     const leaf = chain[chain.length - 1];
-    await assertImportLeafCategory(leaf, slugs[slugs.length - 1]);
+    await assertImportTargetCategory(leaf, slugs[slugs.length - 1]);
     return resolveProductCategoryFields({
       mainCategory: chain[0]._id,
       subCategory: leaf._id,

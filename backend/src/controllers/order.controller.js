@@ -1,4 +1,5 @@
 import Order from '../models/Order.js';
+import User from '../models/User.js';
 import Cart from '../models/Cart.js';
 import Product from '../models/Product.js';
 import { resolveProductLine } from '../utils/productCatalog.js';
@@ -17,7 +18,12 @@ import { calculateItemsSubtotal } from '../utils/cartLinePricing.js';
 import { formatOrder } from '../utils/formatters.js';
 import { notifyOrderCreated, notifyOrderStatusChange } from '../utils/sendEmail.js';
 import { notifyOrderTimeline } from '../services/orderNotification.service.js';
-import { notifyCustomerOrderStatus } from '../services/orderTrackingNotify.service.js';
+import {
+  notifyCustomerOrderStatus,
+  notifyCustomerDriverAssigned,
+  notifyCustomerTrackingLive,
+} from '../services/orderTrackingNotify.service.js';
+import { autoAssignDriverToOrder } from '../services/deliveryDispatch.service.js';
 import { pushStatusHistory } from '../services/orderManagement.service.js';
 import { ORDER_STATUS_VALUES } from '../constants/orderStatuses.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
@@ -43,10 +49,13 @@ import {
   awardPointsForOrder,
   redeemPointsForOrder,
 } from '../services/loyalty.service.js';
+import { spendWalletForOrder, creditWallet } from '../services/wallet.service.js';
 import {
   findDeliveryZone,
+  listPublicDeliveryZones,
   validateDeliveryForZone,
 } from '../services/deliveryZone.service.js';
+import { anyZoneHasCoords, findCoveringZone } from '../utils/zoneCoverage.js';
 import { resolveFulfillmentLocationForZone } from '../services/fulfillmentLocation.service.js';
 import { enrichAndValidateAddress } from '../services/addressEnrichment.service.js';
 import {
@@ -141,6 +150,7 @@ export const createOrder = asyncHandler(async (req, res) => {
     recurringPreferredDayOfMonth,
     discountCode,
     pointsToRedeem = 0,
+    walletToRedeem = 0,
     deliveryZoneId,
     timeSlotId,
     area,
@@ -249,11 +259,39 @@ export const createOrder = asyncHandler(async (req, res) => {
     timeSlotId,
   });
 
+  // Customer's chosen pin (from the startup location popup or the checkout map).
+  // Kept even when the checkout map feature is off, so admin/driver still see it.
+  const rawPinLat = Number(shippingAddress?.lat);
+  const rawPinLng = Number(shippingAddress?.lng);
+  const hasCustomerPin = Number.isFinite(rawPinLat) && Number.isFinite(rawPinLng);
+  const customerPinLat = enrichedShipping.lat ?? (hasCustomerPin ? rawPinLat : null);
+  const customerPinLng = enrichedShipping.lng ?? (hasCustomerPin ? rawPinLng : null);
+
+  // Delivery-area coverage: reject pins that fall outside every active zone's radius.
+  if (
+    storeSettings?.locationGate?.enabled
+    && storeSettings?.locationGate?.enforceCoverage !== false
+    && customerPinLat != null
+    && customerPinLng != null
+  ) {
+    const activeZones = await listPublicDeliveryZones();
+    if (anyZoneHasCoords(activeZones)
+      && !findCoveringZone(activeZones, { lat: customerPinLat, lng: customerPinLng })) {
+      throw new AppError(
+        lang === 'ar'
+          ? 'عذراً! لا نغطي هذه المنطقة.'
+          : 'Sorry! We do not deliver to this area.',
+        400,
+      );
+    }
+  }
+
   const totals = await calculateCartTotals({
     items,
     deliveryMethod: deliveryMethod === 'recurring' ? 'recurring' : deliveryMethod,
     discountCode,
     pointsToRedeem,
+    walletToSpend: Math.max(0, Number(walletToRedeem) || 0),
     user: req.user,
     deliveryZoneId: deliveryZone.id,
   });
@@ -401,10 +439,10 @@ export const createOrder = asyncHandler(async (req, res) => {
       governorate: enrichedShipping.governorate,
       area: enrichedShipping.area || area,
       postalCode: enrichedShipping.postalCode,
-      lat: enrichedShipping.lat,
-      lng: enrichedShipping.lng,
-      formattedAddress: enrichedShipping.formattedAddress,
-      placeId: enrichedShipping.placeId,
+      lat: customerPinLat,
+      lng: customerPinLng,
+      formattedAddress: enrichedShipping.formattedAddress || shippingAddress.formattedAddress || '',
+      placeId: enrichedShipping.placeId || shippingAddress.placeId || '',
       locationSource: enrichedShipping.locationSource || shippingAddress.locationSource || '',
     },
     phone,
@@ -414,6 +452,7 @@ export const createOrder = asyncHandler(async (req, res) => {
     discount: totals.discountAmount,
     pointsRedeemed: totals.pointsRedeemed,
     pointsDiscount: totals.pointsDiscount,
+    walletAmount: totals.walletApplied || 0,
     couponCode: totals.appliedCoupon?.code || discountCode || null,
     total: totals.total,
     paymentMethod,
@@ -458,6 +497,37 @@ export const createOrder = asyncHandler(async (req, res) => {
       throw new AppError('Your points balance changed. Please review checkout again.', 409);
     }
   }
+
+  if (totals.walletApplied > 0) {
+    const spent = await spendWalletForOrder({
+      userId: req.user._id,
+      order,
+      walletApplied: totals.walletApplied,
+    });
+    if (!spent) {
+      // Undo the points redemption we just committed, hand back the coupon slot,
+      // then drop the order.
+      if (totals.pointsRedeemed > 0) {
+        await User.findByIdAndUpdate(req.user._id, {
+          $inc: { pointsBalance: totals.pointsRedeemed },
+          $push: {
+            pointsHistory: {
+              type: 'refund',
+              points: totals.pointsRedeemed,
+              amount: totals.pointsDiscount,
+              note: 'Points restored — checkout could not be completed',
+            },
+          },
+        });
+      }
+      if (couponClaimed) await releaseCouponRedemption(couponClaimed);
+      await Order.findByIdAndDelete(order._id);
+      throw new AppError('Your wallet balance changed. Please review checkout again.', 409);
+    }
+  }
+
+  // Coupon usage is already committed by reserveCouponRedemption above; the
+  // reservation stands once the order persists, so nothing to increment here.
 
   if (deliveryMethod === 'recurring') {
     try {
@@ -541,6 +611,7 @@ export const createOrder = asyncHandler(async (req, res) => {
       pointsRedeemed: order.pointsRedeemed,
       pointsDiscount: order.pointsDiscount,
       pointsEarned: order.pointsEarned || 0,
+      walletAmount: order.walletAmount || 0,
       status: order.orderStatus,
       orderStatus: order.orderStatus,
     },
@@ -711,12 +782,13 @@ export const getOrderById = asyncHandler(async (req, res) => {
 });
 
 export const calculateTotals = asyncHandler(async (req, res) => {
-  const { items, deliveryMethod, discountCode, pointsToRedeem, deliveryZoneId } = req.body;
+  const { items, deliveryMethod, discountCode, pointsToRedeem, walletToRedeem, deliveryZoneId } = req.body;
   const totals = await calculateCartTotals({
     items: items || [],
     deliveryMethod,
     discountCode,
     pointsToRedeem,
+    walletToSpend: Math.max(0, Number(walletToRedeem) || 0),
     user: req.user,
     deliveryZoneId,
   });
@@ -865,6 +937,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   const previousStatus = order.orderStatus;
   let statusNote = '';
+  let autoAssignedDriver = null;
 
   if (orderStatus && orderStatus !== order.orderStatus) {
     if (!ORDER_STATUS_VALUES.includes(orderStatus)) {
@@ -892,8 +965,13 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     }
 
     order.orderStatus = orderStatus;
-    if (orderStatus === 'out_for_delivery' && order.assignedDriver) {
-      await ensureOrderTracking(order);
+    if (orderStatus === 'out_for_delivery') {
+      if (!order.assignedDriver) {
+        autoAssignedDriver = await autoAssignDriverToOrder(order, { req });
+      }
+      if (order.assignedDriver) {
+        await ensureOrderTracking(order);
+      }
     }
     if (orderStatus === 'delivered' && previousStatus !== 'delivered') {
       order.deliveredAt = new Date();
@@ -971,6 +1049,23 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
           : {}),
       },
     });
+  }
+
+  if (autoAssignedDriver) {
+    try {
+      const populatedForDriver = await Order.findById(order._id)
+        .populate('user', 'name email phone')
+        .populate('assignedDriver', 'name phone');
+      await notifyCustomerDriverAssigned(
+        populatedForDriver,
+        populatedForDriver.user,
+        populatedForDriver.assignedDriver,
+      );
+      await notifyCustomerTrackingLive(populatedForDriver, populatedForDriver.user)
+        .catch((err) => console.error('Tracking live notify failed:', err.message));
+    } catch (err) {
+      console.error('Auto-assign driver notify failed:', err.message);
+    }
   }
 
   const populated = await Order.findById(order._id)

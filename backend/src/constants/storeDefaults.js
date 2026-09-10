@@ -96,12 +96,37 @@ export const DEFAULT_PAYMENT_METHODS = [
   },
 ];
 
+/** Keep in sync with the `locationGate` sub-schema in models/StoreSettings.js. */
+export const DEFAULT_LOCATION_GATE = {
+  enabled: false,
+  mandatory: true,
+  enforceCoverage: true,
+  titleAr: 'اختر منطقتك',
+  titleEn: 'Choose your area',
+  subtitleAr: 'حدّد منطقة التوصيل لعرض المنتجات والأسعار ومواعيد التوصيل الصحيحة',
+  subtitleEn: 'Set your delivery area to see the right products, prices and delivery slots',
+  mapCenterLat: 29.8453,
+  mapCenterLng: 31.3339,
+  mapZoom: 12,
+};
+
 export const DEFAULT_LOW_STOCK_ALERT = {
   lowStockAlertEnabled: true,
   lowStockAlertThreshold: 10,
   adminStockAlertThreshold: 10,
   lowStockMessageAr: 'باقي {{qty}} فقط',
   lowStockMessageEn: 'Only {{qty}} left',
+};
+
+/** Keep in sync with the `wallet` sub-schema in models/StoreSettings.js. */
+export const DEFAULT_WALLET = {
+  enabled: true,
+  allowTopUp: true,
+  allowCheckoutSpend: true,
+  minTopUp: 50,
+  maxTopUp: 5000,
+  maxBalance: 20000,
+  maxCheckoutPercent: 100,
 };
 
 export const DEFAULT_TRENDING_SEARCHES = [
@@ -112,9 +137,20 @@ export const DEFAULT_TRENDING_SEARCHES = [
   { query: 'eggs', labelAr: 'بيض', labelEn: 'eggs', sortOrder: 4, isActive: true },
 ];
 
+/** Keep in sync with the `trendingConfig` sub-schema in models/StoreSettings.js. */
+export const DEFAULT_TRENDING_CONFIG = {
+  displayLimit: 8,
+  autoLookbackDays: 7,
+  autoMinCount: 3,
+  requireConversion: false,
+  dedupeByProduct: true,
+  autoBlocklist: [],
+};
+
 export const DEFAULT_SEARCH_SETTINGS = {
   trendingMode: 'manual',
   trendingSearches: DEFAULT_TRENDING_SEARCHES,
+  trendingConfig: DEFAULT_TRENDING_CONFIG,
 };
 
 export const DEFAULT_ADMIN_PANEL = {
@@ -160,5 +196,14 @@ export const DEFAULT_PARTNER_REVENUE = {
   partners: [],
 };
 
-export const DEFAULT_THEME_COLOR = 'green';
+/** Keep in sync with the `driverSettings` sub-schema in models/StoreSettings.js. */
+export const DEFAULT_DRIVER_SETTINGS = {
+  autoAssignEnabled: false,
+  autoAssignMaxActive: 0,
+  availabilityEnabled: true,
+  pickingChecklistEnabled: true,
+  cashCalculatorEnabled: true,
+};
+
+export const DEFAULT_THEME_COLOR = 'hyperone';
 export const DEFAULT_SITE_FONT = 'cairo';

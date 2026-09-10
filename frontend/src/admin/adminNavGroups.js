@@ -36,6 +36,7 @@ import {
   Award,
   Filter,
   Handshake,
+  Wallet,
 } from 'lucide-react';
 
 export const ADMIN_NAV_GROUPS = [
@@ -141,6 +142,7 @@ export const ADMIN_NAV_GROUPS = [
       { path: '/admin/users', labelAr: 'المستخدمون', labelEn: 'Users', Icon: Users, permission: 'users:read' },
       { path: '/admin/team', labelAr: 'فريق الإدارة', labelEn: 'Admin team', Icon: UserCog, permission: 'users:write' },
       { path: '/admin/loyalty', labelAr: 'نقاط الولاء', labelEn: 'Loyalty points', Icon: Gift, permission: 'settings:write' },
+      { path: '/admin/wallet', labelAr: 'المحافظ', labelEn: 'Wallets', Icon: Wallet, permission: 'settings:write' },
     ],
   },
   {

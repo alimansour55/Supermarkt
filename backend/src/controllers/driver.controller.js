@@ -20,7 +20,8 @@ import { notifyCustomerDriverLocation, notifyCustomerOrderStatus } from '../serv
 import { buildTrackingSnapshot } from '../services/deliveryTracking.service.js';
 import { awardPointsForOrder } from '../services/loyalty.service.js';
 import { logAudit } from '../services/auditLog.service.js';
-import { getGpsDeliveryEnabled } from '../services/storeSettings.service.js';
+import { getGpsDeliveryEnabled, getDriverSettings } from '../services/storeSettings.service.js';
+import User from '../models/User.js';
 
 function formatDriverItems(items = []) {
   return items.map((item) => ({
@@ -35,7 +36,11 @@ function formatDriverItems(items = []) {
   }));
 }
 
-export function formatDriverOrder(order, { gpsDeliveryEnabled = true } = {}) {
+export function formatDriverOrder(order, {
+  gpsDeliveryEnabled = true,
+  pickingChecklistEnabled = true,
+  cashCalculatorEnabled = true,
+} = {}) {
   const raw = order.toObject?.() ?? order;
   const user = raw.user && typeof raw.user === 'object' ? raw.user : null;
   const items = formatDriverItems(raw.items);
@@ -58,6 +63,8 @@ export function formatDriverOrder(order, { gpsDeliveryEnabled = true } = {}) {
     itemCount: items.reduce((sum, item) => sum + (item.quantity || 0), 0),
     trackingEnabled: raw.trackingEnabled === true,
     gpsDeliveryEnabled,
+    pickingChecklistEnabled,
+    cashCalculatorEnabled,
     canShareLocation: gpsDeliveryEnabled && isActiveDriverTrackingStatus(raw.orderStatus),
     canComplete: raw.orderStatus === 'out_for_delivery',
     shippingAddress: raw.shippingAddress,
@@ -68,6 +75,18 @@ export function formatDriverOrder(order, { gpsDeliveryEnabled = true } = {}) {
     assignedDriverAt: raw.assignedDriverAt,
     createdAt: raw.createdAt,
     deliveredAt: raw.deliveredAt || null,
+  };
+}
+
+async function getDriverOrderFlags() {
+  const [gpsDeliveryEnabled, driverSettings] = await Promise.all([
+    getGpsDeliveryEnabled(),
+    getDriverSettings(),
+  ]);
+  return {
+    gpsDeliveryEnabled,
+    pickingChecklistEnabled: driverSettings.pickingChecklistEnabled !== false,
+    cashCalculatorEnabled: driverSettings.cashCalculatorEnabled !== false,
   };
 }
 
@@ -138,7 +157,7 @@ async function finalizeDriverOrderStatus(order, nextStatus, { driverId, failureP
 }
 
 export const getDriverDeliveries = asyncHandler(async (req, res) => {
-  const gpsDeliveryEnabled = await getGpsDeliveryEnabled();
+  const flags = await getDriverOrderFlags();
   const orders = await Order.find({
     assignedDriver: req.user._id,
     orderStatus: 'out_for_delivery',
@@ -149,7 +168,7 @@ export const getDriverDeliveries = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    data: orders.map((order) => formatDriverOrder(order, { gpsDeliveryEnabled })),
+    data: orders.map((order) => formatDriverOrder(order, flags)),
   });
 });
 
@@ -160,8 +179,36 @@ export const getDriverDeliveryById = asyncHandler(async (req, res) => {
     throw new AppError('Delivery not found', 404);
   }
 
-  const gpsDeliveryEnabled = await getGpsDeliveryEnabled();
-  res.json({ success: true, data: formatDriverOrder(order, { gpsDeliveryEnabled }) });
+  const flags = await getDriverOrderFlags();
+  res.json({ success: true, data: formatDriverOrder(order, flags) });
+});
+
+export const getDriverConfig = asyncHandler(async (req, res) => {
+  const driverSettings = await getDriverSettings();
+  res.json({
+    success: true,
+    data: {
+      availabilityEnabled: driverSettings.availabilityEnabled !== false,
+      pickingChecklistEnabled: driverSettings.pickingChecklistEnabled !== false,
+      cashCalculatorEnabled: driverSettings.cashCalculatorEnabled !== false,
+      driverAvailable: req.user.driverAvailable !== false,
+    },
+  });
+});
+
+export const updateDriverAvailability = asyncHandler(async (req, res) => {
+  const driverSettings = await getDriverSettings();
+  if (driverSettings.availabilityEnabled === false) {
+    throw new AppError('Availability control is disabled by the store', 403);
+  }
+
+  const available = req.body.available === true || req.body.available === 'true';
+  await User.updateOne(
+    { _id: req.user._id },
+    { $set: { driverAvailable: available, driverAvailableAt: new Date() } },
+  );
+
+  res.json({ success: true, data: { driverAvailable: available } });
 });
 
 export const updateDriverOrderLocation = asyncHandler(async (req, res) => {

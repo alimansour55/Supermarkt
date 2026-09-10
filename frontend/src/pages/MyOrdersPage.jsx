@@ -41,7 +41,7 @@ export default function MyOrdersPage() {
   }), [orders]);
 
   return (
-    <div className="container-app py-6 pb-12 md:py-8">
+    <div className="min-w-0 pb-8">
       <div className="mx-auto max-w-3xl">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>

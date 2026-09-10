@@ -1,4 +1,5 @@
 export const DELIVERY_LOCATIONS = [
+  { id: 'cairo-helwan', nameAr: 'حلوان، القاهرة', nameEn: 'Helwan, Cairo', centerLat: 29.8453, centerLng: 31.3339 },
   { id: 'cairo-nasr', nameAr: 'مدينة نصر، القاهرة', nameEn: 'Nasr City, Cairo' },
   { id: 'cairo-maadi', nameAr: 'المعادي، القاهرة', nameEn: 'Maadi, Cairo' },
   { id: 'cairo-heliopolis', nameAr: 'مصر الجديدة، القاهرة', nameEn: 'Heliopolis, Cairo' },

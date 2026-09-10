@@ -113,16 +113,19 @@ export async function fetchSearchSuggestions(query, category = '') {
   };
 }
 
-export async function fetchTrendingSearches(limit = 8) {
+export async function fetchTrendingSearches(limit) {
   if (useApi) {
     try {
-      const { data } = await api.get('/search/trending', { params: { limit, days: 7 } });
+      // Omit params so the store's configured display limit / lookback window apply;
+      // pass `limit` only when a caller needs a hard upper bound.
+      const params = limit != null ? { limit } : undefined;
+      const { data } = await api.get('/search/trending', { params });
       if (Array.isArray(data.data)) return data.data;
     } catch {
       // fall through
     }
   }
-  return POPULAR_SEARCHES.slice(0, limit);
+  return POPULAR_SEARCHES.slice(0, limit || 8);
 }
 
 export async function trackSearchEvent({ query, resultCount, source = 'search' }) {

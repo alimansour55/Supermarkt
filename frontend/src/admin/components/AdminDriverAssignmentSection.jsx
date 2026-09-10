@@ -6,6 +6,7 @@ import {
 import Button from '../../components/ui/Button';
 import AdminOrderTrackingSection from './AdminOrderTrackingSection';
 import { formatDate } from '../../utils/formatters';
+import { useAdminPanel } from '../context/AdminPanelContext';
 
 function DriverAvatar({ name, size = 'md' }) {
   const initials = (name || '?')
@@ -56,12 +57,17 @@ function DriverPickCard({
           {driver.phone ? `${driver.username ? ' · ' : ''}${driver.phone}` : ''}
         </p>
         <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {driver.available === false && (
+            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+              {isAr ? 'غير متصل' : 'Offline'}
+            </span>
+          )}
           {busy && (
             <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800">
               {driver.activeDeliveries} {isAr ? 'طلب نشط' : 'active'}
             </span>
           )}
-          {!busy && driver.activeDeliveries === 0 && (
+          {!busy && driver.activeDeliveries === 0 && driver.available !== false && (
             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
               {isAr ? 'متاح' : 'Available'}
             </span>
@@ -86,6 +92,17 @@ export default function AdminDriverAssignmentSection({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pendingDriverId, setPendingDriverId] = useState('');
+  const { driverSettings } = useAdminPanel();
+  const autoAssignEnabled = driverSettings?.autoAssignEnabled === true;
+
+  const sortedDrivers = useMemo(
+    () => [...drivers].sort((a, b) => {
+      const availDiff = (a.available === false ? 1 : 0) - (b.available === false ? 1 : 0);
+      if (availDiff) return availDiff;
+      return (a.activeDeliveries || 0) - (b.activeDeliveries || 0);
+    }),
+    [drivers],
+  );
 
   const assignedId = order.assignedDriver?._id || order.assignedDriver?.id || '';
   const currentStatus = order.orderStatus || order.status;
@@ -159,6 +176,13 @@ export default function AdminDriverAssignmentSection({
       </div>
 
       <div className="space-y-4 p-4">
+        {autoAssignEnabled && !assignedId && (
+          <p className="rounded-lg bg-teal-50 px-3 py-2 text-xs text-teal-900">
+            {isAr
+              ? '⚡ التعيين التلقائي مُفعّل — سيُختار مندوب تلقائياً عند تحويل الطلب إلى «في الطريق». يمكنك أيضاً اختيار مندوب يدوياً الآن.'
+              : '⚡ Auto-assign is on — a driver is picked automatically when the order ships. You can still pick one manually now.'}
+          </p>
+        )}
         {assignedId && order.assignedDriver ? (
           <div className="rounded-xl border border-teal-200 bg-white p-4 shadow-sm">
             <div className="flex items-start gap-3">
@@ -274,7 +298,7 @@ export default function AdminDriverAssignmentSection({
                   </div>
                 ) : (
                   <ul className="max-h-64 space-y-2 overflow-y-auto">
-                    {drivers.map((driver) => (
+                    {sortedDrivers.map((driver) => (
                       <li key={driver._id}>
                         <DriverPickCard
                           driver={driver}

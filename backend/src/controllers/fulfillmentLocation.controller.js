@@ -2,10 +2,30 @@ import FulfillmentLocation from '../models/FulfillmentLocation.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { AppError } from '../utils/AppError.js';
 import { geocodeAddress, reverseGeocode, geocodePlaceId } from '../services/googleMaps.service.js';
+import { getOsmSuggestions, reverseGeocodeOsm } from '../services/osmGeocode.service.js';
 import {
   clearOtherDefaultLocations,
   formatFulfillmentLocation,
 } from '../services/fulfillmentLocation.service.js';
+
+const pickLanguage = (value) => (String(value || 'ar').toLowerCase().startsWith('en') ? 'en' : 'ar');
+
+const mergeGeocode = (primary, secondary, lat, lng) => {
+  if (!primary) return secondary ? { ...secondary, lat, lng } : null;
+  if (!secondary) return { ...primary, lat, lng };
+  return {
+    ...primary,
+    lat,
+    lng,
+    street: primary.street || secondary.street || '',
+    building: primary.building || secondary.building || '',
+    area: primary.area || secondary.area || '',
+    city: primary.city || secondary.city || '',
+    governorate: primary.governorate || secondary.governorate || '',
+    formattedAddress: primary.formattedAddress || secondary.formattedAddress || '',
+    placeId: primary.placeId || secondary.placeId || '',
+  };
+};
 
 const normalizeZoneIds = (body) => {
   const raw = body.deliveryZones ?? body.deliveryZoneIds ?? [];
@@ -80,24 +100,55 @@ export const deleteAdminFulfillmentLocation = asyncHandler(async (req, res) => {
 
 export const geocodeAdminFulfillmentLocation = asyncHandler(async (req, res) => {
   const { address, lat, lng, placeId } = req.body;
+  const language = pickLanguage(req.body?.language);
 
-  if (lat != null && lng != null) {
-    const result = await reverseGeocode(Number(lat), Number(lng));
-    if (!result) throw new AppError('Could not resolve coordinates to an address', 404);
-    return res.json({ success: true, data: result });
+  if (lat != null && lng != null && lat !== '' && lng !== '') {
+    const pinLat = Number(lat);
+    const pinLng = Number(lng);
+    if (!Number.isFinite(pinLat) || !Number.isFinite(pinLng)) {
+      throw new AppError('Invalid coordinates', 400);
+    }
+
+    // Google first (when configured), then OpenStreetMap so the picker still
+    // resolves an address with no Google Maps billing set up.
+    const [googleResult, osmResult] = await Promise.all([
+      reverseGeocode(pinLat, pinLng).catch(() => null),
+      reverseGeocodeOsm(pinLat, pinLng, { language }).catch(() => null),
+    ]);
+
+    const result = mergeGeocode(googleResult, osmResult, pinLat, pinLng);
+    if (!result) {
+      // Coordinates are valid even when no address service answered — let the
+      // admin keep the pin and type the address manually.
+      return res.json({ success: true, data: { lat: pinLat, lng: pinLng, formattedAddress: '', placeId: '' } });
+    }
+    return res.json({ success: true, data: { ...result, lat: pinLat, lng: pinLng } });
   }
 
   if (placeId) {
-    const result = await geocodePlaceId(placeId);
-    if (!result) throw new AppError('Place not found', 404);
-    return res.json({ success: true, data: result });
+    const result = await geocodePlaceId(placeId).catch(() => null);
+    if (result) return res.json({ success: true, data: result });
+    // fall through to text search on the place label if we have one
   }
 
   const query = String(address || '').trim();
   if (!query) throw new AppError('Address or coordinates are required', 400);
 
-  const result = await geocodeAddress(query);
-  if (!result) throw new AppError('Address not found', 404);
+  const googleGeo = await geocodeAddress(query).catch(() => null);
+  if (googleGeo) return res.json({ success: true, data: googleGeo });
 
-  res.json({ success: true, data: result });
+  const [osmMatch] = await getOsmSuggestions(query, { language }).catch(() => []);
+  if (osmMatch && Number.isFinite(osmMatch.lat) && Number.isFinite(osmMatch.lng)) {
+    return res.json({
+      success: true,
+      data: {
+        lat: osmMatch.lat,
+        lng: osmMatch.lng,
+        formattedAddress: osmMatch.formattedAddress || osmMatch.description || query,
+        placeId: osmMatch.placeId || '',
+      },
+    });
+  }
+
+  throw new AppError('Address not found', 404);
 });

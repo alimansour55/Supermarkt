@@ -31,7 +31,12 @@ export async function enrichAndValidateAddress(input, {
     throw new AppError(lang === 'ar' ? 'الشارع مطلوب' : 'Street is required', 400);
   }
 
-  const mapPinRequired = requireMapPin ?? await getGpsDeliveryEnabled();
+  // A hand-typed address ("إدخال يدوي" in the storefront) is a deliberate no-map
+  // choice by the customer — never force a pin / geocode for it.
+  const isManualEntry = String(input.locationSource || '').toLowerCase() === 'manual';
+  const mapPinRequired = isManualEntry
+    ? false
+    : (requireMapPin ?? await getGpsDeliveryEnabled());
 
   if (!mapPinRequired) {
     const zone = deliveryZoneId ? await findDeliveryZone(deliveryZoneId) : null;

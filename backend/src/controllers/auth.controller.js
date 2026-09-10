@@ -55,6 +55,7 @@ const formatUserResponse = (user) => ({
   id: user._id,
   name: user.name,
   username: user.username || null,
+  email: user.email || null,
   phone: user.phone,
   phoneDisplay: user.phone ? formatPhoneDisplay(user.phone) : null,
   role: user.role,
@@ -64,6 +65,8 @@ const formatUserResponse = (user) => ({
   isVerified: user.isPhoneVerified,
   mfaEnabled: user.mfaEnabled,
   pointsBalance: user.pointsBalance || 0,
+  walletBalance: user.walletBalance || 0,
+  ...(user.role === 'driver' ? { driverAvailable: user.driverAvailable !== false } : {}),
 });
 
 const formatUserWithDetails = (user) => ({
@@ -137,6 +140,10 @@ export const sendOtp = asyncHandler(async (req, res) => {
     user.name = name.trim();
   }
 
+  if (!isNewUser && user.isActive === false) {
+    throw new AppError('This account has been suspended. Please contact support.', 403);
+  }
+
   if (user.lastOtpSentAt && !isDevDemoPhone(phone)) {
     const elapsed = (Date.now() - user.lastOtpSentAt.getTime()) / 1000;
     if (elapsed < OTP_RESEND_SECONDS) {
@@ -187,6 +194,10 @@ export const verifyOtp = asyncHandler(async (req, res) => {
     throw new AppError('No account found for this phone number', 404);
   }
 
+  if (user.isActive === false) {
+    throw new AppError('This account has been suspended. Please contact support.', 403);
+  }
+
   const result = user.verifyPhoneOtp(code);
 
   if (!result.ok) {
@@ -216,6 +227,10 @@ export const resendOtp = asyncHandler(async (req, res) => {
   const user = await findUserWithOtp(phone);
   if (!user) {
     throw new AppError('No account found. Enter your name to create an account.', 404);
+  }
+
+  if (user.isActive === false) {
+    throw new AppError('This account has been suspended. Please contact support.', 403);
   }
 
   if (user.lastOtpSentAt && !isDevDemoPhone(phone)) {
@@ -345,7 +360,7 @@ export const getMe = asyncHandler(async (req, res) => {
 });
 
 export const updateMe = asyncHandler(async (req, res) => {
-  const { name } = req.body;
+  const { name, email } = req.body;
 
   if (name !== undefined) {
     const trimmed = String(name).trim();
@@ -353,6 +368,14 @@ export const updateMe = asyncHandler(async (req, res) => {
       throw new AppError('Name must be 2–100 characters', 400);
     }
     req.user.name = trimmed;
+  }
+
+  if (email !== undefined) {
+    const trimmed = String(email).trim().toLowerCase();
+    if (trimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      throw new AppError('Invalid email address', 400);
+    }
+    req.user.email = trimmed;
   }
 
   await req.user.save();

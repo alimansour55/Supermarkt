@@ -32,6 +32,9 @@ const emptyForm = {
   estimatedScheduled: '4-6 hours',
   estimatedExpress: 'within 2 hours',
   priority: 0,
+  centerLat: '',
+  centerLng: '',
+  radiusKm: 8,
   isActive: true,
   leadTimeOverride: false,
   scheduledMinLeadMinutes: 120,
@@ -44,6 +47,9 @@ const toForm = (zone = {}) => ({
   ...zone,
   freeDeliveryMethods: parseFreeDeliveryMethodsFromApi(zone.freeDeliveryMethods),
   freeDeliveryOverride: zone.freeDeliveryOverride === true,
+  centerLat: zone.centerLat ?? '',
+  centerLng: zone.centerLng ?? '',
+  radiusKm: zone.radiusKm ?? 8,
   timeSlotsText: JSON.stringify(zone.timeSlots?.length ? zone.timeSlots : defaultSlots, null, 2),
 });
 
@@ -152,6 +158,9 @@ export default function DeliveryZonesPage() {
       freeDeliveryOverride: form.freeDeliveryOverride === true,
       freeDeliveryMethods: parseFreeDeliveryMethodsFromApi(form.freeDeliveryMethods),
       priority: Number(form.priority) || 0,
+      centerLat: form.centerLat === '' || form.centerLat == null ? null : Number(form.centerLat),
+      centerLng: form.centerLng === '' || form.centerLng == null ? null : Number(form.centerLng),
+      radiusKm: Math.max(0, Number(form.radiusKm) || 8),
       timeSlots,
     };
   };
@@ -272,6 +281,9 @@ export default function DeliveryZonesPage() {
             <Input label={isAr ? 'المنطقة عربي' : 'Area AR'} value={form.areaAr} onChange={(e) => update('areaAr', e.target.value)} required />
             <Input label={isAr ? 'Area EN' : 'Area EN'} value={form.areaEn} onChange={(e) => update('areaEn', e.target.value)} required />
             <Input label={isAr ? 'الأولوية' : 'Priority'} type="number" value={form.priority} onChange={(e) => update('priority', e.target.value)} />
+            <Input label={isAr ? 'خط عرض مركز المنطقة' : 'Zone center latitude'} type="number" step="0.0001" value={form.centerLat} onChange={(e) => update('centerLat', e.target.value)} placeholder={isAr ? 'لمطابقة الدبوس بالمنطقة' : 'For pin → zone matching'} />
+            <Input label={isAr ? 'خط طول مركز المنطقة' : 'Zone center longitude'} type="number" step="0.0001" value={form.centerLng} onChange={(e) => update('centerLng', e.target.value)} />
+            <Input label={isAr ? 'نصف قطر المنطقة (كم)' : 'Zone radius (km)'} type="number" min="0" step="0.5" value={form.radiusKm} onChange={(e) => update('radiusKm', e.target.value)} />
             <Input label={isAr ? 'رسوم التوصيل العادي' : 'Standard delivery fee'} type="number" min="0" step="0.01" value={form.scheduledFee} onChange={(e) => update('scheduledFee', e.target.value)} />
             <Input label={isAr ? 'رسوم التوصيل السريع' : 'Express delivery fee'} type="number" min="0" step="0.01" value={form.expressFee} onChange={(e) => update('expressFee', e.target.value)} />
             <Input label={isAr ? 'الحد الأدنى للطلب' : 'Minimum order'} type="number" min="0" value={form.minimumOrder} onChange={(e) => update('minimumOrder', e.target.value)} />

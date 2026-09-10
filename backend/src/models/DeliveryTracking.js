@@ -26,6 +26,22 @@ const deliveryTrackingSchema = new mongoose.Schema(
       enum: DELIVERY_TRACKING_STATUS_VALUES,
       default: 'idle',
     },
+    // Cached driving route (driver → destination) so the customer poll does not
+    // hit Google Directions on every request. Refreshed when the driver drifts
+    // far from `routeComputedFrom` or the cache goes stale (see the service).
+    routePolyline: { type: String, default: '' },
+    routePath: {
+      type: [{ lat: Number, lng: Number, _id: false }],
+      default: undefined,
+    },
+    routeEtaSeconds: { type: Number, default: null },
+    routeDistanceText: { type: String, default: '' },
+    routeDistanceMeters: { type: Number, default: null },
+    routeComputedAt: { type: Date, default: null },
+    routeComputedFrom: {
+      type: { lat: Number, lng: Number, _id: false },
+      default: null,
+    },
     updatedAt: { type: Date, default: Date.now },
     trackingLinkSmsSent: { type: Boolean, default: false },
     firstLocationSmsSent: { type: Boolean, default: false },

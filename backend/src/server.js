@@ -1,7 +1,7 @@
 /**
  * MarketPlus API entry point — validates env, connects MongoDB, starts Express.
  */
-import 'dotenv/config';
+import './config/loadEnv.js';
 import app from './app.js';
 import connectDB from './config/db.js';
 import { validateEnv } from './config/env.js';

@@ -5,12 +5,26 @@ const jsonMessage = (message) => ({
   message,
 });
 
+const isProd = process.env.NODE_ENV === 'production';
+
+/**
+ * Credential login (admin + driver).
+ * - Only *failed* attempts count, so a valid user logging in normally is never blocked.
+ * - Keyed by IP + submitted username, so one account under attack can't lock out
+ *   other users on the same IP (and a shared NAT/office IP isn't a single bucket).
+ * - Relaxed cap outside production so local testing doesn't trip it.
+ */
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: isProd ? 10 : 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: jsonMessage('Too many login attempts. Please try again in 15 minutes.'),
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => {
+    const username = String(req.body?.username || '').trim().toLowerCase();
+    return `login:${ipKeyGenerator(req.ip)}:${username}`;
+  },
+  message: jsonMessage('Too many failed login attempts. Please try again in 15 minutes.'),
 });
 
 export const otpSendLimiter = rateLimit({

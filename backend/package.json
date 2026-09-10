@@ -11,6 +11,7 @@
     "seed:cleaning-catalog": "node src/seed/seedCleaningCatalog.js",
     "sync-ratings": "node src/scripts/syncProductRatings.js",
     "repair:categories": "node scripts/repair-category-links.js",
+    "migrate:category-tree": "node scripts/migrate-category-tree.js",
     "repair:brands": "node scripts/repair-product-brands.js",
     "repair:superadmin": "node scripts/repair-superadmin-login.js",
     "repair:user-indexes": "node scripts/repair-user-indexes.js",
@@ -43,6 +44,7 @@
     "nodemailer": "^9.0.1",
     "openai": "^6.45.0",
     "pdfkit": "^0.18.0",
+    "qrcode": "^1.5.4",
     "stripe": "^18.2.1",
     "twilio": "^6.0.2"
   },

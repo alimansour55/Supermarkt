@@ -7,6 +7,16 @@ export const POPULAR_SEARCHES = [
   { query: 'eggs', labelAr: 'بيض', labelEn: 'eggs' },
 ];
 
+/** Mirror of the backend `trendingConfig` sub-schema defaults (models/StoreSettings.js). */
+export const DEFAULT_TRENDING_CONFIG = {
+  displayLimit: 8,
+  autoLookbackDays: 7,
+  autoMinCount: 3,
+  requireConversion: false,
+  dedupeByProduct: true,
+  autoBlocklist: [],
+};
+
 export const SEARCH_DEBOUNCE_MS = 300;
 export const SEARCH_SUGGESTION_LIMIT = 5;
 export const SEARCH_CATEGORY_LIMIT = 3;

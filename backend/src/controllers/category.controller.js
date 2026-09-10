@@ -10,7 +10,6 @@ import {
 } from '../utils/cloudinaryUpload.js';
 import {
   assertValidParent,
-  assertNoChildren,
   assertCategorySlugAvailable,
   assertCategoryParentConsistency,
   attachProductCounts,
@@ -24,6 +23,9 @@ import {
   getCategoryChainFromId,
   getCanonicalSlugPath,
   parseSlugPathParam,
+  rebuildDescendantPaths,
+  refreshProductCategoryPaths,
+  CATEGORY_SOFT_MAX_LEVEL,
 } from '../utils/categoryTree.js';
 import { resolveProductCategoryFields } from '../utils/productCategorySync.js';
 
@@ -39,6 +41,19 @@ const parseOptionalNumber = (value, fallback) => {
   if (value === undefined || value === null || value === '') return fallback;
   const parsed = Number(value);
   return Number.isNaN(parsed) ? fallback : parsed;
+};
+
+/** Non-blocking notice when a category sits deeper than the recommended 3 levels. */
+const depthWarningFor = (category) => {
+  const depth = typeof category.depth === 'number'
+    ? category.depth
+    : Math.max(0, (category.level || 1) - 1);
+  if (depth + 1 <= CATEGORY_SOFT_MAX_LEVEL) return null;
+  return {
+    code: 'depth_exceeds_recommended',
+    en: `This category is ${depth + 1} levels deep. Keeping the catalog to ${CATEGORY_SOFT_MAX_LEVEL} levels (Main › Section › Subsection) is easier for shoppers.`,
+    ar: `هذا القسم في المستوى ${depth + 1}. يُفضّل إبقاء الشجرة عند ${CATEGORY_SOFT_MAX_LEVEL} مستويات (رئيسي › قسم › قسم فرعي) لتسهيل التصفح.`,
+  };
 };
 
 const populateCategoryQuery = () =>
@@ -207,7 +222,8 @@ export const createCategory = asyncHandler(async (req, res) => {
     createdBy: req.user?._id || null,
   });
 
-  res.status(201).json({ success: true, data: formatCategory(category) });
+  const warning = depthWarningFor(category);
+  res.status(201).json({ success: true, data: formatCategory(category), ...(warning ? { warning } : {}) });
 });
 
 export const updateCategory = asyncHandler(async (req, res) => {
@@ -233,7 +249,7 @@ export const updateCategory = asyncHandler(async (req, res) => {
     }
   }
 
-  const { nameAr, nameEn, slug, parentCategory, isActive, icon, color, sortOrder, level } = req.body;
+  const { nameAr, nameEn, slug, parentCategory, isActive, icon, color, sortOrder } = req.body;
 
   if (nameAr !== undefined) category.nameAr = nameAr;
   if (nameEn !== undefined) category.nameEn = nameEn;
@@ -243,20 +259,18 @@ export const updateCategory = asyncHandler(async (req, res) => {
     category.slug = await assertCategorySlugAvailable(slug, category._id);
   }
 
+  let parentChanged = false;
   if (parentCategory !== undefined) {
     const nextParent = parentCategory || null;
-    await assertCategoryParentConsistency({
-      categoryId: category._id,
-      parentId: nextParent,
-      requestedLevel: level != null && level !== '' ? Number(level) : category.level,
-    });
-    if (nextParent) {
-      await assertValidParent(nextParent);
-      await assertNoChildren(category._id);
+    const currentParent = category.parentCategory ? String(category.parentCategory) : null;
+    parentChanged = currentParent !== (nextParent ? String(nextParent) : null);
+    if (parentChanged) {
+      // Cycle / self-parent / "under own descendant" are still rejected here.
+      // Categories with subcategories CAN be reparented — the whole subtree's
+      // path is rebuilt after save.
+      await assertCategoryParentConsistency({ categoryId: category._id, parentId: nextParent });
+      if (nextParent) await assertValidParent(nextParent);
       category.parentCategory = nextParent;
-    } else {
-      await assertNoChildren(category._id);
-      category.parentCategory = null;
     }
   }
 
@@ -273,7 +287,13 @@ export const updateCategory = asyncHandler(async (req, res) => {
 
   await category.save();
 
-  res.json({ success: true, data: formatCategory(category) });
+  if (parentChanged) {
+    const touched = await rebuildDescendantPaths(category._id);
+    await refreshProductCategoryPaths([category._id, ...touched]);
+  }
+
+  const warning = depthWarningFor(category);
+  res.json({ success: true, data: formatCategory(category), ...(warning ? { warning } : {}) });
 });
 
 async function assertCategoryCanDeactivate(category) {
@@ -425,9 +445,10 @@ export const reorderAdminCategories = asyncHandler(async (req, res) => {
         requestedLevel: null,
       });
       if (nextParent) await assertValidParent(nextParent);
-      await assertNoChildren(category._id);
       category.parentCategory = nextParent;
       await category.save();
+      const touched = await rebuildDescendantPaths(category._id);
+      await refreshProductCategoryPaths([category._id, ...touched]);
     }
 
     const siblings = await Category.find({

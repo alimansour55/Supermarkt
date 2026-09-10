@@ -11,6 +11,7 @@ import { LocationProvider } from './context/LocationContext';
 import { StoreSettingsProvider } from './context/StoreSettingsContext';
 import { CategoriesProvider } from './context/CategoriesContext';
 import Layout from './components/layout/Layout';
+import { AccountLayout } from './components/account/AccountSidebar';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import DriverRoute from './components/auth/DriverRoute';
 import DriverLayout from './components/driver/DriverLayout';
@@ -47,6 +48,7 @@ function AppRoutes() {
         )}
       >
         <Route index element={withSuspense(<P.DriverDeliveriesPage />)} />
+        <Route path="account" element={withSuspense(<P.DriverAccountPage />)} />
         <Route path="deliveries/:id" element={withSuspense(<P.DriverDeliveryPage />)} />
       </Route>
 
@@ -74,8 +76,6 @@ function AppRoutes() {
         <Route path="today-deals" element={withSuspense(<P.TodaysDealsPage />)} />
         <Route path="search" element={withSuspense(<P.SearchPage />)} />
         <Route path="search/results" element={withSuspense(<P.SearchResultsPage />)} />
-        <Route path="favorites" element={withSuspense(<P.FavoritesPage />)} />
-        <Route path="orders" element={withSuspense(<ProtectedRoute><P.MyOrdersPage /></ProtectedRoute>)} />
         <Route path="orders/:id" element={withSuspense(<ProtectedRoute><P.OrderDetailPage /></ProtectedRoute>)} />
         <Route path="contact" element={withSuspense(<P.StaticPage />)} />
         <Route path="faq" element={withSuspense(<P.StaticPage />)} />
@@ -85,12 +85,20 @@ function AppRoutes() {
         <Route path="returns" element={withSuspense(<P.StaticPage />)} />
         <Route path="careers" element={withSuspense(<P.StaticPage />)} />
         <Route path="track-order" element={withSuspense(<P.TrackOrderPage />)} />
-        <Route path="profile" element={withSuspense(<ProtectedRoute><P.ProfilePage /></ProtectedRoute>)} />
-        <Route path="account" element={withSuspense(<ProtectedRoute><P.ProfilePage /></ProtectedRoute>)} />
-        <Route path="recurring-deliveries" element={withSuspense(<ProtectedRoute><P.CustomerRecurringDeliveriesPage /></ProtectedRoute>)} />
-        <Route path="my-points" element={withSuspense(<ProtectedRoute><P.MyPointsPage /></ProtectedRoute>)} />
-        <Route path="my-addresses" element={withSuspense(<ProtectedRoute><P.MyAddressesPage /></ProtectedRoute>)} />
-        <Route path="account/settings" element={withSuspense(<ProtectedRoute><P.AccountSettingsPage /></ProtectedRoute>)} />
+
+        {/* Account area — one persistent sidebar, pages swap in the <Outlet /> */}
+        <Route element={<AccountLayout />}>
+          <Route path="favorites" element={withSuspense(<P.FavoritesPage />)} />
+          <Route path="orders" element={withSuspense(<ProtectedRoute><P.MyOrdersPage /></ProtectedRoute>)} />
+          <Route path="profile" element={withSuspense(<ProtectedRoute><P.ProfilePage /></ProtectedRoute>)} />
+          <Route path="account" element={withSuspense(<ProtectedRoute><P.ProfilePage /></ProtectedRoute>)} />
+          <Route path="recurring-deliveries" element={withSuspense(<ProtectedRoute><P.CustomerRecurringDeliveriesPage /></ProtectedRoute>)} />
+          <Route path="my-points" element={withSuspense(<ProtectedRoute><P.MyPointsPage /></ProtectedRoute>)} />
+          <Route path="my-wallet" element={withSuspense(<ProtectedRoute><P.MyWalletPage /></ProtectedRoute>)} />
+          <Route path="my-addresses" element={withSuspense(<ProtectedRoute><P.MyAddressesPage /></ProtectedRoute>)} />
+          <Route path="account/settings" element={withSuspense(<ProtectedRoute><P.AccountSettingsPage /></ProtectedRoute>)} />
+        </Route>
+
         <Route path="*" element={withSuspense(<P.NotFoundPage />)} />
       </Route>
     </Routes>

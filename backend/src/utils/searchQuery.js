@@ -1,5 +1,5 @@
 import Category from '../models/Category.js';
-import { getLeafDescendantIds } from './categoryTree.js';
+import { getSelfAndDescendantIds } from './categoryTree.js';
 
 /** Escape special regex characters */
 function escapeRegex(str) {
@@ -166,8 +166,8 @@ export async function findMatchingCategoryIds(q, CategoryModel = Category) {
     const chain = buildChainFromFlat(cat, byId);
     if (!categoryMatchesQuery(cat, chain, trimmed)) continue;
 
-    const leafIds = await getLeafDescendantIds(cat._id);
-    leafIds.forEach((id) => matchingIds.add(id));
+    const ids = await getSelfAndDescendantIds(cat._id);
+    ids.forEach((id) => matchingIds.add(id));
   }
 
   return [...matchingIds];

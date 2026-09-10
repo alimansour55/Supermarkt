@@ -31,6 +31,12 @@ export const formatCategory = (cat) => {
     }
     : (parent || null),
   parentSlug: parentObj?.slug || null,
+  ancestors: Array.isArray(cat.ancestors)
+    ? cat.ancestors.map((a) => (a && typeof a === 'object' && a._id ? a._id : a))
+    : [],
+  depth: typeof cat.depth === 'number'
+    ? cat.depth
+    : (Array.isArray(cat.ancestors) ? cat.ancestors.length : (parentObj || parent ? 1 : 0)),
   level: cat.level || (parentObj || parent ? 2 : 1),
   icon: cat.icon,
   color: cat.color,
@@ -98,6 +104,9 @@ export const formatProduct = (product) => {
     mainCategorySlug: product.mainCategory?.slug || product._mainCategorySlug || null,
     subCategory: product.subCategory?._id || product.subCategory,
     subCategorySlug: product.subCategory?.slug || product._subCategorySlug || null,
+    categoryAncestors: Array.isArray(product.categoryAncestors)
+      ? product.categoryAncestors.map((a) => (a && typeof a === 'object' && a._id ? a._id : a))
+      : [],
     brand: product.brand,
     brandAr: product.brandAr || '',
     brandEn: product.brandEn || product.brand || '',
@@ -262,6 +271,7 @@ export const formatOrder = (order) => {
     pointsRedeemed: order.pointsRedeemed || 0,
     pointsDiscount: order.pointsDiscount || 0,
     pointsEarned: order.pointsEarned || 0,
+    walletAmount: order.walletAmount || 0,
     deliveryZoneNameAr: order.deliveryZoneNameAr,
     deliveryZoneNameEn: order.deliveryZoneNameEn,
     deliveryTimeSlot: order.deliveryTimeSlot,

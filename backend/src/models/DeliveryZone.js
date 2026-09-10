@@ -39,6 +39,10 @@ const deliveryZoneSchema = new mongoose.Schema(
     scheduledMinLeadMinutes: { type: Number, min: 0, max: 1440, default: 120 },
     expressMinLeadMinutes: { type: Number, min: 0, max: 1440, default: 120 },
     priority: { type: Number, default: 0 },
+    /** Geo anchor — lets the startup location popup map a dropped pin to this zone. */
+    centerLat: { type: Number, default: null },
+    centerLng: { type: Number, default: null },
+    radiusKm: { type: Number, min: 0, default: 8 },
     isActive: { type: Boolean, default: true },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

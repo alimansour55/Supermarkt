@@ -1,6 +1,6 @@
 import SearchAutocomplete from './SearchAutocomplete';
 
-/** Header / inline smart search with live autocomplete. */
-export default function SearchBar({ className = '' }) {
-  return <SearchAutocomplete className={className} showCategorySelect={false} />;
+/** Header / inline smart search with live autocomplete — soft pill field. */
+export default function SearchBar({ className = '', variant = 'pill' }) {
+  return <SearchAutocomplete className={className} showCategorySelect={false} variant={variant} />;
 }

@@ -13,10 +13,15 @@ export const REAL_OFFER_CONDITION = {
 /** @deprecated Use REAL_OFFER_CONDITION — kept for imports; same rules as storefront. */
 export const CATALOG_OFFER_CONDITION = REAL_OFFER_CONDITION;
 
+/**
+ * Restrict a Mongo product filter to real offers.
+ * Mutates `filter` in place (appending to `$and`) AND returns it, so both
+ * `applyOffersOnlyFilter(filter)` and `const f = applyOffersOnlyFilter({...})`
+ * call styles work.
+ */
 export function applyOffersOnlyFilter(filter = {}) {
-  const next = { ...filter };
-  next.$and = [...(next.$and || []), REAL_OFFER_CONDITION];
-  return next;
+  filter.$and = [...(filter.$and || []), REAL_OFFER_CONDITION];
+  return filter;
 }
 
 export function buildOffersProductFilter(base = {}) {

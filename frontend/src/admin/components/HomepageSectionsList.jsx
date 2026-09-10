@@ -17,16 +17,7 @@ import {
 } from '../utils/browseSectionSummaries';
 import SectionCategoryWarning from './SectionCategoryWarning';
 import { sectionUsesCategoryLink } from '../utils/sectionCategoryHealth';
-
-function reorderList(list, fromIndex, toIndex) {
-  const next = [...list];
-  const [removed] = next.splice(fromIndex, 1);
-  next.splice(toIndex, 0, removed);
-  return next.map((section, index) => ({
-    ...section,
-    sortOrder: (index + 1) * 10,
-  }));
-}
+import { reorderList } from '../utils/reorderList';
 
 export default function HomepageSectionsList({
   sections,
@@ -44,7 +35,7 @@ export default function HomepageSectionsList({
 
   const applyReorder = (fromIndex, toIndex) => {
     if (fromIndex === toIndex) return;
-    onReorder(reorderList(sections, fromIndex, toIndex));
+    onReorder(reorderList(sections, fromIndex, toIndex, { step: 10, startAt: 10 }));
   };
 
   const moveBy = (index, delta) => {

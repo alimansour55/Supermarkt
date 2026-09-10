@@ -22,7 +22,7 @@ function FavoritesAction({ item, isAr }) {
       <ToolbarIcon icon="heart" itemKey="favorites" />
       <span className={labelClassName(item.showLabel, false)}>{label}</span>
       {favoriteCount > 0 && (
-        <span className="absolute -top-1 -start-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+        <span className="absolute -top-0.5 -end-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
           {favoriteCount > 99 ? '99+' : favoriteCount}
         </span>
       )}
@@ -37,9 +37,9 @@ function CartAction({ item, isAr }) {
   return (
     <Link to="/cart" className={TOOLBAR_PLAIN_CLASS} aria-label={label}>
       <ToolbarIcon icon="shopping-cart" itemKey="cart" />
-      <span className={item.showLabel ? 'hidden sm:inline' : 'sr-only'}>{label}</span>
+      <span className={labelClassName(item.showLabel, false)}>{label}</span>
       {totalItems > 0 && (
-        <span className="absolute -top-1 -start-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-500 px-1 text-[10px] font-bold text-white">
+        <span className="absolute -top-0.5 -end-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
           {totalItems > 99 ? '99+' : totalItems}
         </span>
       )}

@@ -1,31 +1,66 @@
 /**
- * Global styles — MarketPlus design tokens, RTL-friendly utilities, responsive container.
- * Carrefour-inspired green palette with original branding.
+ * Global styles — storefront design tokens, RTL-friendly utilities, fluid container.
+ * HyperOne-aligned palette (primary blue #1d4ca1, sale red #e22319) with our own branding.
+ * Token values are the static fallback; the admin theme system repaints --color-primary-*
+ * at runtime (default theme: "hyperone", see src/constants/siteThemes.js).
  */
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: 'Cairo', system-ui, sans-serif;
+  --font-sans: 'Cairo', 'Ubuntu', 'Open Sans', system-ui, -apple-system, Helvetica, Arial, sans-serif;
 
-  --color-primary-50: #ecfdf5;
-  --color-primary-100: #d1fae5;
-  --color-primary-200: #a7f3d0;
-  --color-primary-300: #6ee7b7;
-  --color-primary-400: #34d399;
-  --color-primary-500: #10b981;
-  --color-primary-600: #059669;
-  --color-primary-700: #047857;
-  --color-primary-800: #065f46;
-  --color-primary-900: #064e3b;
+  /* Primary — anchored on HyperOne blue #1d4ca1 at the 600 step (our CTA anchor). */
+  --color-primary-50: #f2f6fb;
+  --color-primary-100: #e6eef7;
+  --color-primary-200: #cdddef;
+  --color-primary-300: #a8c0e2;
+  --color-primary-400: #6f93cc;
+  --color-primary-500: #3f6ab5;
+  --color-primary-600: #1d4ca1;
+  --color-primary-700: #17408a;
+  --color-primary-800: #123468;
+  --color-primary-900: #0b1a36;
 
-  --color-accent-500: #f59e0b;
-  --color-accent-600: #d97706;
+  /* Accent — promo orange ("save more" tiles, count badges). */
+  --color-accent-500: #ff8d38;
+  --color-accent-600: #f0760f;
 
-  --color-surface: #f8fafc;
+  /* Semantic — sale / destructive. */
+  --color-danger-50: #fef6f6;
+  --color-danger-100: #fdeded;
+  --color-danger-200: #fce9e8;
+  --color-danger-300: #f3a7a3;
+  --color-danger-500: #e22319;
+  --color-danger-600: #c31d15;
+  --color-danger-700: #a5170f;
+
+  /* Semantic — success / in-stock. */
+  --color-success-50: #f1f7ed;
+  --color-success-100: #edf5e5;
+  --color-success-500: #4e9700;
+  --color-success-600: #3f7d00;
+
+  /* Semantic — warning. */
+  --color-warning-50: #fff4ec;
+  --color-warning-500: #ff8d38;
+  --color-warning-600: #f0760f;
+
+  --color-surface: #f6f7f9;
+  --color-surface-alt: #f7f7f7;
   --color-surface-card: #ffffff;
-  --color-border: #e2e8f0;
-  --color-text: #0f172a;
-  --color-text-muted: #64748b;
+  --color-border: #d2d5dc;
+  --color-text: #0b1a36;
+  --color-text-muted: #6f6f6f;
+
+  /* Radii — HyperOne uses 16px cards, 12px fields. */
+  --radius-field: 12px;
+  --radius-tile: 14px;
+  --radius-card: 16px;
+
+  /* Elevation. */
+  --shadow-card: 0 1px 2px rgb(11 26 54 / 0.06);
+  --shadow-pop: 0 10px 22px rgb(11 26 54 / 0.10);
+  --shadow-menu: 0 24px 48px -12px rgb(11 26 54 / 0.18);
 }
 
 @layer base {
@@ -64,8 +99,14 @@
 }
 
 @layer utilities {
+  /* Fluid, edge-to-edge with responsive gutters (HyperOne has no max-width). */
   .container-app {
-    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full px-3 sm:px-4 lg:px-6 xl:px-8 2xl:px-12;
+  }
+
+  /* Opt-in narrow wrapper for reading-width content (auth, static pages, forms). */
+  .container-readable {
+    @apply mx-auto w-full max-w-3xl px-4 sm:px-6;
   }
 
   /* Safe area for notched phones */

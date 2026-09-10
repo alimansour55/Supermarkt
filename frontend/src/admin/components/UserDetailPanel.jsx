@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
-  Calendar, Gift, Mail, MapPin, Phone, Save, ShieldCheck, ShoppingBag, Trash2, User,
+  Ban, Calendar, Gift, Mail, MapPin, MessageSquareOff, Phone, Save, ShieldCheck,
+  ShoppingBag, Trash2, User,
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Loader from '../../components/ui/Loader';
 import AdminSlidePanel from './AdminSlidePanel';
+import ToggleSwitch from './ToggleSwitch';
+import UserStatusBadge, { resolveUserStatus } from './UserStatusBadge';
 import { adminApi } from '../adminApi';
 import { ASSIGNABLE_ROLES, roleLabel, STAFF_ROLES } from '../adminPermissions';
 import { formatDate } from '../../utils/formatters';
@@ -63,7 +66,9 @@ export default function UserDetailPanel({
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingAccess, setSavingAccess] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', role: 'user' });
+  const [access, setAccess] = useState({ isActive: true, isPhoneVerified: false, reviewBlocked: false });
 
   useEffect(() => {
     if (!open || !userId) {
@@ -79,6 +84,11 @@ export default function UserDetailPanel({
         const u = data.data;
         setUser(u);
         setForm({ name: u.name || '', phone: u.phone || '', role: u.role || 'user' });
+        setAccess({
+          isActive: u.isActive !== false,
+          isPhoneVerified: Boolean(u.isPhoneVerified),
+          reviewBlocked: Boolean(u.reviewBlocked),
+        });
       })
       .catch(() => {
         if (!cancelled) setUser(null);
@@ -94,6 +104,27 @@ export default function UserDetailPanel({
   const isStaff = user && STAFF_ROLES.includes(user.role);
   const canEdit = isSuperAdmin && !isSelf;
   const canDelete = isSuperAdmin && user && !isStaff && !isSelf;
+  const accessDirty = user && (
+    access.isActive !== (user.isActive !== false)
+    || access.isPhoneVerified !== Boolean(user.isPhoneVerified)
+    || access.reviewBlocked !== Boolean(user.reviewBlocked)
+  );
+
+  const handleSaveAccess = async () => {
+    if (!userId || !canEdit) return;
+    setSavingAccess(true);
+    try {
+      const { data } = await adminApi.updateUser(userId, access);
+      const updated = { ...user, ...data.data };
+      setUser(updated);
+      onUpdated?.(updated);
+      onSuccess?.(isAr ? 'تم تحديث حالة الحساب' : 'Account status updated');
+    } catch (err) {
+      onError?.(err.response?.data?.message || (isAr ? 'تعذر الحفظ' : 'Save failed'));
+    } finally {
+      setSavingAccess(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!userId || !canEdit) return;
@@ -132,6 +163,14 @@ export default function UserDetailPanel({
         </p>
       ) : (
         <div className="space-y-5">
+          {resolveUserStatus(user) === 'suspended' && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-800">
+              <Ban className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>{isAr
+                ? 'هذا الحساب موقوف — لا يستطيع صاحبه تسجيل الدخول حتى إعادة التفعيل.'
+                : 'This account is suspended — the owner cannot sign in until it is reactivated.'}</p>
+            </div>
+          )}
           <div className="flex items-center gap-4 rounded-2xl border border-border bg-white p-4">
             <UserAvatar name={user.name} />
             <div className="min-w-0 flex-1">
@@ -139,6 +178,7 @@ export default function UserDetailPanel({
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${ROLE_COLORS[user.role] || ROLE_COLORS.user}`}>
                   {roleLabel(user.role, isAr)}
                 </span>
+                <UserStatusBadge user={user} isAr={isAr} />
                 {user.isPhoneVerified && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                     <ShieldCheck className="h-3.5 w-3.5" />
@@ -230,6 +270,68 @@ export default function UserDetailPanel({
               <InfoRow icon={Calendar} label={isAr ? 'تاريخ التسجيل' : 'Joined'}>
                 {user.createdAt ? formatDate(user.createdAt, isAr ? 'ar-EG' : 'en-GB') : '—'}
               </InfoRow>
+            </div>
+          )}
+
+          {canEdit && (
+            <div className="space-y-3 rounded-2xl border border-border bg-white p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-text-muted">
+                {isAr ? 'الحالة والوصول' : 'Status & access'}
+              </p>
+
+              <label className="flex items-center justify-between gap-3">
+                <span className="flex items-start gap-2.5">
+                  <ShieldCheck className={`mt-0.5 h-4 w-4 ${access.isActive ? 'text-emerald-600' : 'text-text-muted'}`} />
+                  <span>
+                    <span className="block text-sm font-medium text-text">
+                      {isAr ? 'الحساب نشط' : 'Account active'}
+                    </span>
+                    <span className="block text-xs text-text-muted">
+                      {isAr ? 'إيقافه يمنع تسجيل الدخول بالكامل' : 'Turning this off blocks sign-in entirely'}
+                    </span>
+                  </span>
+                </span>
+                <ToggleSwitch
+                  checked={access.isActive}
+                  onChange={(v) => setAccess((p) => ({ ...p, isActive: v }))}
+                  ariaLabel={isAr ? 'الحساب نشط' : 'Account active'}
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-3">
+                <span className="flex items-start gap-2.5">
+                  <Phone className={`mt-0.5 h-4 w-4 ${access.isPhoneVerified ? 'text-emerald-600' : 'text-text-muted'}`} />
+                  <span className="block text-sm font-medium text-text">
+                    {isAr ? 'الهاتف موثّق' : 'Phone verified'}
+                  </span>
+                </span>
+                <ToggleSwitch
+                  checked={access.isPhoneVerified}
+                  onChange={(v) => setAccess((p) => ({ ...p, isPhoneVerified: v }))}
+                  ariaLabel={isAr ? 'الهاتف موثّق' : 'Phone verified'}
+                />
+              </label>
+
+              <label className="flex items-center justify-between gap-3">
+                <span className="flex items-start gap-2.5">
+                  <MessageSquareOff className={`mt-0.5 h-4 w-4 ${access.reviewBlocked ? 'text-red-600' : 'text-text-muted'}`} />
+                  <span className="block text-sm font-medium text-text">
+                    {isAr ? 'حظر كتابة التقييمات' : 'Block writing reviews'}
+                  </span>
+                </span>
+                <ToggleSwitch
+                  checked={access.reviewBlocked}
+                  onChange={(v) => setAccess((p) => ({ ...p, reviewBlocked: v }))}
+                  ariaLabel={isAr ? 'حظر كتابة التقييمات' : 'Block writing reviews'}
+                />
+              </label>
+
+              {accessDirty && (
+                <Button onClick={handleSaveAccess} disabled={savingAccess} className="w-full gap-2">
+                  <Save className="h-4 w-4" />
+                  {savingAccess ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ الحالة' : 'Save status')}
+                </Button>
+              )}
             </div>
           )}
 

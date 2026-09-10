@@ -42,6 +42,9 @@ const normalizePayload = (body) => ({
   scheduledMinLeadMinutes: Math.min(1440, Math.max(0, Math.round(Number(body.scheduledMinLeadMinutes) || 120))),
   expressMinLeadMinutes: Math.min(1440, Math.max(0, Math.round(Number(body.expressMinLeadMinutes) || 120))),
   priority: Number(body.priority) || 0,
+  centerLat: body.centerLat === '' || body.centerLat == null ? null : Number(body.centerLat),
+  centerLng: body.centerLng === '' || body.centerLng == null ? null : Number(body.centerLng),
+  radiusKm: Math.max(0, Number(body.radiusKm) || 8),
   isActive: body.isActive !== false,
 });
 

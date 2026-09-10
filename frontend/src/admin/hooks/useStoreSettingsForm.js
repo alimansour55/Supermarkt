@@ -16,6 +16,7 @@ export function useStoreSettingsForm() {
   const [saving, setSaving] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
   const [faviconFile, setFaviconFile] = useState(null);
+  const [stampFile, setStampFile] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -52,6 +53,17 @@ export function useStoreSettingsForm() {
     } : prev));
   }, []);
 
+  const updateInvoiceColumn = useCallback((field, value) => {
+    setSettings((prev) => (prev ? {
+      ...prev,
+      invoice: { ...prev.invoice, columns: { ...prev.invoice.columns, [field]: value } },
+    } : prev));
+  }, []);
+
+  const updateInvoiceRows = useCallback((rows) => {
+    setSettings((prev) => (prev ? { ...prev, invoice: { ...prev.invoice, customRows: rows } } : prev));
+  }, []);
+
   const save = useCallback(async (e) => {
     e?.preventDefault?.();
     if (!settings) return false;
@@ -60,11 +72,12 @@ export function useStoreSettingsForm() {
       const payload = buildStoreSettingsSavePayload(settings);
       let response;
 
-      if (logoFile || faviconFile) {
+      if (logoFile || faviconFile || stampFile) {
         const form = new FormData();
         form.append('settings', JSON.stringify(payload));
         if (logoFile) form.append('logo', logoFile);
         if (faviconFile) form.append('favicon', faviconFile);
+        if (stampFile) form.append('invoiceStamp', stampFile);
         response = await adminApi.updateStoreSettings(form);
       } else {
         response = await adminApi.updateStoreSettingsJson(payload);
@@ -74,6 +87,7 @@ export function useStoreSettingsForm() {
       setSettings(saved);
       setLogoFile(null);
       setFaviconFile(null);
+      setStampFile(null);
       refreshAdminPanel();
       toast.success(isAr ? 'تم حفظ إعدادات المتجر' : 'Store settings saved');
       return true;
@@ -83,7 +97,7 @@ export function useStoreSettingsForm() {
     } finally {
       setSaving(false);
     }
-  }, [faviconFile, isAr, logoFile, refreshAdminPanel, settings, toast]);
+  }, [faviconFile, isAr, logoFile, stampFile, refreshAdminPanel, settings, toast]);
 
   return {
     settings,
@@ -94,10 +108,14 @@ export function useStoreSettingsForm() {
     updateNested,
     updateInvoice,
     updateInvoiceLabel,
+    updateInvoiceColumn,
+    updateInvoiceRows,
     logoFile,
     setLogoFile,
     faviconFile,
     setFaviconFile,
+    stampFile,
+    setStampFile,
     isAr,
   };
 }

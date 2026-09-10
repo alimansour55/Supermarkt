@@ -33,6 +33,7 @@ export default function CheckoutDeliveryMeta({
   language = 'ar',
   deliveryMethod,
   location,
+  deliverToLabel,
   form,
   selectedSlot,
   paymentMethod,
@@ -49,7 +50,9 @@ export default function CheckoutDeliveryMeta({
 
   const zoneName = location
     ? (isAr ? location.nameAr : location.nameEn)
-    : (isAr ? '—' : '—');
+    : '—';
+  // Show the customer's own pinned/typed address here, not the admin zone label.
+  const deliverToValue = deliverToLabel?.trim() || zoneName;
 
   let deliveryValue = isAr ? methodMeta.labelAr : methodMeta.labelEn;
 
@@ -71,8 +74,8 @@ export default function CheckoutDeliveryMeta({
     }
   }
 
-  const deliveryPrefix = isAr ? 'التوصيل: ' : 'Delivery: ';
-  const areaPrefix = isAr ? 'المنطقة: ' : 'Area: ';
+  const deliveryPrefix = isAr ? 'طريقة التوصيل: ' : 'Delivery: ';
+  const areaPrefix = isAr ? 'التوصيل إلى: ' : 'Deliver to: ';
   const paymentPrefix = isAr ? 'الدفع: ' : 'Payment: ';
 
   return (
@@ -87,7 +90,7 @@ export default function CheckoutDeliveryMeta({
         icon={MapPin}
         iconClass="text-sky-700"
         label={areaPrefix}
-        value={zoneName}
+        value={deliverToValue}
       />
       <MetaLine
         icon={CreditCard}

@@ -1,9 +1,10 @@
-export const DEFAULT_THEME_COLOR = 'green';
+export const DEFAULT_THEME_COLOR = 'hyperone';
 export const DEFAULT_THEME_SHADE = 600;
 
 export const THEME_SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
 
 export const SITE_THEME_KEYS = [
+  'hyperone',
   'green',
   'teal',
   'blue',

@@ -2,6 +2,7 @@ import { Menu, Languages } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import AdminBreadcrumbs from './AdminBreadcrumbs';
 import NotificationBell from './NotificationBell';
+import AdminSearchBox from './AdminSearchBox';
 import { hasPermission } from '../adminPermissions';
 import { useAuth } from '../../context/AuthContext';
 
@@ -24,10 +25,14 @@ export default function AdminHeader({ title, breadcrumbs, onMenuClick, menuOpen 
           <Menu className="h-5 w-5" />
         </button>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 shrink-0 sm:max-w-[40%] lg:max-w-[30%]">
           <AdminBreadcrumbs items={breadcrumbs} className="mb-1 hidden sm:flex" />
           <h1 className="truncate text-lg font-semibold text-text sm:text-xl">{title}</h1>
           <AdminBreadcrumbs items={breadcrumbs} className="mt-1 sm:hidden" />
+        </div>
+
+        <div className="min-w-0 flex-1 self-center">
+          <AdminSearchBox isAr={isAr} className="mx-auto w-full max-w-2xl" />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">

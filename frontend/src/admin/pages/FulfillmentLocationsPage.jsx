@@ -104,7 +104,10 @@ export default function FulfillmentLocationsPage() {
   };
 
   const geocode = async (payload) => {
-    const { data } = await adminApi.geocodeFulfillmentLocation(payload);
+    const { data } = await adminApi.geocodeFulfillmentLocation({
+      ...payload,
+      language: isAr ? 'ar' : 'en',
+    });
     return data.data;
   };
 

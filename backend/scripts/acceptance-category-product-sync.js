@@ -118,6 +118,35 @@ async function runCreateFlow() {
   if (storefrontParent) pass('Storefront: parent category expands to leaf');
   else fail('Storefront: parent category expands to leaf');
 
+  const leafDoc = await Product.findById(product._id).select('categoryAncestors').lean();
+  const expectedPath = [main._id, mid._id, leaf._id].map(String).join('/');
+  const actualPath = (leafDoc.categoryAncestors || []).map(String).join('/');
+  if (actualPath === expectedPath) pass('categoryAncestors: root → leaf path stored');
+  else fail('categoryAncestors: root → leaf path stored', `${actualPath} ≠ ${expectedPath}`);
+
+  // Product attached directly to a parent category (mid), not a leaf.
+  const parentFields = await resolveProductCategoryFields({ subCategory: mid._id, category: mid._id });
+  const parentProduct = await Product.create({
+    nameAr: 'منتج على قسم أب',
+    nameEn: `${PREFIX}-parent-product`,
+    slug: `${PREFIX}-parent-product`,
+    price: 12,
+    stock: 3,
+    isActive: true,
+    ...parentFields,
+  });
+
+  const onParent = await productInFilter(parentProduct._id, { category: mid._id });
+  const onMain = await productInFilter(parentProduct._id, { mainCategory: String(main._id) });
+  const onSiblingLeaf = await productInFilter(parentProduct._id, { subCategory: String(leaf._id) });
+
+  if (onParent) pass('Non-leaf product: shows in its own category listing');
+  else fail('Non-leaf product: shows in its own category listing');
+  if (onMain) pass('Non-leaf product: shows in main category listing');
+  else fail('Non-leaf product: shows in main category listing');
+  if (!onSiblingLeaf) pass('Non-leaf product: does NOT leak into descendant leaf listing');
+  else fail('Non-leaf product: does NOT leak into descendant leaf listing');
+
   const searchHit = await Product.exists({
     _id: product._id,
     $or: [
@@ -209,15 +238,18 @@ async function runEdgeCases(ctx) {
     'inactive',
   );
 
-  await expectThrows(
-    'Parent (non-leaf) category: create rejected',
-    () => resolveProductCategoryFields({
-      mainCategory: main._id,
-      subCategory: mid._id,
-      category: mid._id,
-    }),
-    'subcategory',
-  );
+  // Non-leaf categories are valid product targets now.
+  try {
+    const parentFields = await resolveProductCategoryFields({ subCategory: mid._id, category: mid._id });
+    if (String(parentFields.category) === String(mid._id)
+      && String(parentFields.mainCategory) === String(main._id)) {
+      pass('Parent (non-leaf) category: create allowed');
+    } else {
+      fail('Parent (non-leaf) category: create allowed', 'unexpected resolved fields');
+    }
+  } catch (err) {
+    fail('Parent (non-leaf) category: create allowed', err.message);
+  }
 
   await expectThrows(
     'Import bad slug: rejected',
@@ -225,11 +257,13 @@ async function runEdgeCases(ctx) {
     'not found',
   );
 
-  await expectThrows(
-    'Import parent slug as leaf: rejected',
-    () => resolveProductCategoryFieldsFromImport({ categorySlug: mid.slug }),
-    'subcategor',
-  );
+  try {
+    const imported = await resolveProductCategoryFieldsFromImport({ categorySlug: mid.slug });
+    if (String(imported.category) === String(mid._id)) pass('Import parent slug: attaches to that category');
+    else fail('Import parent slug: attaches to that category');
+  } catch (err) {
+    fail('Import parent slug: attaches to that category', err.message);
+  }
 
   const fakeId = new mongoose.Types.ObjectId();
   await Product.collection.updateOne(
@@ -270,15 +304,9 @@ async function runEdgeCases(ctx) {
     fail('Bulk category change: subCategory updated');
   }
 
-  await expectThrows(
-    'Bulk to parent category: rejected',
-    () => resolveProductCategoryFields({
-      mainCategory: main._id,
-      subCategory: mid._id,
-      category: mid._id,
-    }),
-    'subcategory',
-  );
+  const bulkToParent = await resolveProductCategoryFields({ subCategory: mid._id, category: mid._id });
+  if (String(bulkToParent.category) === String(mid._id)) pass('Bulk to parent category: allowed');
+  else fail('Bulk to parent category: allowed');
 
   const deletedSection = await HomepageSection.create({
     type: 'category_spotlight',

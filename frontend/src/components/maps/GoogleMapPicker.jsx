@@ -1,6 +1,13 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import InteractiveGoogleMap from './InteractiveGoogleMap';
 import AddressSearchInput from './AddressSearchInput';
+import CurrentLocationButton from './CurrentLocationButton';
+import {
+  getGeolocationAccuracyWarning,
+  getGeolocationErrorMessage,
+  getGeolocationProgressMessage,
+  useCurrentGeolocation,
+} from '../../hooks/useCurrentGeolocation';
 import { deliveryZoneService } from '../../services/apiServices';
 import { parseOsmSelection } from '../../utils/osmGeocode';
 import { parseGeocodeResult, readGooglePlaceCoords } from '../../utils/parseGooglePlace';
@@ -15,13 +22,30 @@ export default function GoogleMapPicker({
   isAr = false,
   heightClass = 'h-72',
   suggestPlaces,
+  showCurrentLocation = true,
 }) {
-  const position = lat != null && lng != null
+  const {
+    locate,
+    loading: locating,
+    error: locateError,
+    progress: locateProgress,
+    setError: setLocateError,
+    clearError: clearLocateError,
+  } = useCurrentGeolocation();
+
+  const [livePin, setLivePin] = useState(null);
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
+  const [gpsWarning, setGpsWarning] = useState('');
+
+  const savedPosition = lat != null && lng != null
     ? { lat: Number(lat), lng: Number(lng) }
     : null;
+  const position = (locating && livePin) ? livePin : (savedPosition || livePin);
 
   const center = position || DEFAULT_CENTER;
-  const zoom = position ? 16 : 11;
+  const zoom = position
+    ? (gpsAccuracy != null && gpsAccuracy > 350 ? 14 : gpsAccuracy != null && gpsAccuracy > 120 ? 15 : 16)
+    : 11;
 
   const applyGeocodeResult = useCallback((result, fallbackAddress = '') => {
     onChange?.({
@@ -32,6 +56,30 @@ export default function GoogleMapPicker({
       address: result.formattedAddress || fallbackAddress,
     });
   }, [onChange]);
+
+  const resolveCoords = useCallback(async (nextLat, nextLng, { fromGps = false } = {}) => {
+    const base = { lat: nextLat, lng: nextLng };
+    if (!fromGps) {
+      setGpsAccuracy(null);
+      setGpsWarning('');
+    }
+    if (!onGeocode) {
+      onChange?.(base);
+      return;
+    }
+    try {
+      const result = await onGeocode({ lat: nextLat, lng: nextLng });
+      onChange?.({
+        ...base,
+        formattedAddress: result.formattedAddress,
+        placeId: result.placeId,
+        address: result.formattedAddress || '',
+      });
+    } catch {
+      // Coordinates still usable — admin can type the address by hand.
+      onChange?.(base);
+    }
+  }, [onChange, onGeocode]);
 
   const handleSuggestionSelect = useCallback(async (item) => {
     if ((item.lat != null && item.lng != null) || item.osmResult) {
@@ -97,56 +145,71 @@ export default function GoogleMapPicker({
     }
   }, [applyGeocodeResult, onGeocode]);
 
-  const handleDragEnd = useCallback(async (event) => {
+  const handleDragEnd = useCallback((event) => {
     const nextLat = event.latLng?.lat?.();
     const nextLng = event.latLng?.lng?.();
     if (nextLat == null || nextLng == null) return;
+    setLivePin({ lat: nextLat, lng: nextLng });
+    void resolveCoords(nextLat, nextLng);
+  }, [resolveCoords]);
 
-    const base = { lat: nextLat, lng: nextLng };
-    if (!onGeocode) {
-      onChange?.(base);
-      return;
-    }
-
-    try {
-      const result = await onGeocode({ lat: nextLat, lng: nextLng });
-      onChange?.({
-        ...base,
-        formattedAddress: result.formattedAddress,
-        placeId: result.placeId,
-        address: result.formattedAddress || '',
-      });
-    } catch {
-      onChange?.(base);
-    }
-  }, [onChange, onGeocode]);
-
-  const handleMapClick = useCallback(async (event) => {
+  const handleMapClick = useCallback((event) => {
     const nextLat = event.detail?.latLng?.lat;
     const nextLng = event.detail?.latLng?.lng;
     if (nextLat == null || nextLng == null) return;
+    setLivePin({ lat: nextLat, lng: nextLng });
+    void resolveCoords(nextLat, nextLng);
+  }, [resolveCoords]);
 
-    const base = { lat: nextLat, lng: nextLng };
-    if (!onGeocode) {
-      onChange?.(base);
-      return;
-    }
-
+  const handleUseCurrentLocation = useCallback(async () => {
+    clearLocateError();
+    setGpsWarning('');
     try {
-      const result = await onGeocode({ lat: nextLat, lng: nextLng });
-      onChange?.({
-        ...base,
-        formattedAddress: result.formattedAddress,
-        placeId: result.placeId,
-        address: result.formattedAddress || '',
+      const coords = await locate({
+        onProgress: (next) => {
+          if (next?.lat != null && next?.lng != null) {
+            setLivePin({ lat: Number(next.lat), lng: Number(next.lng) });
+          }
+        },
       });
-    } catch {
-      onChange?.(base);
+      setGpsAccuracy(coords.accuracy ?? null);
+      setGpsWarning(getGeolocationAccuracyWarning(coords, isAr));
+      setLivePin({ lat: coords.lat, lng: coords.lng });
+      await resolveCoords(coords.lat, coords.lng, { fromGps: true });
+    } catch (err) {
+      setGpsAccuracy(null);
+      setLocateError(getGeolocationErrorMessage(err, isAr));
     }
-  }, [onChange, onGeocode]);
+  }, [clearLocateError, isAr, locate, resolveCoords, setLocateError]);
 
   return (
     <div className="space-y-3">
+      {showCurrentLocation && (
+        <>
+          <CurrentLocationButton
+            isAr={isAr}
+            loading={locating}
+            statusText={locating ? getGeolocationProgressMessage(locateProgress, isAr) : ''}
+            onClick={handleUseCurrentLocation}
+          />
+          {locateError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{locateError}</p>
+          )}
+          {gpsWarning && !locateError && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{gpsWarning}</p>
+          )}
+
+          <div className="relative py-1">
+            <div className="absolute inset-0 flex items-center" aria-hidden>
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase tracking-wide text-text-muted">
+              <span className="bg-white px-2">{isAr ? 'أو' : 'or'}</span>
+            </div>
+          </div>
+        </>
+      )}
+
       <AddressSearchInput
         isAr={isAr}
         onSelect={handleSuggestionSelect}
@@ -157,6 +220,7 @@ export default function GoogleMapPicker({
         center={center}
         zoom={zoom}
         position={position}
+        accuracyMeters={gpsAccuracy}
         onClick={handleMapClick}
         onDragEnd={handleDragEnd}
         isAr={isAr}
@@ -165,8 +229,8 @@ export default function GoogleMapPicker({
 
       <p className="text-xs text-text-muted">
         {isAr
-          ? 'ابحث عن العنوان واختر من القائمة، أو انقر على الخريطة أو اسحب الدبوس.'
-          : 'Search and pick from suggestions, or click the map / drag the pin.'}
+          ? 'استخدم موقعك الحالي، أو ابحث عن العنوان واختر من القائمة، أو انقر على الخريطة أو اسحب الدبوس.'
+          : 'Use your current location, search and pick a suggestion, or click the map / drag the pin.'}
       </p>
     </div>
   );

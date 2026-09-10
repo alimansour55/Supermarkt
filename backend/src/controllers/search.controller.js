@@ -2,7 +2,7 @@ import SearchEvent from '../models/SearchEvent.js';
 import Category from '../models/Category.js';
 import Product from '../models/Product.js';
 import StoreSettings from '../models/StoreSettings.js';
-import { DEFAULT_TRENDING_SEARCHES } from '../constants/storeDefaults.js';
+import { DEFAULT_TRENDING_SEARCHES, DEFAULT_TRENDING_CONFIG } from '../constants/storeDefaults.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { formatProduct } from '../utils/formatters.js';
 import {
@@ -18,6 +18,29 @@ async function getStoreSearchSettings() {
 }
 
 const MIN_TRACKED_SEARCH_LENGTH = 3;
+
+function clampNumber(value, min, max, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(Math.max(num, min), max);
+}
+
+/** Merge stored trendingConfig over the defaults, clamped to safe ranges. */
+function resolveTrendingConfig(searchSettings = {}) {
+  const raw = searchSettings.trendingConfig?.toObject?.()
+    || searchSettings.trendingConfig
+    || {};
+  return {
+    displayLimit: clampNumber(raw.displayLimit, 1, 20, DEFAULT_TRENDING_CONFIG.displayLimit),
+    autoLookbackDays: clampNumber(raw.autoLookbackDays, 1, 30, DEFAULT_TRENDING_CONFIG.autoLookbackDays),
+    autoMinCount: clampNumber(raw.autoMinCount, 1, 1000, DEFAULT_TRENDING_CONFIG.autoMinCount),
+    requireConversion: raw.requireConversion === true,
+    dedupeByProduct: raw.dedupeByProduct !== false,
+    autoBlocklist: Array.isArray(raw.autoBlocklist)
+      ? raw.autoBlocklist.map((entry) => normalizeSearchQuery(String(entry || ''))).filter(Boolean)
+      : [],
+  };
+}
 
 function isTrackableSearchQuery(query) {
   const normalized = normalizeSearchQuery(String(query || ''));
@@ -59,24 +82,43 @@ async function enrichTrendingItems(items) {
   }).filter(Boolean);
 }
 
-async function getManualTrendingSearches(limit) {
-  const searchSettings = await getStoreSearchSettings();
-  if (searchSettings.trendingMode === 'auto') return null;
-
-  const configured = (searchSettings.trendingSearches || [])
+function getConfiguredManualItems(searchSettings, limit) {
+  return (searchSettings.trendingSearches || [])
     .filter((item) => item.isActive !== false && (String(item.query || '').trim() || item.productId))
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
     .slice(0, limit);
+}
 
+async function getManualTrendingSearches(limit, searchSettings) {
+  const settings = searchSettings || await getStoreSearchSettings();
+  const configured = getConfiguredManualItems(settings, limit);
   if (!configured.length) return null;
 
   const enriched = await enrichTrendingItems(configured);
   return enriched.length ? enriched : null;
 }
 
-async function getAnalyticsTrendingSearches(limit, days) {
+async function getAnalyticsTrendingSearches(limit, opts = {}) {
+  if (limit <= 0) return null;
+
+  const {
+    days = DEFAULT_TRENDING_CONFIG.autoLookbackDays,
+    minCount = DEFAULT_TRENDING_CONFIG.autoMinCount,
+    requireConversion = false,
+    dedupeByProduct = true,
+    blocklist = [],
+    excludeProductIds = [],
+    excludeNormalizedQueries = [],
+  } = opts;
+
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const candidateLimit = Math.min(Math.max(limit * 2, 12), 24);
+  const skipQueries = new Set([
+    ...blocklist,
+    ...excludeNormalizedQueries,
+  ].map((q) => normalizeSearchQuery(String(q || ''))).filter(Boolean));
+  const seenProductIds = new Set(excludeProductIds.map(String));
+
+  const candidateLimit = Math.min(Math.max(limit * 3, 15), 40);
   const trending = await SearchEvent.aggregate([
     {
       $match: {
@@ -91,19 +133,23 @@ async function getAnalyticsTrendingSearches(limit, days) {
       $group: {
         _id: '$normalizedQuery',
         count: { $sum: 1 },
+        conversions: { $sum: { $cond: ['$converted', 1, 0] } },
         lastQuery: { $first: '$query' },
       },
     },
+    { $match: { count: { $gte: minCount } } },
     { $sort: { count: -1, _id: 1 } },
     { $limit: candidateLimit },
   ]);
 
   if (!trending.length) return null;
 
-  const seenProductIds = new Set();
   const results = [];
 
   for (const item of trending) {
+    if (skipQueries.has(item._id)) continue;
+    if (requireConversion && !(item.conversions > 0)) continue;
+
     const query = item.lastQuery || item._id;
     if (!isTrackableSearchQuery(query)) continue;
 
@@ -121,7 +167,8 @@ async function getAnalyticsTrendingSearches(limit, days) {
     );
     const product = await productQuery.lean();
 
-    if (!product || seenProductIds.has(String(product._id))) continue;
+    if (!product) continue;
+    if (dedupeByProduct && seenProductIds.has(String(product._id))) continue;
     seenProductIds.add(String(product._id));
     results.push(formatTrendingItem({ query, count: item.count }, product));
     if (results.length === limit) break;
@@ -185,24 +232,53 @@ export const getSearchSuggestions = asyncHandler(async (req, res) => {
   });
 });
 
+const TRENDING_MODES = ['manual', 'auto', 'hybrid'];
+
 export const getTrendingSearches = asyncHandler(async (req, res) => {
-  const days = Math.min(Number(req.query.days) || 7, 30);
-  const limit = Math.min(Number(req.query.limit) || 8, 20);
   const searchSettings = await getStoreSearchSettings();
-  const mode = searchSettings.trendingMode === 'auto' ? 'auto' : 'manual';
+  const config = resolveTrendingConfig(searchSettings);
+  const mode = TRENDING_MODES.includes(searchSettings.trendingMode)
+    ? searchSettings.trendingMode
+    : 'manual';
 
-  let results;
+  const limit = req.query.limit != null
+    ? clampNumber(req.query.limit, 1, 20, config.displayLimit)
+    : config.displayLimit;
+  const days = req.query.days != null
+    ? clampNumber(req.query.days, 1, 30, config.autoLookbackDays)
+    : config.autoLookbackDays;
+
+  const autoOpts = {
+    days,
+    minCount: config.autoMinCount,
+    requireConversion: config.requireConversion,
+    dedupeByProduct: config.dedupeByProduct,
+    blocklist: config.autoBlocklist,
+  };
+
+  let results = [];
   if (mode === 'manual') {
-    results = await getManualTrendingSearches(limit);
+    results = await getManualTrendingSearches(limit, searchSettings) || [];
+  } else if (mode === 'auto') {
+    results = await getAnalyticsTrendingSearches(limit, autoOpts) || [];
   } else {
-    results = await getAnalyticsTrendingSearches(limit, days);
+    const manual = await getManualTrendingSearches(limit, searchSettings) || [];
+    results = [...manual];
+    if (results.length < limit) {
+      const fill = await getAnalyticsTrendingSearches(limit - results.length, {
+        ...autoOpts,
+        excludeProductIds: manual.map((item) => item.productId).filter(Boolean),
+        excludeNormalizedQueries: manual.map((item) => item.query).filter(Boolean),
+      }) || [];
+      results = [...results, ...fill];
+    }
   }
 
-  if (!results?.length) {
-    results = DEFAULT_TRENDING_SEARCHES.slice(0, limit).map(formatTrendingItem);
+  if (!results.length) {
+    results = DEFAULT_TRENDING_SEARCHES.slice(0, limit).map((item) => formatTrendingItem(item));
   }
 
-  res.json({ success: true, data: results, mode });
+  res.json({ success: true, data: results.slice(0, limit), mode });
 });
 
 export const trackSearch = asyncHandler(async (req, res) => {

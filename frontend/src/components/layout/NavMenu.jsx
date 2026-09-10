@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, LayoutGrid, Tag } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
 import { useCategories } from '../../context/CategoriesContext';
-import { buildStoreNavItems } from '../../utils/navBarConfig';
+import { buildStoreNavItems, clampStoreNavItems } from '../../utils/navBarConfig';
 import { prefetchMegaBlocks, prefetchOffersMega } from '../../utils/megaMenuCache';
 import { useHoverMenu } from '../../hooks/useHoverMenu';
 import CategoryMegaMenuPanel from './CategoryMegaMenuPanel';
 import OffersMegaMenuPanel from './OffersMegaMenuPanel';
 
 export default function NavMenu() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const { pathname } = useLocation();
   const { settings } = useStoreSettings();
   const { rootCategories, categories, getChildren } = useCategories();
@@ -22,8 +22,21 @@ export default function NavMenu() {
   const { cancelClose, scheduleClose, markOpen } = useHoverMenu({ closeDelay: 450 });
 
   const navItems = useMemo(
-    () => buildStoreNavItems(settings?.navigation, categories, getChildren),
+    // Cap the bar so an over-filled admin config can't break the header layout.
+    () => clampStoreNavItems(
+      buildStoreNavItems(settings?.navigation, categories, getChildren),
+    ),
     [settings?.navigation, categories, getChildren],
+  );
+
+  // Deals / Offers (and any highlighted link) are anchored to the opposite end (HyperOne pattern).
+  const primaryNavItems = useMemo(
+    () => navItems.filter((item) => !item.isOffers && !item.highlight),
+    [navItems],
+  );
+  const endNavItems = useMemo(
+    () => navItems.filter((item) => item.isOffers || item.highlight),
+    [navItems],
   );
 
   const allRootSlugs = useMemo(
@@ -81,166 +94,185 @@ export default function NavMenu() {
     prefetchOffersMega();
   }, [categories, allRootSlugs, navCategorySlugs, getChildren, isAr]);
 
-  const pillClass = (isActive, isOpen, highlight, offersOpen = false) => {
-    if (offersOpen) {
-      return 'flex items-center gap-1 whitespace-nowrap rounded-full bg-gradient-to-r from-red-600 to-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm';
+  // Plain text links — no filled pills. Every item shares the same padding so the
+  // spacing between them is uniform across the whole bar.
+  const NAV_BASE = 'relative flex items-center gap-1.5 whitespace-nowrap px-4 py-3.5 text-[15px] transition-colors lg:px-[22px]';
+  const NAV_UNDERLINE = 'after:absolute after:inset-x-4 after:bottom-0 after:h-[3px] after:rounded-t-full lg:after:inset-x-[22px]';
+
+  const linkClass = (isActive, isMenuOpen) => {
+    if (isMenuOpen || isActive) {
+      return `${NAV_BASE} ${NAV_UNDERLINE} font-semibold text-primary-800 after:bg-primary-600`;
     }
-    if (isOpen) {
-      return 'flex items-center gap-1 whitespace-nowrap rounded-full bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm';
+    return `${NAV_BASE} font-medium text-primary-700 hover:text-primary-900`;
+  };
+
+  const offersClass = (isMenuOpen) => {
+    if (isMenuOpen) {
+      return `${NAV_BASE} ${NAV_UNDERLINE} font-bold text-danger-600 after:bg-danger-500`;
     }
-    if (isActive) {
-      return 'flex items-center gap-1 whitespace-nowrap rounded-full bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-800';
-    }
-    if (highlight) {
-      return 'flex items-center gap-1 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50';
-    }
-    return 'flex items-center gap-1 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-surface';
+    return `${NAV_BASE} font-bold text-danger-500 hover:text-danger-600`;
   };
 
   const menuSlugs = megaScope === 'all' ? allRootSlugs : (activeCategory ? [activeCategory] : []);
+  const allCategoriesOpen = open && megaScope === 'all';
+
+  const renderNavItem = (item) => {
+    const label = isAr ? item.labelAr : item.labelEn;
+    const isActive = pathname === item.to || (item.to !== '/' && pathname.startsWith(item.to));
+    const isSingleOpen = open && item.type === 'category' && megaScope === 'single' && activeCategory === item.slug;
+
+    if (item.type === 'category' && item.hasMegaMenu) {
+      return (
+        <li
+          key={item.id}
+          className="shrink-0"
+          onMouseEnter={() => {
+            prefetchMegaBlocks([item.slug], categories, getChildren, isAr);
+            openMega('single', item.slug);
+          }}
+        >
+          <button
+            type="button"
+            className={linkClass(isActive, isSingleOpen)}
+            aria-expanded={isSingleOpen}
+            onFocus={() => openMega('single', item.slug)}
+          >
+            <span>{label}</span>
+          </button>
+        </li>
+      );
+    }
+
+    if (item.isExternal) {
+      return (
+        <li key={item.id} className="shrink-0">
+          <a href={item.to} className={linkClass(isActive, false)} target="_blank" rel="noreferrer">
+            {label}
+          </a>
+        </li>
+      );
+    }
+
+    return (
+      <li key={item.id} className="shrink-0">
+        <Link to={item.to} className={linkClass(isActive, false)}>{label}</Link>
+      </li>
+    );
+  };
+
+  const renderEndItem = (item) => {
+    const label = isAr ? item.labelAr : item.labelEn;
+    const isOffersOpen = open && megaScope === 'offers' && item.isOffers;
+    const icon = <Tag className="h-[15px] w-[15px] shrink-0" aria-hidden />;
+
+    if (item.isExternal) {
+      return (
+        <li key={item.id} className="shrink-0">
+          <a href={item.to} className={offersClass(false)} target="_blank" rel="noreferrer">
+            {icon}
+            <span>{label}</span>
+          </a>
+        </li>
+      );
+    }
+
+    if (item.isOffers) {
+      return (
+        <li key={item.id} className="shrink-0" onMouseEnter={openOffersMega}>
+          <button
+            type="button"
+            className={offersClass(isOffersOpen)}
+            aria-expanded={isOffersOpen}
+            onFocus={openOffersMega}
+          >
+            {icon}
+            <span>{label}</span>
+          </button>
+        </li>
+      );
+    }
+
+    return (
+      <li key={item.id} className="shrink-0">
+        <Link to={item.to} className={offersClass(false)}>
+          {icon}
+          <span>{label}</span>
+        </Link>
+      </li>
+    );
+  };
 
   return (
     <nav
-      className="relative hidden border-t border-border/50 bg-white md:block"
+      className="relative hidden border-b border-border bg-white md:block"
       onMouseLeave={handleLeave}
     >
       <div className="container-app">
-        <ul className="flex items-center gap-2 overflow-x-auto py-2.5 scrollbar-thin">
-          {navItems.map((item) => {
-            const label = isAr ? item.labelAr : item.labelEn;
-            const isActive = pathname === item.to || (item.to !== '/' && pathname.startsWith(item.to));
-            const isOpen = open && (
-              (item.type === 'home' && megaScope === 'all')
-              || (item.type === 'category' && megaScope === 'single' && activeCategory === item.slug)
-            );
-            const isOffersOpen = open && megaScope === 'offers' && item.isOffers;
+        {/*
+          Items sit in one centered group with uniform gaps between them — not
+          stretched edge-to-edge. The count is capped upstream (clampStoreNavItems)
+          so the row never overflows regardless of the admin config.
+        */}
+        <ul className="flex items-center justify-center gap-x-1 lg:gap-x-2">
+          {/* All Categories — opens the full mega menu */}
+          <li
+            className="shrink-0"
+            onMouseEnter={() => {
+              prefetchMegaBlocks(allRootSlugs, categories, getChildren, isAr);
+              openMega('all', defaultRoot);
+            }}
+          >
+            <button
+              type="button"
+              className={`${
+                allCategoriesOpen
+                  ? `${NAV_BASE} ${NAV_UNDERLINE} font-bold text-primary-800 after:bg-primary-600`
+                  : `${NAV_BASE} font-bold text-primary-700 hover:text-primary-900`
+              }`}
+              aria-expanded={allCategoriesOpen}
+              onFocus={() => openMega('all', defaultRoot)}
+            >
+              <LayoutGrid className="h-[18px] w-[18px] shrink-0" aria-hidden />
+              <span>{t.nav.allCategories}</span>
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${allCategoriesOpen ? 'rotate-180' : ''}`} aria-hidden />
+            </button>
+          </li>
 
-            if (item.type === 'home') {
-              return (
-                <li
-                  key={item.id}
-                  className="shrink-0"
-                  onMouseEnter={() => {
-                    prefetchMegaBlocks(allRootSlugs, categories, getChildren, isAr);
-                    openMega('all', defaultRoot);
-                  }}
-                >
-                  <button
-                    type="button"
-                    className={pillClass(isActive, isOpen, false)}
-                    aria-expanded={isOpen}
-                    onFocus={() => openMega('all', defaultRoot)}
-                  >
-                    <span>{label}</span>
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                </li>
-              );
-            }
-
-            if (item.type === 'category' && item.hasMegaMenu) {
-              return (
-                <li
-                  key={item.id}
-                  className="shrink-0"
-                  onMouseEnter={() => {
-                    prefetchMegaBlocks([item.slug], categories, getChildren, isAr);
-                    openMega('single', item.slug);
-                  }}
-                >
-                  <button
-                    type="button"
-                    className={pillClass(isActive, isOpen, false)}
-                    aria-expanded={isOpen}
-                    onFocus={() => openMega('single', item.slug)}
-                  >
-                    <span>{label}</span>
-                  </button>
-                </li>
-              );
-            }
-
-            if (item.type === 'category') {
-              return (
-                <li key={item.id} className="shrink-0">
-                  <Link to={item.to} className={pillClass(isActive, false, false)}>
-                    {label}
-                  </Link>
-                </li>
-              );
-            }
-
-            if (item.isOffers && !item.isExternal) {
-              return (
-                <li
-                  key={item.id}
-                  className="shrink-0"
-                  onMouseEnter={openOffersMega}
-                >
-                  <button
-                    type="button"
-                    className={pillClass(isActive, false, item.highlight, isOffersOpen)}
-                    aria-expanded={isOffersOpen}
-                    onFocus={openOffersMega}
-                  >
-                    <span>{label}</span>
-                  </button>
-                </li>
-              );
-            }
-
-            if (item.isExternal) {
-              return (
-                <li key={item.id} className="shrink-0">
-                  <a
-                    href={item.to}
-                    className={pillClass(isActive, false, item.highlight)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {label}
-                  </a>
-                </li>
-              );
-            }
-
-            return (
-              <li key={item.id} className="shrink-0">
-                <Link to={item.to} className={pillClass(isActive, false, item.highlight)}>
-                  {label}
-                </Link>
-              </li>
-            );
-          })}
+          {primaryNavItems.map(renderNavItem)}
+          {endNavItems.map(renderEndItem)}
         </ul>
       </div>
 
       {open && megaScope === 'offers' && (
         <div
-          className="absolute inset-x-0 top-full z-50 pt-2"
+          className="absolute inset-x-0 top-full z-50"
           onMouseEnter={cancelClose}
           onMouseLeave={handleLeave}
         >
-          <div className="mega-menu-panel overflow-hidden border border-border/80 bg-white shadow-[0_24px_48px_-12px_rgba(15,23,42,0.18)]">
-            <OffersMegaMenuPanel onNavigate={closeMega} />
+          <div className="container-app">
+            <div className="mega-menu-panel overflow-hidden rounded-b-2xl border border-t-0 border-border bg-white shadow-menu">
+              <OffersMegaMenuPanel onNavigate={closeMega} />
+            </div>
           </div>
         </div>
       )}
 
       {open && activeCategory && menuSlugs.length > 0 && megaScope !== 'offers' && (
         <div
-          className="absolute inset-x-0 top-full z-50 pt-2"
+          className="absolute inset-x-0 top-full z-50"
           onMouseEnter={cancelClose}
           onMouseLeave={handleLeave}
         >
-          <div className="mega-menu-panel border border-border/80 bg-white shadow-[0_24px_48px_-12px_rgba(15,23,42,0.18)]">
-            <CategoryMegaMenuPanel
-              activeCategorySlug={activeCategory}
-              menuCategorySlugs={menuSlugs}
-              scope={megaScope}
-              onHoverCategory={setActiveCategory}
-              onNavigate={closeMega}
-            />
+          <div className="container-app">
+            <div className="mega-menu-panel overflow-hidden rounded-b-2xl border border-t-0 border-border bg-white shadow-menu">
+              <CategoryMegaMenuPanel
+                activeCategorySlug={activeCategory}
+                menuCategorySlugs={menuSlugs}
+                scope={megaScope}
+                onHoverCategory={setActiveCategory}
+                onNavigate={closeMega}
+              />
+            </div>
           </div>
         </div>
       )}

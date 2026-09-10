@@ -18,9 +18,11 @@ import FulfillmentLocation from './FulfillmentLocation.js';
 import DeliveryTracking from './DeliveryTracking.js';
 import UserNotification from './UserNotification.js';
 import PartnerPayout from './PartnerPayout.js';
+import WalletTransaction from './WalletTransaction.js';
+import WalletTopUpRequest from './WalletTopUpRequest.js';
 
 export {
-  User, Product, Category, Cart, Order, Coupon, Banner, StoreSettings, HomepageSection, DeliveryZone, SearchEvent, ContentPage, NotificationTemplate, RecurringDeliverySubscription, Brand, Promotion, FulfillmentLocation, DeliveryTracking, UserNotification, PartnerPayout,
+  User, Product, Category, Cart, Order, Coupon, Banner, StoreSettings, HomepageSection, DeliveryZone, SearchEvent, ContentPage, NotificationTemplate, RecurringDeliverySubscription, Brand, Promotion, FulfillmentLocation, DeliveryTracking, UserNotification, PartnerPayout, WalletTransaction, WalletTopUpRequest,
 };
 
 export default {
@@ -44,4 +46,6 @@ export default {
   DeliveryTracking,
   UserNotification,
   PartnerPayout,
+  WalletTransaction,
+  WalletTopUpRequest,
 };

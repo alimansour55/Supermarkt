@@ -48,6 +48,8 @@ export const orderService = {
   downloadInvoice: (id, lang = 'ar') =>
     api.get(`/orders/${id}/invoice`, { params: { lang }, responseType: 'blob' }),
   getTracking: (id) => api.get(`/orders/${id}/tracking`),
+  getDriverConfig: () => api.get('/orders/driver/config'),
+  setDriverAvailability: (available) => api.put('/orders/driver/availability', { available }),
   getDriverDeliveries: () => api.get('/orders/driver/deliveries'),
   getDriverDelivery: (id) => api.get(`/orders/driver/deliveries/${id}`),
   completeDriverDelivery: (id) => api.post(`/orders/driver/deliveries/${id}/complete`),
@@ -124,6 +126,21 @@ export const deliveryZoneService = {
 
 export const loyaltyService = {
   getMe: (language = 'ar') => api.get('/loyalty/me', { params: { lang: language } }),
+};
+
+export const walletService = {
+  getMe: (language = 'ar') => api.get('/wallet/me', { params: { lang: language } }),
+  createTopUp: ({ amount, method, destinationAccount, senderReference, proofFile, lang = 'ar' }) => {
+    const form = new FormData();
+    form.append('amount', String(amount));
+    form.append('method', method);
+    form.append('destinationAccount', destinationAccount);
+    if (senderReference) form.append('senderReference', senderReference);
+    form.append('lang', lang);
+    if (proofFile) form.append('proof', proofFile);
+    return api.post('/wallet/topup', form);
+  },
+  getTopUp: (id) => api.get(`/wallet/topup/${id}`),
 };
 
 export const reviewService = {

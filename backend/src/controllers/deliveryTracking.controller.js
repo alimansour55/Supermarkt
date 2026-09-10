@@ -30,7 +30,11 @@ export const getCustomerOrderTracking = asyncHandler(async (req, res) => {
     throw new AppError('Live map tracking is disabled for this store', 404);
   }
 
-  if (!canShowOrderTracking(order, { gpsDeliveryEnabled })) {
+  const eligible = order.orderStatus === 'out_for_delivery'
+    && Boolean(order.assignedDriver)
+    && order.trackingEnabled === true;
+
+  if (!eligible && !canShowOrderTracking(order, { gpsDeliveryEnabled })) {
     throw new AppError('Live tracking is not available for this order', 404);
   }
 

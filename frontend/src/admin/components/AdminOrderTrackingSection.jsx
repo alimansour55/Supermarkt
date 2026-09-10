@@ -12,11 +12,14 @@ import {
 } from '../../utils/orderTracking';
 
 const POLL_MS = 30_000;
+const DEV = import.meta.env.DEV;
 
 export default function AdminOrderTrackingSection({ orderId, orderNumber, isAr, compact = false }) {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [simRunning, setSimRunning] = useState(false);
+  const [simBusy, setSimBusy] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!orderId) return;
@@ -38,6 +41,31 @@ export default function AdminOrderTrackingSection({ orderId, orderNumber, isAr, 
     const timer = setInterval(() => load(true), POLL_MS);
     return () => clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    if (!DEV || !orderId) return;
+    adminApi.getTrackingSimulation(orderId)
+      .then(({ data }) => setSimRunning(Boolean(data.data?.running)))
+      .catch(() => {});
+  }, [orderId]);
+
+  const toggleSim = useCallback(async () => {
+    setSimBusy(true);
+    try {
+      if (simRunning) {
+        await adminApi.stopTrackingSimulation(orderId);
+        setSimRunning(false);
+      } else {
+        await adminApi.startTrackingSimulation(orderId, { speedKmh: 30 });
+        setSimRunning(true);
+        setTimeout(() => load(true), 1500);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Simulation failed');
+    } finally {
+      setSimBusy(false);
+    }
+  }, [orderId, simRunning, load]);
 
   const stale = snapshot?.locationStale
     || isDriverLocationStale(snapshot?.driver?.updatedAt || snapshot?.driverUpdatedAt);
@@ -63,10 +91,24 @@ export default function AdminOrderTrackingSection({ orderId, orderNumber, isAr, 
             </p>
           )}
         </div>
-        <Button type="button" size="sm" variant="secondary" onClick={() => load()} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          {isAr ? 'تحديث' : 'Refresh'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {DEV && (
+            <Button
+              type="button"
+              size="sm"
+              variant={simRunning ? 'danger' : 'primary'}
+              onClick={toggleSim}
+              disabled={simBusy}
+            >
+              <Truck className="h-4 w-4" />
+              {simRunning ? 'Stop sim' : 'Simulate driver (dev)'}
+            </Button>
+          )}
+          <Button type="button" size="sm" variant="secondary" onClick={() => load()} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            {isAr ? 'تحديث' : 'Refresh'}
+          </Button>
+        </div>
       </div>
 
       {error && (

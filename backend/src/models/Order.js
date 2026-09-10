@@ -213,6 +213,12 @@ const orderSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    /** Store-wallet money spent on this order (already subtracted from `total`). */
+    walletAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     couponCode: {
       type: String,
       trim: true,

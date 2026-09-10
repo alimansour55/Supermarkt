@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CreditCard, MapPin, ShieldCheck, StickyNote, Truck } from 'lucide-react';
+import { Check, CreditCard, MapPin, ShieldCheck, StickyNote, Truck } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useStoreSettings } from '../context/StoreSettingsContext';
 import { useCart } from '../context/CartContext';
 import { useLocation } from '../context/LocationContext';
 import { useAuth } from '../context/AuthContext';
 import { formatPrice } from '../utils/formatters';
-import { cartService, loyaltyService, orderService, paymentService } from '../services/apiServices';
+import { cartService, loyaltyService, orderService, paymentService, walletService } from '../services/apiServices';
 import PhoneInput from '../components/ui/PhoneInput';
 import LocationSelector from '../components/layout/LocationSelector';
 import AddressMapCapture from '../components/maps/AddressMapCapture';
 import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 import Loader from '../components/ui/Loader';
-import { emptyAddressCapture, hasAddressPin } from '../utils/parseGooglePlace';
+import { emptyAddressCapture, hasAddressPin, normalizeGpsAddress } from '../utils/parseGooglePlace';
 import { isGpsDeliveryEnabled } from '../utils/gpsDelivery';
+import { deliveryLocationLabel } from '../utils/locationGate';
 import CheckoutSidebarSummary from '../components/checkout/CheckoutSidebarSummary';
 import DeliveryMethodSelector, { resolveSelectedSlot } from '../components/checkout/DeliveryMethodSelector';
 import { defaultBookingDate, isDateWithinBookingWindow } from '../constants/deliveryOptions';
@@ -59,7 +61,10 @@ export default function CheckoutPage() {
     clearCart,
     setDeliveryMethod,
   } = useCart();
-  const { location, refetchZones } = useLocation();
+  const {
+    location, refetchZones, confirmed: locationConfirmed,
+    pin: locationPin, manualAddress: locationManualAddress, openGate,
+  } = useLocation();
   const { settings } = useStoreSettings();
   const gpsMapEnabled = isGpsDeliveryEnabled(settings);
   const { isAuthenticated, user, refreshUser } = useAuth();
@@ -69,6 +74,14 @@ export default function CheckoutPage() {
   const checkoutPromoNote = useMemo(
     () => getCheckoutPromoReassurance(items, isAr),
     [items, isAr],
+  );
+  // The customer's own pinned/typed address — shown in the summary recap instead
+  // of the admin zone label (see deliveryLocationLabel / delivery-zone display rules).
+  const deliverToLabel = deliveryLocationLabel(
+    locationConfirmed ? locationPin : null,
+    isAr ? location?.nameAr : location?.nameEn,
+    isAr,
+    locationConfirmed ? locationManualAddress : null,
   );
   const paymentOptions = useMemo(() => (
     (settings?.paymentMethods || [])
@@ -90,8 +103,15 @@ export default function CheckoutPage() {
   const [manualPaymentError, setManualPaymentError] = useState('');
   const [pointsToRedeem, setPointsToRedeem] = useState('');
   const [loyalty, setLoyalty] = useState(null);
+  const [walletToRedeem, setWalletToRedeem] = useState('');
+  const [wallet, setWallet] = useState(null);
   const [address, setAddress] = useState(emptyAddressCapture);
   const [selectedSavedAddressId, setSelectedSavedAddressId] = useState('');
+  const [editingAddress, setEditingAddress] = useState(false);
+  // A precise pin dropped in the startup location popup — the customer already
+  // told us where to deliver, so checkout confirms it instead of asking again.
+  const hasGatePin = locationConfirmed && locationPin?.lat != null && locationPin?.lng != null;
+  const showAddressEditor = !hasGatePin || editingAddress;
   const [form, setForm] = useState({
     phoneLocal: parseLocalPhone(user?.phoneDisplay || user?.phone || ''),
     alternatePhoneLocal: '',
@@ -118,8 +138,60 @@ export default function CheckoutPage() {
     scheduledLeadMinutes,
   );
 
+  // A location picked in the startup popup is the default delivery point — its pin
+  // flows to the order so admin/driver see the customer's exact GPS spot.
+  const gatePinAppliedRef = useRef(false);
+  useEffect(() => {
+    if (gatePinAppliedRef.current) return;
+    if (!locationConfirmed || locationPin?.lat == null || locationPin?.lng == null) return;
+    gatePinAppliedRef.current = true;
+    setAddress((prev) => {
+      const next = {
+        ...prev,
+        lat: locationPin.lat,
+        lng: locationPin.lng,
+        formattedAddress: locationPin.formattedAddress || prev.formattedAddress || '',
+        area: prev.area || (language === 'ar' ? location?.areaAr : location?.areaEn) || '',
+        city: prev.city || (language === 'ar' ? location?.cityAr : location?.cityEn) || '',
+        locationSource: locationPin.source === 'gps' ? 'gps' : 'map',
+        gpsConfirmed: true,
+      };
+      // Derive a usable street line from the pinned address so the shopper does
+      // not have to retype what the popup already resolved.
+      if (!next.street?.trim()) {
+        next.street = normalizeGpsAddress(next).street || next.formattedAddress || '';
+      }
+      return next;
+    });
+    setSelectedSavedAddressId('');
+  }, [locationConfirmed, locationPin, language, location?.areaAr, location?.areaEn, location?.cityAr, location?.cityEn]);
+
+  // An address typed via "إدخال يدوي" in the startup popup — no pin, but real
+  // street/city details that should pre-fill the checkout form.
+  const gateManualAppliedRef = useRef(false);
+  useEffect(() => {
+    if (gateManualAppliedRef.current || gatePinAppliedRef.current) return;
+    if (!locationConfirmed || !locationManualAddress?.street) return;
+    gateManualAppliedRef.current = true;
+    setAddress((prev) => ({
+      ...prev,
+      street: locationManualAddress.street || prev.street,
+      building: locationManualAddress.building || prev.building,
+      floor: locationManualAddress.floor || prev.floor,
+      city: locationManualAddress.city || prev.city,
+      governorate: locationManualAddress.governorate || prev.governorate,
+      area: locationManualAddress.area || prev.area,
+      formattedAddress: locationManualAddress.formattedAddress || prev.formattedAddress || '',
+      locationSource: 'manual',
+    }));
+    setSelectedSavedAddressId('');
+  }, [locationConfirmed, locationManualAddress]);
+
   useEffect(() => {
     if (!user?.addresses?.length) return;
+    // Don't override a fresh popup pin with the default saved address.
+    if (locationConfirmed && locationPin?.lat != null && !gatePinAppliedRef.current) return;
+    if (gatePinAppliedRef.current || gateManualAppliedRef.current) return;
     const saved = user.addresses.find((item) => item.isDefault) || user.addresses[0];
     if (!saved) return;
     setAddress({
@@ -136,7 +208,7 @@ export default function CheckoutPage() {
       placeId: saved.placeId || '',
     });
     setSelectedSavedAddressId(saved._id || '');
-  }, [user?.addresses]);
+  }, [user?.addresses, locationConfirmed, locationPin?.lat]);
 
   useEffect(() => {
     refetchZones?.();
@@ -189,6 +261,7 @@ export default function CheckoutPage() {
       discountCode: discountCode || undefined,
       deliveryZoneId: location?.id,
       pointsToRedeem: isAuthenticated ? Math.max(0, Math.floor(Number(pointsToRedeem) || 0)) : 0,
+      walletToRedeem: isAuthenticated ? Math.max(0, Number(walletToRedeem) || 0) : 0,
     }).then(({ data }) => {
       if (cancelled) return;
       setCheckoutQuote(data);
@@ -202,11 +275,11 @@ export default function CheckoutPage() {
     });
 
     return () => { cancelled = true; };
-  }, [items, deliveryMethod, discountCode, location?.id, isAuthenticated, pointsToRedeem]);
+  }, [items, deliveryMethod, discountCode, location?.id, isAuthenticated, pointsToRedeem, walletToRedeem]);
 
   const quotedSubtotal = checkoutQuote?.subtotal ?? subtotal;
   const quotedDiscountAmount = checkoutQuote?.discountAmount ?? discountAmount;
-  const quotedTotal = checkoutQuote?.total ?? total;
+  const quotedTotal = checkoutQuote?.totalBeforeWallet ?? checkoutQuote?.total ?? total;
 
   useEffect(() => {
     if (!paymentOptions.length) return;
@@ -224,6 +297,13 @@ export default function CheckoutPage() {
       })
       .catch(() => {
         if (mounted) setLoyalty(null);
+      });
+    walletService.getMe(language)
+      .then(({ data }) => {
+        if (mounted) setWallet(data);
+      })
+      .catch(() => {
+        if (mounted) setWallet(null);
       });
     return () => {
       mounted = false;
@@ -297,7 +377,24 @@ export default function CheckoutPage() {
     };
   }, [checkoutQuote?.pointsDiscount, checkoutQuote?.pointsRedeemed, quotedDiscountAmount, quotedSubtotal, quotedTotal, loyalty, pointsToRedeem, user?.pointsBalance]);
 
-  const manualTransferTotal = pointsPreview.estimatedTotal ?? checkoutQuote?.total ?? total;
+  const walletPreview = useMemo(() => {
+    const rules = wallet?.settings || settings?.wallet || {};
+    const enabled = rules.enabled !== false && rules.allowCheckoutSpend !== false;
+    const balance = Math.max(0, Number(wallet?.walletBalance ?? user?.walletBalance ?? 0));
+    // Total after points, before wallet — points preview already nets points out.
+    const afterPoints = Math.max(0, Number(pointsPreview.estimatedTotal ?? quotedTotal));
+    const serverApplied = Math.max(0, Number(checkoutQuote?.walletApplied || 0));
+    const requested = Math.max(0, Number(walletToRedeem) || 0);
+    const percent = Number(rules.maxCheckoutPercent ?? 100);
+    const percentCap = percent > 0 ? Math.round(afterPoints * (percent / 100) * 100) / 100 : afterPoints;
+    const applied = !enabled || requested <= 0
+      ? 0
+      : Math.round(Math.min(serverApplied || requested, requested, balance, afterPoints, percentCap) * 100) / 100;
+    const estimatedTotal = Math.max(0, Math.round((afterPoints - applied) * 100) / 100);
+    return { enabled, balance, rules, walletApplied: applied, estimatedTotal, payableTotal: afterPoints };
+  }, [wallet, settings?.wallet, pointsPreview.estimatedTotal, quotedTotal, checkoutQuote?.walletApplied, walletToRedeem, user?.walletBalance]);
+
+  const manualTransferTotal = walletPreview.estimatedTotal ?? pointsPreview.estimatedTotal ?? checkoutQuote?.total ?? total;
 
   useEffect(() => {
     setManualPaymentError('');
@@ -366,15 +463,18 @@ export default function CheckoutPage() {
       }
     }
 
-    if (gpsMapEnabled && !hasAddressPin(address)) {
+    if (gpsMapEnabled && !hasAddressPin(address) && address.locationSource !== 'manual') {
       setError(language === 'ar'
         ? 'يرجى تحديد موقع التوصيل على الخريطة أو البحث عن عنوانك.'
         : 'Please pin your delivery location on the map or search for your address.');
       return;
     }
 
-    if (!address.street?.trim()) {
-      setError(language === 'ar' ? 'الشارع مطلوب' : 'Street is required');
+    const resolvedStreet = address.street?.trim() || address.formattedAddress?.trim() || '';
+    if (!resolvedStreet) {
+      setError(language === 'ar'
+        ? 'يرجى تحديد عنوان التوصيل على الخريطة أو إدخال اسم الشارع.'
+        : 'Please pin your delivery address or enter a street name.');
       return;
     }
 
@@ -437,7 +537,7 @@ export default function CheckoutPage() {
         })),
         shippingAddress: {
           label: 'Delivery',
-          street: address.street.trim(),
+          street: resolvedStreet,
           building: address.building,
           floor: address.floor,
           city: address.city || (language === 'ar' ? location.nameAr : location.nameEn),
@@ -467,6 +567,7 @@ export default function CheckoutPage() {
         timeSlotId: selectedSlot?._id,
         discountCode,
         pointsToRedeem: pointsPreview.pointsRedeemed,
+        walletToRedeem: walletPreview.walletApplied,
       };
 
       const { data } = requiresPaymentProof(paymentMethod)
@@ -501,7 +602,7 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="container-app py-6 md:py-8">
+    <div className="container-app py-6 pb-28 md:py-8 lg:pb-8">
       <nav className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
         <Link to="/" className="transition-colors hover:text-primary-600">{language === 'ar' ? 'الرئيسية' : 'Home'}</Link>
         <span className="text-slate-300">/</span>
@@ -542,9 +643,74 @@ export default function CheckoutPage() {
             title={language === 'ar' ? 'عنوان التوصيل' : 'Delivery Address'}
             icon={MapPin}
           >
-            <LocationSelector variant="form" className="mb-4" />
+            {locationConfirmed ? (
+              <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3.5">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+                    <Check className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-emerald-900">
+                      {language === 'ar' ? 'تم تأكيد موقع التوصيل' : 'Delivery location confirmed'}
+                    </p>
+                    <p className="mt-0.5 break-words text-sm text-emerald-800">
+                      {deliveryLocationLabel(
+                        locationPin,
+                        language === 'ar' ? location.nameAr : location.nameEn,
+                        language === 'ar',
+                        locationManualAddress,
+                      )}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <button
+                        type="button"
+                        onClick={openGate}
+                        className="text-sm font-semibold text-primary-700 hover:text-primary-800"
+                      >
+                        {language === 'ar' ? 'تغيير الموقع' : 'Change location'}
+                      </button>
+                      {hasGatePin && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAddress((v) => !v)}
+                          className="text-sm font-medium text-slate-600 hover:text-slate-800"
+                        >
+                          {editingAddress
+                            ? (language === 'ar' ? 'إخفاء تفاصيل العنوان' : 'Hide address details')
+                            : (language === 'ar' ? 'تعديل تفاصيل العنوان' : 'Edit address details')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <LocationSelector variant="form" className="mb-4" />
+            )}
 
-            {user?.addresses?.length > 0 && (
+            {hasGatePin && !editingAddress && (
+              <div className="mb-4 grid gap-4 sm:grid-cols-2">
+                <Input
+                  label={language === 'ar' ? 'رقم العمارة' : 'Building'}
+                  value={address.building || ''}
+                  onChange={(e) => setAddress((prev) => ({ ...prev, building: e.target.value }))}
+                  placeholder={language === 'ar' ? 'مثال: 12' : 'e.g. 12'}
+                />
+                <Input
+                  label={language === 'ar' ? 'الدور / الشقة' : 'Floor / Apt'}
+                  value={address.floor || ''}
+                  onChange={(e) => setAddress((prev) => ({ ...prev, floor: e.target.value }))}
+                  placeholder={language === 'ar' ? 'مثال: الدور 3 - شقة 5' : 'e.g. Floor 3, Apt 5'}
+                />
+                <p className="text-xs text-text-muted sm:col-span-2">
+                  {language === 'ar'
+                    ? 'أضف رقم العمارة والدور ليصل إليك المندوب بسهولة.'
+                    : 'Add your building and floor so the driver reaches you easily.'}
+                </p>
+              </div>
+            )}
+
+            {showAddressEditor && user?.addresses?.length > 0 && (
               <label className="mb-4 block">
                 <span className="mb-1 block text-sm font-medium text-slate-700">
                   {language === 'ar' ? 'عنوان محفوظ' : 'Saved address'}
@@ -564,13 +730,15 @@ export default function CheckoutPage() {
               </label>
             )}
 
-            <AddressMapCapture
-              value={address}
-              onChange={setAddress}
-              deliveryZone={location}
-              isAr={language === 'ar'}
-              enableMap={gpsMapEnabled}
-            />
+            {showAddressEditor && (
+              <AddressMapCapture
+                value={address}
+                onChange={setAddress}
+                deliveryZone={location}
+                isAr={language === 'ar'}
+                enableMap={gpsMapEnabled}
+              />
+            )}
 
             <div className="mt-4 space-y-4">
               <PhoneInput
@@ -706,23 +874,38 @@ export default function CheckoutPage() {
               language={language}
               checkoutQuote={checkoutQuote}
               pointsPreview={pointsPreview}
-              loyaltyEnabled={!!loyalty?.rules?.enabled}
-              loyaltyRules={loyalty?.rules}
+              loyaltyEnabled={(loyalty?.rules?.enabled ?? settings?.loyalty?.enabled) !== false}
+              loyaltyRules={loyalty?.rules || settings?.loyalty}
               isAuthenticated={isAuthenticated}
               pointsToRedeem={pointsToRedeem}
               onPointsToRedeemChange={setPointsToRedeem}
+              walletEnabled={walletPreview.enabled}
+              walletBalance={walletPreview.balance}
+              walletSettings={walletPreview.rules}
+              walletToRedeem={walletToRedeem}
+              onWalletToRedeemChange={setWalletToRedeem}
+              walletApplied={walletPreview.walletApplied}
+              walletPayableTotal={walletPreview.payableTotal}
               deliveryMethod={deliveryMethod}
               location={location}
+              deliverToLabel={deliverToLabel}
               form={form}
               selectedSlot={selectedSlot}
               paymentMethod={paymentMethod}
               paymentOptions={paymentOptions}
-              totalOverride={pointsPreview.estimatedTotal}
-              extraRows={pointsPreview.pointsDiscount > 0 ? [{
-                label: language === 'ar' ? 'خصم النقاط' : 'Points discount',
-                value: `− ${formatPrice(pointsPreview.pointsDiscount)}`,
-                className: 'text-primary-600',
-              }] : []}
+              totalOverride={walletPreview.estimatedTotal}
+              extraRows={[
+                ...(pointsPreview.pointsDiscount > 0 ? [{
+                  label: language === 'ar' ? 'خصم النقاط' : 'Points discount',
+                  value: `− ${formatPrice(pointsPreview.pointsDiscount)}`,
+                  className: 'text-primary-600',
+                }] : []),
+                ...(walletPreview.walletApplied > 0 ? [{
+                  label: language === 'ar' ? 'المحفظة' : 'Wallet',
+                  value: `− ${formatPrice(walletPreview.walletApplied)}`,
+                  className: 'text-primary-600',
+                }] : []),
+              ]}
             />
           </div>
           {quoteLoading && (
@@ -758,6 +941,32 @@ export default function CheckoutPage() {
             <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary-600" aria-hidden />
             {language === 'ar' ? 'طلبك محمي — تتبّعه من حسابك بعد التأكيد' : 'Protected order — track from your account'}
           </p>
+        </div>
+      </div>
+
+      {/* Mobile-only sticky order bar — total + confirm always within reach */}
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
+        {error && (
+          <p className="mb-2 rounded-lg bg-red-50 px-3 py-1.5 text-center text-xs font-medium text-red-700">
+            {error}
+          </p>
+        )}
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 shrink-0">
+            <p className="text-[11px] text-slate-500">{language === 'ar' ? 'الإجمالي' : 'Total'}</p>
+            <p className="text-lg font-bold leading-tight text-primary-700 tabular-nums" dir="ltr">
+              {formatPrice(walletPreview.estimatedTotal)}
+            </p>
+          </div>
+          <Button
+            type="button"
+            className="flex-1 shadow-md shadow-primary-600/20"
+            size="lg"
+            disabled={loading || quoteLoading}
+            onClick={() => formRef.current?.requestSubmit()}
+          >
+            {loading ? <Loader size="sm" /> : (language === 'ar' ? 'تأكيد الطلب' : 'Confirm Order')}
+          </Button>
         </div>
       </div>
     </div>

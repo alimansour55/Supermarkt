@@ -5,6 +5,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { fetchBrands } from '../services/brandApi';
 import { SHOP_BRANDS } from '../data/shopBrands';
 import {
+  AR_ALPHABET,
+  EN_ALPHABET,
+  brandIndexLetter,
   brandProductHref,
   getBrandLabel,
   normalizeBrandEntry,
@@ -42,6 +45,7 @@ export default function BrandsPage() {
   const [brands, setBrands] = useState(() => SHOP_BRANDS.map(normalizeBrandEntry));
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [letter, setLetter] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -57,16 +61,33 @@ export default function BrandsPage() {
     return () => { active = false; };
   }, []);
 
+  // Index letter each brand is filed under, based on the displayed-language name.
+  const letterOf = useMemo(
+    () => (brand) => brandIndexLetter(getBrandLabel(brand, isAr)),
+    [isAr],
+  );
+
+  const alphabet = isAr ? AR_ALPHABET : EN_ALPHABET;
+
+  const availableLetters = useMemo(
+    () => new Set(brands.map(letterOf)),
+    [brands, letterOf],
+  );
+
+  // Ignore a stale selection after switching language (Arabic ↔ English index).
+  const activeLetter = letter && alphabet.includes(letter) ? letter : null;
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    if (!needle) return brands;
     return brands.filter((brand) => {
+      if (activeLetter && letterOf(brand) !== activeLetter) return false;
+      if (!needle) return true;
       const labelAr = getBrandLabel(brand, true).toLowerCase();
       const labelEn = getBrandLabel(brand, false).toLowerCase();
       const q = (brand.query || '').toLowerCase();
       return labelAr.includes(needle) || labelEn.includes(needle) || q.includes(needle);
     });
-  }, [brands, query]);
+  }, [brands, query, activeLetter, letterOf]);
 
   return (
     <div className="pb-12">
@@ -122,6 +143,43 @@ export default function BrandsPage() {
         </div>
       </section>
 
+      <div className="sticky top-0 z-20 border-b border-border bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+        <div className="container-app flex items-center gap-1.5 overflow-x-auto py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            onClick={() => setLetter(null)}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-bold transition ${
+              activeLetter === null
+                ? 'bg-primary-600 text-white shadow-sm'
+                : 'bg-surface-muted text-text-muted hover:bg-primary-50 hover:text-primary-700'
+            }`}
+          >
+            {isAr ? 'الكل' : 'All'}
+          </button>
+          {alphabet.map((ch) => {
+            const enabled = availableLetters.has(ch);
+            const active = activeLetter === ch;
+            return (
+              <button
+                key={ch}
+                type="button"
+                disabled={!enabled}
+                onClick={() => setLetter(active ? null : ch)}
+                className={`h-9 w-9 shrink-0 rounded-full text-sm font-bold transition ${
+                  active
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : enabled
+                      ? 'bg-surface-muted text-text hover:bg-primary-50 hover:text-primary-700'
+                      : 'cursor-not-allowed bg-transparent text-text-muted/30'
+                }`}
+              >
+                {ch}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="container-app py-8">
         {loading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
@@ -133,8 +191,19 @@ export default function BrandsPage() {
           <div className="rounded-2xl border border-dashed border-border bg-surface-muted/30 px-6 py-16 text-center">
             <p className="text-lg font-bold text-text">{isAr ? 'لا توجد علامات' : 'No brands found'}</p>
             <p className="mt-2 text-sm text-text-muted">
-              {isAr ? 'جرّب كلمة بحث أخرى' : 'Try a different search term'}
+              {activeLetter && !query
+                ? (isAr ? `لا توجد علامات تبدأ بحرف «${activeLetter}»` : `No brands starting with “${activeLetter}”`)
+                : (isAr ? 'جرّب كلمة بحث أخرى' : 'Try a different search term')}
             </p>
+            {activeLetter && (
+              <button
+                type="button"
+                onClick={() => setLetter(null)}
+                className="mt-4 inline-flex rounded-full bg-primary-600 px-4 py-1.5 text-sm font-bold text-white"
+              >
+                {isAr ? 'عرض كل العلامات' : 'Show all brands'}
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">

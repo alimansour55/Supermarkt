@@ -70,7 +70,7 @@ const LOCATION_TYPE_RANK = {
   APPROXIMATE: 3,
 };
 
-function haversineMeters(lat1, lng1, lat2, lng2) {
+export function haversineMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const toRad = (deg) => (deg * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
@@ -483,6 +483,7 @@ export async function getDirections({ originLat, originLng, destLat, destLng }) 
     etaSeconds: leg?.duration?.value ?? null,
     etaText: leg?.duration?.text ?? '',
     distanceText: leg?.distance?.text ?? '',
+    distanceMeters: leg?.distance?.value ?? null,
     polyline,
     path: decodePolyline(polyline),
   };

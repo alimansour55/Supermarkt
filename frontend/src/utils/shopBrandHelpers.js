@@ -6,6 +6,30 @@ export function brandProductHref(query) {
   return `/products?brand=${encodeURIComponent(q)}`;
 }
 
+/** Arabic alphabet used for the brand A–Z index bar. */
+export const AR_ALPHABET = [
+  'ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض',
+  'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي',
+];
+
+/** English A–Z. */
+export const EN_ALPHABET = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));
+
+const AR_INDEX_NORMALISE = {
+  'أ': 'ا', 'إ': 'ا', 'آ': 'ا', 'ٱ': 'ا', 'ى': 'ي', 'ة': 'ه', 'ﻻ': 'ل',
+};
+
+/**
+ * First character of a brand name folded to a single index letter, so e.g.
+ * "برسيل" files under "ب" and "Ariel" under "A".
+ */
+export function brandIndexLetter(name) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return '';
+  const first = Array.from(trimmed)[0];
+  return (AR_INDEX_NORMALISE[first] || first).toUpperCase();
+}
+
 export function getBrandLabel(brand, isAr) {
   if (isAr) {
     return brand.nameAr || brand.titleAr || brand.nameEn || brand.titleEn || brand.queryValue || brand.query || '';

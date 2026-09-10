@@ -32,6 +32,23 @@ const loyaltySchema = new mongoose.Schema(
   { _id: false },
 );
 
+const walletSchema = new mongoose.Schema(
+  {
+    enabled: { type: Boolean, default: true },
+    /** Customers may request manual top-ups (InstaPay / Vodafone Cash). */
+    allowTopUp: { type: Boolean, default: true },
+    /** Wallet balance may be spent at checkout. */
+    allowCheckoutSpend: { type: Boolean, default: true },
+    minTopUp: { type: Number, min: 1, default: 50 },
+    maxTopUp: { type: Number, min: 1, default: 5000 },
+    /** Reject top-ups that would push the balance above this. 0 = no cap. */
+    maxBalance: { type: Number, min: 0, default: 20000 },
+    /** Max share of an order's payable total the wallet can cover. */
+    maxCheckoutPercent: { type: Number, min: 0, max: 100, default: 100 },
+  },
+  { _id: false },
+);
+
 const navLinkSchema = new mongoose.Schema(
   {
     labelAr: { type: String, trim: true, default: '' },
@@ -164,10 +181,31 @@ const invoiceLabelsSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const invoiceColumnsSchema = new mongoose.Schema(
+  {
+    sku: { type: Boolean, default: false },
+    unitPrice: { type: Boolean, default: true },
+    lineTotal: { type: Boolean, default: true },
+  },
+  { _id: false },
+);
+
+const invoiceCustomRowSchema = new mongoose.Schema(
+  {
+    labelAr: { type: String, trim: true, default: '' },
+    labelEn: { type: String, trim: true, default: '' },
+    valueAr: { type: String, trim: true, default: '' },
+    valueEn: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
+);
+
 const invoiceSchema = new mongoose.Schema(
   {
     titleAr: { type: String, trim: true, default: 'فاتورة' },
     titleEn: { type: String, trim: true, default: 'Tax Invoice' },
+    documentPrefixAr: { type: String, trim: true, default: '' },
+    documentPrefixEn: { type: String, trim: true, default: '' },
     companyNameAr: { type: String, trim: true, default: 'سوق+' },
     companyNameEn: { type: String, trim: true, default: 'MarketPlus' },
     companyAddressAr: { type: String, trim: true, default: 'القاهرة، مصر' },
@@ -175,16 +213,40 @@ const invoiceSchema = new mongoose.Schema(
     taxRegistrationNumber: { type: String, trim: true, default: '' },
     taxIdLabelAr: { type: String, trim: true, default: 'الرقم الضريبي' },
     taxIdLabelEn: { type: String, trim: true, default: 'Tax ID' },
+    paymentMethodLabelAr: { type: String, trim: true, default: 'طريقة الدفع' },
+    paymentMethodLabelEn: { type: String, trim: true, default: 'Payment method' },
     headerNoteAr: { type: String, trim: true, default: '' },
     headerNoteEn: { type: String, trim: true, default: '' },
     footerNoteAr: { type: String, trim: true, default: 'شكراً لتسوقكم معنا!' },
     footerNoteEn: { type: String, trim: true, default: 'Thank you for shopping with us!' },
     termsAr: { type: String, trim: true, default: 'هذه فاتورة إلكترونية ولا تحتاج إلى توقيع.' },
     termsEn: { type: String, trim: true, default: 'This is an electronic invoice and does not require a signature.' },
+    bankDetailsAr: { type: String, trim: true, default: '' },
+    bankDetailsEn: { type: String, trim: true, default: '' },
+
+    // Appearance
+    accentColor: { type: String, trim: true, default: '#0f766e' },
+    pageSize: { type: String, enum: ['A4', 'Letter'], default: 'A4' },
+    logoPosition: { type: String, enum: ['start', 'center', 'end'], default: 'end' },
+    logoSize: { type: String, enum: ['sm', 'md', 'lg'], default: 'md' },
+
+    // Display toggles
     showLogo: { type: Boolean, default: true },
     showTaxId: { type: Boolean, default: true },
     showOrderStatus: { type: Boolean, default: true },
     showPaymentStatus: { type: Boolean, default: true },
+    showPaymentMethod: { type: Boolean, default: true },
+    showSavings: { type: Boolean, default: true },
+    showBankDetails: { type: Boolean, default: false },
+    showStamp: { type: Boolean, default: false },
+    showQr: { type: Boolean, default: false },
+
+    // Assets
+    stampUrl: { type: String, trim: true, default: '' },
+    stampPublicId: { type: String, trim: true, default: '' },
+
+    columns: { type: invoiceColumnsSchema, default: () => ({}) },
+    customRows: { type: [invoiceCustomRowSchema], default: [] },
     labels: { type: invoiceLabelsSchema, default: () => ({}) },
   },
   { _id: false },
@@ -202,10 +264,29 @@ const trendingSearchItemSchema = new mongoose.Schema(
   { _id: true },
 );
 
+const trendingConfigSchema = new mongoose.Schema(
+  {
+    /** Max chips shown to the customer (search bar + home section). */
+    displayLimit: { type: Number, min: 1, max: 20, default: 8 },
+    /** Analytics lookback window for auto / hybrid fill. */
+    autoLookbackDays: { type: Number, min: 1, max: 30, default: 7 },
+    /** Minimum times a query must have been searched to qualify. */
+    autoMinCount: { type: Number, min: 1, default: 3 },
+    /** Only surface queries that produced at least one conversion. */
+    requireConversion: { type: Boolean, default: false },
+    /** Never surface the same product twice (manual pin wins in hybrid). */
+    dedupeByProduct: { type: Boolean, default: true },
+    /** Normalized queries that must never appear in auto / hybrid results. */
+    autoBlocklist: { type: [String], default: [] },
+  },
+  { _id: false },
+);
+
 const searchSettingsSchema = new mongoose.Schema(
   {
-    trendingMode: { type: String, enum: ['manual', 'auto'], default: 'manual' },
+    trendingMode: { type: String, enum: ['manual', 'auto', 'hybrid'], default: 'manual' },
     trendingSearches: { type: [trendingSearchItemSchema], default: [] },
+    trendingConfig: { type: trendingConfigSchema, default: () => ({}) },
   },
   { _id: false },
 );
@@ -359,6 +440,34 @@ const freeDeliveryBannerSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const locationGateSchema = new mongoose.Schema(
+  {
+    /** Show the "choose your area" popup when a visitor opens the storefront. */
+    enabled: { type: Boolean, default: false },
+    /** When true the popup blocks browsing until a location is chosen. */
+    mandatory: { type: Boolean, default: true },
+    /** When true, a pin outside every active zone's radius is rejected ("we don't cover this area"). */
+    enforceCoverage: { type: Boolean, default: true },
+    titleAr: { type: String, trim: true, default: 'اختر منطقتك' },
+    titleEn: { type: String, trim: true, default: 'Choose your area' },
+    subtitleAr: {
+      type: String,
+      trim: true,
+      default: 'حدّد منطقة التوصيل لعرض المنتجات والأسعار ومواعيد التوصيل الصحيحة',
+    },
+    subtitleEn: {
+      type: String,
+      trim: true,
+      default: 'Set your delivery area to see the right products, prices and delivery slots',
+    },
+    /** Initial map center — defaults to Helwan, Cairo. */
+    mapCenterLat: { type: Number, default: 29.8453 },
+    mapCenterLng: { type: Number, default: 31.3339 },
+    mapZoom: { type: Number, min: 3, max: 18, default: 12 },
+  },
+  { _id: false },
+);
+
 const FREE_DELIVERY_METHOD_VALUES = ['scheduled', 'express', 'recurring'];
 
 const paymentAccountNumberSchema = new mongoose.Schema(
@@ -397,6 +506,22 @@ const themeRotationSchema = new mongoose.Schema(
     enabled: { type: Boolean, default: false },
     intervalMinutes: { type: Number, min: 1, max: 1440, default: 30 },
     steps: { type: [themeRotationStepSchema], default: [] },
+  },
+  { _id: false },
+);
+
+const driverSettingsSchema = new mongoose.Schema(
+  {
+    /** Master switch: pick a driver automatically when an order ships. */
+    autoAssignEnabled: { type: Boolean, default: false },
+    /** Skip drivers with at least this many active deliveries (0 = no cap). */
+    autoAssignMaxActive: { type: Number, min: 0, max: 50, default: 0 },
+    /** Show the online/offline control in the driver app and honour it in auto-assign. */
+    availabilityEnabled: { type: Boolean, default: true },
+    /** Show the picking checklist on the driver delivery screen. */
+    pickingChecklistEnabled: { type: Boolean, default: true },
+    /** Show the cash-on-delivery change calculator on the driver delivery screen. */
+    cashCalculatorEnabled: { type: Boolean, default: true },
   },
   { _id: false },
 );
@@ -454,6 +579,8 @@ const storeSettingsSchema = new mongoose.Schema(
     gpsDeliveryEnabled: { type: Boolean, default: true },
     /** When false: hide the store AI chat widget and block assistant API for customers. */
     aiChatEnabled: { type: Boolean, default: true },
+    /** Startup "choose your area" popup configuration. */
+    locationGate: { type: locationGateSchema, default: () => ({}) },
     freeDeliveryMethods: {
       type: [{ type: String, enum: FREE_DELIVERY_METHOD_VALUES }],
       default: ['scheduled', 'recurring'],
@@ -467,6 +594,7 @@ const storeSettingsSchema = new mongoose.Schema(
     socialLinks: { type: socialLinksSchema, default: () => ({}) },
     appLinks: { type: appLinksSchema, default: () => ({}) },
     loyalty: { type: loyaltySchema, default: () => ({}) },
+    wallet: { type: walletSchema, default: () => ({}) },
     navigation: { type: navigationSchema, default: () => ({}) },
     seo: { type: seoSchema, default: () => ({}) },
     paymentMethods: { type: [paymentMethodSchema], default: [] },
@@ -480,9 +608,10 @@ const storeSettingsSchema = new mongoose.Schema(
     partnerRevenue: { type: partnerRevenueSchema, default: () => ({}) },
     productFilterSettings: { type: productFilterSettingsSchema, default: () => ({}) },
     invoice: { type: invoiceSchema, default: () => ({}) },
-    themeColor: { type: String, trim: true, default: 'green' },
+    themeColor: { type: String, trim: true, default: 'hyperone' },
     themeShade: { type: Number, default: 600 },
     themeRotation: { type: themeRotationSchema, default: () => ({}) },
+    driverSettings: { type: driverSettingsSchema, default: () => ({}) },
     siteFont: { type: String, trim: true, default: 'cairo' },
     isActive: { type: Boolean, default: true },
   },

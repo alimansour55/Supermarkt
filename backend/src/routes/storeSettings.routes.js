@@ -19,6 +19,7 @@ router.put(
   optionalUploadFields([
     { name: 'logo', maxCount: 1 },
     { name: 'favicon', maxCount: 1 },
+    { name: 'invoiceStamp', maxCount: 1 },
   ]),
   updateAdminStoreSettings,
 );

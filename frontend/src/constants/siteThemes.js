@@ -1,4 +1,4 @@
-export const DEFAULT_THEME_COLOR = 'green';
+export const DEFAULT_THEME_COLOR = 'hyperone';
 export const DEFAULT_THEME_SHADE = 600;
 
 export const THEME_SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
@@ -13,6 +13,24 @@ export const THEME_GROUPS = [
 
 /** Full primary palette per theme — drives header, buttons, links, badges site-wide. */
 export const SITE_THEMES = {
+  hyperone: {
+    id: 'hyperone',
+    group: 'cool',
+    labelAr: 'أزرق هايبر',
+    labelEn: 'Hyper Blue',
+    colors: {
+      50: '#f2f6fb',
+      100: '#e6eef7',
+      200: '#cdddef',
+      300: '#a8c0e2',
+      400: '#6f93cc',
+      500: '#3f6ab5',
+      600: '#1d4ca1',
+      700: '#17408a',
+      800: '#123468',
+      900: '#0b1a36',
+    },
+  },
   green: {
     id: 'green',
     group: 'fresh',

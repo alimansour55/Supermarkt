@@ -9,6 +9,7 @@ export const CLOUDINARY_FOLDERS = {
   store: 'marketplus/store',
   homepage: 'marketplus/homepage',
   paymentProofs: 'marketplus/payment-proofs',
+  walletTopUps: 'marketplus/wallet-topups',
 };
 
 let cloudinaryReady = false;

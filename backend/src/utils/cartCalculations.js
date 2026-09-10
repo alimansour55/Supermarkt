@@ -5,6 +5,10 @@ import {
   getLoyaltySettings,
 } from '../services/loyalty.service.js';
 import {
+  calculateWalletRedemption,
+  getWalletSettings,
+} from '../services/wallet.service.js';
+import {
   isFreeDeliveryForMethod,
   isThresholdMet,
   resolveDeliveryFee,
@@ -69,6 +73,7 @@ export async function calculateCartTotals({
   deliveryMethod = 'scheduled',
   discountCode = null,
   pointsToRedeem = 0,
+  walletToSpend = 0,
   user = null,
   deliveryZoneId = null,
 }) {
@@ -125,7 +130,23 @@ export async function calculateCartTotals({
     loyalty = redemption.rules;
   }
 
-  const total = Math.max(0, subtotal + deliveryFee - discountAmount - pointsDiscount);
+  const totalBeforeWallet = Math.max(0, subtotal + deliveryFee - discountAmount - pointsDiscount);
+
+  let walletApplied = 0;
+  let walletBalance = Math.max(0, Number(user?.walletBalance || 0));
+  let walletRules = null;
+  if (walletToSpend > 0 && user) {
+    walletRules = await getWalletSettings();
+    const redemption = calculateWalletRedemption({
+      requestedAmount: walletToSpend,
+      user,
+      payableTotal: totalBeforeWallet,
+      settings: walletRules,
+    });
+    walletApplied = redemption.walletApplied;
+  }
+
+  const total = Math.max(0, roundMoney(totalBeforeWallet - walletApplied));
   const freeDeliveryRemaining = Math.max(0, freeDeliveryThreshold - subtotal);
   const thresholdMet = isThresholdMet(subtotal, freeDeliveryThreshold, freeDeliveryFromCoupon);
   const freeDeliveryForCurrentMethod = isFreeDeliveryForMethod({
@@ -145,6 +166,9 @@ export async function calculateCartTotals({
     discount: discountAmount,
     pointsRedeemed,
     pointsDiscount,
+    totalBeforeWallet,
+    walletApplied,
+    walletBalance,
     total,
     appliedCoupon,
     loyalty,

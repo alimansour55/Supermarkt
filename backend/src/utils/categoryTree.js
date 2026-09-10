@@ -4,8 +4,18 @@ import { AppError } from './AppError.js';
 import { productCategoryError } from '../constants/productCategoryErrors.js';
 import { slugify } from './slugify.js';
 
-export const CATEGORY_MAX_LEVEL = 4;
+/** Soft guidance depth (root = level 1). Main › Section › Subsection. Warned, never blocked. */
+export const CATEGORY_SOFT_MAX_LEVEL = 3;
+/** Hard safety ceiling to prevent pathological nesting / accidental cycles. */
+export const CATEGORY_HARD_MAX_LEVEL = 10;
+/** @deprecated retained for callers still referencing a max level — now the soft cap. */
+export const CATEGORY_MAX_LEVEL = CATEGORY_SOFT_MAX_LEVEL;
 export const CATEGORY_LEVEL = { MAIN: 1, CATEGORY: 2, SUB: 3, SUB_SUB: 4 };
+
+/** True when placing a child under a parent at `parentLevel` exceeds the soft guidance depth. */
+export function isDepthWarning(parentLevel) {
+  return Number(parentLevel || 1) + 1 > CATEGORY_SOFT_MAX_LEVEL;
+}
 
 /** Express 5 `{*slugPath}` wildcards arrive as string[] — normalize to slug segments. */
 export function parseSlugPathParam(slugPathParam) {
@@ -28,8 +38,8 @@ export async function assertValidParent(parentId) {
   const parent = await Category.findById(parentId);
   if (!parent) throw new AppError('Parent category not found', 400);
   const parentLevel = getCategoryLevel(parent);
-  if (parentLevel >= CATEGORY_MAX_LEVEL) {
-    throw new AppError('Maximum category depth reached — cannot add another sub level', 400);
+  if (parentLevel >= CATEGORY_HARD_MAX_LEVEL) {
+    throw new AppError(`Category nesting cannot exceed ${CATEGORY_HARD_MAX_LEVEL} levels`, 400);
   }
   return parent;
 }
@@ -83,15 +93,8 @@ export async function assertCategoryParentConsistency({
     }
   }
 
-  const parentLevel = getCategoryLevel(parent);
-  const expectedLevel = parentLevel + 1;
-  if (requestedLevel != null && requestedLevel !== '' && Number(requestedLevel) !== expectedLevel) {
-    throw new AppError(
-      `Invalid parent for this level — "${parent.nameEn}" is level ${parentLevel}, so this category must be level ${expectedLevel}`,
-      400,
-    );
-  }
-
+  // Depth is derived from the parent chain by the Category pre-save hook; the
+  // caller-supplied `requestedLevel` is advisory only and no longer enforced.
   return parent;
 }
 
@@ -137,6 +140,25 @@ export async function getLeafDescendantIds(categoryId) {
   return leaves;
 }
 
+/**
+ * The category itself plus every descendant (any depth).
+ * Products may now be attached at any level, so category product listings match
+ * against this whole set rather than only the leaf nodes.
+ */
+export async function getSelfAndDescendantIds(categoryId, { activeOnly = true } = {}) {
+  const statusFilter = activeOnly ? { isActive: true } : {};
+  const collect = async (id) => {
+    const children = await Category.find({ parentCategory: id, ...statusFilter }).select('_id');
+    const ids = [];
+    for (const child of children) {
+      ids.push(child._id);
+      ids.push(...await collect(child._id));
+    }
+    return ids;
+  };
+  return [categoryId, ...await collect(categoryId)];
+}
+
 export async function resolveCategoryProductFilter(categoryRef) {
   if (!categoryRef) return null;
 
@@ -152,11 +174,11 @@ export async function resolveCategoryProductFilter(categoryRef) {
   }
   if (!category) return null;
 
-  const leafIds = await getLeafDescendantIds(category._id);
-  if (leafIds.length === 1 && String(leafIds[0]) === String(category._id)) {
-    return category._id;
+  const ids = await getSelfAndDescendantIds(category._id);
+  if (ids.length === 1) {
+    return ids[0];
   }
-  return { $in: leafIds };
+  return { $in: ids };
 }
 
 export async function getRootCategoryId(categoryId) {
@@ -172,12 +194,62 @@ export async function getRootCategoryId(categoryId) {
 export async function getCategoryChainFromId(categoryId) {
   const chain = [];
   let current = await Category.findById(categoryId);
-  while (current) {
+  const guard = new Set();
+  while (current && !guard.has(String(current._id))) {
+    guard.add(String(current._id));
     chain.unshift(current);
     if (!current.parentCategory) break;
     current = await Category.findById(current.parentCategory);
   }
   return chain;
+}
+
+/** Ordered ids root → self — the value stored on Product.categoryAncestors. */
+export async function getCategoryPathIds(categoryId) {
+  const chain = await getCategoryChainFromId(categoryId);
+  return chain.map((c) => c._id);
+}
+
+/**
+ * Recompute ancestors / depth / level for every descendant of a category whose
+ * own path just changed (e.g. after a reparent). The category itself is assumed
+ * already saved with a correct path.
+ */
+export async function rebuildDescendantPaths(categoryId) {
+  const root = await Category.findById(categoryId).select('ancestors _id');
+  if (!root) return [];
+  const touched = [];
+  const walk = async (parent) => {
+    const children = await Category.find({ parentCategory: parent._id })
+      .select('ancestors depth level parentCategory _id');
+    for (const child of children) {
+      child.ancestors = [...(parent.ancestors || []), parent._id];
+      child.depth = child.ancestors.length;
+      child.level = child.depth + 1;
+      await child.save({ validateBeforeSave: false });
+      touched.push(child._id);
+      await walk(child);
+    }
+  };
+  await walk(root);
+  return touched;
+}
+
+/** Refresh Product.categoryAncestors (and mainCategory) for products under the given categories. */
+export async function refreshProductCategoryPaths(categoryIds = []) {
+  if (!categoryIds.length) return 0;
+  const { default: Product } = await import('../models/Product.js');
+  let updated = 0;
+  for (const catId of categoryIds) {
+    const pathIds = await getCategoryPathIds(catId);
+    if (!pathIds.length) continue;
+    const res = await Product.updateMany(
+      { $or: [{ category: catId }, { subCategory: catId }] },
+      { $set: { categoryAncestors: pathIds, mainCategory: pathIds[0] } },
+    );
+    updated += res.modifiedCount || 0;
+  }
+  return updated;
 }
 
 async function resolveStrictCategoryChain(slugs) {
@@ -335,27 +407,23 @@ export async function buildProductCategoryPathMeta(leafCategoryId, product = {})
   };
 }
 
-export async function assertProductCategoryAssignment(leafCategoryId, mainCategoryId) {
-  const leaf = await Category.findById(leafCategoryId);
-  if (!leaf) throw new AppError(productCategoryError('notFound'), 400);
-  if (!leaf.isActive) {
+/**
+ * A product may be attached to any active category, at any depth — a category no
+ * longer has to be a childless leaf. We only require the category to exist, be
+ * active, and sit under the declared main (root) category.
+ */
+export async function assertProductCategoryAssignment(categoryId, mainCategoryId) {
+  const target = await Category.findById(categoryId);
+  if (!target) throw new AppError(productCategoryError('notFound'), 400);
+  if (!target.isActive) {
     throw new AppError(productCategoryError('inactive'), 400);
   }
 
-  const childCount = await Category.countDocuments({ parentCategory: leaf._id });
-  if (childCount > 0) {
-    const isMain = !leaf.parentCategory && (leaf.level === 1 || leaf.level == null);
-    throw new AppError(
-      isMain ? productCategoryError('hasChildrenMain') : productCategoryError('hasChildren'),
-      400,
-    );
-  }
-
-  const rootId = await getRootCategoryId(leaf._id);
+  const rootId = target.parentCategory ? await getRootCategoryId(target._id) : target._id;
   if (!rootId || String(rootId) !== String(mainCategoryId)) {
     throw new AppError(productCategoryError('mainMismatch'), 400);
   }
-  return leaf;
+  return target;
 }
 
 /** @deprecated use assertProductCategoryAssignment */

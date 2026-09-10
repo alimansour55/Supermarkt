@@ -8,6 +8,26 @@ import {
   pointsToCashValue,
 } from '../../utils/loyaltyHelpers';
 
+/** Card shell — module-level so it is NOT recreated on every render (which
+ *  would remount the <input> and steal focus after each keystroke). */
+function Shell({ isAr, children }) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+          <Gift className="h-4 w-4" aria-hidden />
+        </span>
+        <p className="text-sm font-bold text-amber-950">{isAr ? 'نقاط الولاء' : 'Loyalty points'}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Loyalty-points block on checkout. Always visible (as a card) when the store's
+ * loyalty programme is on and the shopper is signed in.
+ */
 export default function CheckoutPointsRedeem({
   language,
   isAuthenticated,
@@ -22,9 +42,10 @@ export default function CheckoutPointsRedeem({
 }) {
   const isAr = language === 'ar';
   const rules = loyaltyRules || {};
-  const balance = pointsPreview?.balance ?? 0;
+  const balance = Math.max(0, Math.floor(Number(pointsPreview?.balance ?? 0)));
   const minRedeem = Number(rules.minRedeemPoints ?? 10);
   const requested = Math.max(0, Math.floor(Number(pointsToRedeem) || 0));
+  const cashbackPercent = getCashbackPercent(rules);
   const maxPoints = calculateMaxRedeemablePoints({
     rules,
     balance,
@@ -36,126 +57,120 @@ export default function CheckoutPointsRedeem({
 
   if (!loyaltyEnabled) return null;
 
+  // Not signed in
   if (!isAuthenticated) {
     return (
-      <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-3 py-2.5 text-sm">
-        <p className="font-medium text-amber-950">
-          {isAr ? 'استبدل نقاطك عند الدفع' : 'Redeem your points at checkout'}
+      <Shell isAr={isAr}>
+        <p className="text-xs text-amber-900">
+          {isAr
+            ? `اكسب استرداد ${cashbackPercent}% على هذا الطلب واستبدل نقاطك عند الدفع.`
+            : `Earn ${cashbackPercent}% cashback on this order and redeem points at checkout.`}
         </p>
-        <Link to="/login" state={{ from: '/checkout' }} className="mt-1 inline-block text-xs font-semibold text-primary-700 hover:underline">
-          {isAr ? 'سجّل الدخول لاستخدام نقاطك' : 'Log in to use your points'}
+        <Link
+          to="/login"
+          state={{ from: '/checkout' }}
+          className="mt-2 inline-block text-xs font-bold text-primary-700 hover:underline"
+        >
+          {isAr ? 'سجّل الدخول لاستخدام نقاطك' : 'Sign in to use your points'}
         </Link>
-      </div>
+      </Shell>
     );
   }
 
-  if (balance < minRedeem) {
-    return (
-      <div className="rounded-xl border border-border bg-surface/50 px-3 py-2.5 text-xs text-text-muted">
-        <span className="font-semibold text-text">{isAr ? 'نقاطك' : 'Your points'}: </span>
-        {balance.toLocaleString()} {isAr ? 'نقطة' : 'pts'}
-        {' · '}
-        {isAr
-          ? `تحتاج ${minRedeem} نقطة على الأقل للاستبدال`
-          : `Need at least ${minRedeem} points to redeem`}
-      </div>
-    );
-  }
-
+  // Applied — chip + remove
   if (applied) {
     return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-violet-50 px-3 py-2">
-          <span className="text-sm font-medium text-violet-900">
-            <Gift className="me-1 inline h-4 w-4" aria-hidden />
+      <Shell isAr={isAr}>
+        <div className="flex items-center justify-between gap-2 rounded-lg bg-violet-100/70 px-3 py-2">
+          <span className="text-sm font-semibold text-violet-900">
             {isAr
-              ? `${pointsPreview.pointsRedeemed.toLocaleString()} نقطة (−${formatPrice(pointsPreview.pointsDiscount)})`
-              : `${pointsPreview.pointsRedeemed.toLocaleString()} pts (−${formatPrice(pointsPreview.pointsDiscount)})`}
+              ? `تم استخدام ${pointsPreview.pointsRedeemed.toLocaleString()} نقطة (−${formatPrice(pointsPreview.pointsDiscount)})`
+              : `${pointsPreview.pointsRedeemed.toLocaleString()} points applied (−${formatPrice(pointsPreview.pointsDiscount)})`}
           </span>
           <button
             type="button"
             onClick={() => onPointsChange('')}
-            className="shrink-0 text-xs font-semibold text-red-600 hover:text-red-700"
+            className="shrink-0 text-xs font-bold text-red-600 hover:text-red-700"
           >
             {isAr ? 'إزالة' : 'Remove'}
           </button>
         </div>
-      </div>
+      </Shell>
     );
   }
 
-  const handleApply = () => {
+  const balanceLine = (
+    <p className="text-xs text-amber-900">
+      <span className="font-bold">{isAr ? 'رصيدك:' : 'Your balance:'}</span>{' '}
+      {balance.toLocaleString()} {isAr ? 'نقطة' : 'pts'}
+      {balance > 0 && ` ≈ ${formatPrice(pointsToCashValue(balance, rules))}`}
+    </p>
+  );
+
+  // Signed in but cannot redeem on this order yet
+  if (balance < minRedeem || maxPoints < minRedeem) {
+    return (
+      <Shell isAr={isAr}>
+        {balanceLine}
+        <p className="mt-1 text-xs text-amber-800">
+          {balance < minRedeem
+            ? (isAr
+              ? `تحتاج ${minRedeem} نقطة على الأقل للاستبدال — ستكسب من هذا الطلب استرداد ${cashbackPercent}%.`
+              : `You need at least ${minRedeem} points to redeem — this order earns ${cashbackPercent}% back.`)
+            : (isAr
+              ? 'قيمة هذا الطلب صغيرة جداً لاستبدال نقاط.'
+              : 'This order is too small to redeem points on.')}
+        </p>
+        <Link to="/my-points" className="mt-1.5 inline-block text-xs font-bold text-primary-700 hover:underline">
+          {isAr ? 'عرض نقاطي' : 'View my points'}
+        </Link>
+      </Shell>
+    );
+  }
+
+  const setDigits = (raw) => {
+    const digits = String(raw).replace(/\D/g, '');
+    if (!digits) return onPointsChange('');
+    onPointsChange(String(Math.min(Number(digits), maxPoints)));
+  };
+  const applyTyped = () => {
     const value = Math.min(requested || maxPoints, maxPoints);
     if (value >= minRedeem) onPointsChange(String(value));
   };
 
-  const handleUseMax = () => {
-    if (maxPoints >= minRedeem) onPointsChange(String(maxPoints));
-  };
-
   const inputError = requested > 0 && requested < minRedeem
     ? (isAr ? `الحد الأدنى ${minRedeem} نقطة` : `Minimum ${minRedeem} points`)
-    : requested > balance
-      ? (isAr ? 'رصيد غير كافٍ' : 'Insufficient balance')
-      : requested > maxPoints && maxPoints > 0
-        ? (isAr ? `الحد الأقصى ${maxPoints.toLocaleString()} نقطة لهذا الطلب` : `Max ${maxPoints.toLocaleString()} pts for this order`)
-        : '';
+    : '';
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="font-semibold text-text">
-          {isAr ? 'نقاطك' : 'Your points'}
-        </span>
-        <span className="text-text-muted">
-          {balance.toLocaleString()} {isAr ? 'نقطة' : 'pts'}
-          {' · '}
-          ≈ {formatPrice(pointsToCashValue(balance, rules))}
-        </span>
-      </div>
-      <div className="flex gap-2">
+    <Shell isAr={isAr}>
+      {balanceLine}
+      <div className="mt-2 flex gap-2">
         <input
-          type="number"
-          min={minRedeem}
-          max={Math.min(balance, maxPoints || balance)}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoComplete="off"
           value={pointsToRedeem}
-          onChange={(e) => onPointsChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              handleApply();
-            }
-          }}
-          placeholder={isAr ? 'عدد النقاط' : 'Points to redeem'}
-          className="min-w-0 flex-1 rounded-xl border border-border px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
+          onChange={(e) => setDigits(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyTyped(); } }}
+          placeholder={isAr ? `عدد النقاط (حتى ${maxPoints.toLocaleString()})` : `Points to use (up to ${maxPoints.toLocaleString()})`}
+          className="min-w-0 flex-1 rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm tabular-nums focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
         />
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          disabled={!maxPoints || maxPoints < minRedeem}
-          onClick={handleApply}
-        >
-          {isAr ? 'تطبيق' : 'Apply'}
+        <Button type="button" variant="secondary" size="sm" onClick={applyTyped}>
+          {isAr ? 'استخدم' : 'Apply'}
         </Button>
       </div>
-      {maxPoints >= minRedeem && (
-        <button
-          type="button"
-          onClick={handleUseMax}
-          className="text-xs font-semibold text-primary-700 hover:underline"
-        >
-          {isAr
-            ? `استخدم الحد الأقصى (${maxPoints.toLocaleString()} نقطة · −${formatPrice(pointsToCashValue(maxPoints, rules))})`
-            : `Use max (${maxPoints.toLocaleString()} pts · −${formatPrice(pointsToCashValue(maxPoints, rules))})`}
-        </button>
-      )}
-      {inputError && <p className="text-xs text-red-600">{inputError}</p>}
-      <p className="text-[11px] text-text-muted">
+      <button
+        type="button"
+        onClick={() => onPointsChange(String(maxPoints))}
+        className="mt-1.5 text-xs font-bold text-primary-700 hover:underline"
+      >
         {isAr
-          ? `استرداد ${getCashbackPercent(rules)}% · الحد الأدنى ${minRedeem} نقطة`
-          : `${getCashbackPercent(rules)}% cashback · Min ${minRedeem} pts`}
-      </p>
-    </div>
+          ? `استخدم كل النقاط: ${maxPoints.toLocaleString()} (−${formatPrice(pointsToCashValue(maxPoints, rules))})`
+          : `Use all points: ${maxPoints.toLocaleString()} (−${formatPrice(pointsToCashValue(maxPoints, rules))})`}
+      </button>
+      {inputError && <p className="mt-1 text-xs text-red-600">{inputError}</p>}
+    </Shell>
   );
 }

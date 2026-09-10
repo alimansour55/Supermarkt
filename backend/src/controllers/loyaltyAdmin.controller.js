@@ -1,20 +1,26 @@
+import mongoose from 'mongoose';
 import User from '../models/User.js';
+import Order from '../models/Order.js';
 import StoreSettings from '../models/StoreSettings.js';
 import { AppError } from '../utils/AppError.js';
+import { getLoyaltySettings, normalizeLoyaltySettings } from '../services/loyalty.service.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
-import { normalizeLoyaltySettings } from '../services/loyalty.service.js';
 
-const formatHistory = (entry) => ({
-  id: entry._id,
-  type: entry.type,
-  points: entry.points,
-  order: entry.order,
-  amount: entry.amount,
-  note: entry.note,
-  adjustedBy: entry.adjustedBy,
-  expiresAt: entry.expiresAt,
-  createdAt: entry.createdAt,
-});
+const formatHistory = (entry, { egpPerPoint = 0, orderNumbers = new Map() } = {}) => {
+  const orderId = entry.order ? String(entry.order) : null;
+  return {
+    id: entry._id,
+    type: entry.type,
+    points: entry.points,
+    cashValue: Math.round(Math.abs(entry.points || 0) * egpPerPoint * 100) / 100,
+    orderId,
+    orderNumber: orderId ? orderNumbers.get(orderId) || null : null,
+    note: entry.note || '',
+    adjustedBy: entry.adjustedBy,
+    expiresAt: entry.expiresAt || null,
+    createdAt: entry.createdAt || null,
+  };
+};
 
 const LOYALTY_RULE_FIELDS = [
   'enabled',
@@ -166,10 +172,27 @@ export const getAdminUserLoyalty = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.userId).select('name phone email pointsBalance pointsHistory role');
   if (!user) throw new AppError('User not found', 404);
 
-  const history = [...(user.pointsHistory || [])]
+  const rules = await getLoyaltySettings();
+  const egpPerPoint = Number(rules.redemptionEGPPerPoint || 0);
+
+  const raw = [...(user.pointsHistory || [])]
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-    .slice(0, 50)
-    .map(formatHistory);
+    .slice(0, 50);
+
+  const orderIds = [...new Set(
+    raw.map((e) => e.order).filter(Boolean).map(String).filter((id) => mongoose.Types.ObjectId.isValid(id)),
+  )];
+  const orderNumbers = new Map();
+  if (orderIds.length) {
+    try {
+      const orders = await Order.find({ _id: { $in: orderIds } }).select('orderNumber').lean();
+      orders.forEach((o) => orderNumbers.set(String(o._id), o.orderNumber));
+    } catch {
+      /* cosmetic */
+    }
+  }
+
+  const history = raw.map((e) => formatHistory(e, { egpPerPoint, orderNumbers }));
 
   res.json({
     success: true,

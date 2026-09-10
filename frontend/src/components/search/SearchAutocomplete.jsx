@@ -203,7 +203,9 @@ export default function SearchAutocomplete({
   autoFocus = false,
   initialQuery = '',
   showCategorySelect = true,
+  variant = 'default',
 }) {
+  const isPill = variant === 'pill';
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const isAr = language === 'ar';
@@ -298,6 +300,36 @@ export default function SearchAutocomplete({
 
   return (
     <div ref={wrapperRef} className={`relative ${className}`}>
+      {isPill ? (
+        <form
+          onSubmit={handleSubmit}
+          className="flex items-center gap-2.5 rounded-full border border-primary-100 bg-primary-50/70 px-5 py-2.5 transition-colors focus-within:border-primary-300 focus-within:bg-white focus-within:shadow-sm"
+        >
+          <Search className="h-[18px] w-[18px] shrink-0 text-primary-400" strokeWidth={2} aria-hidden />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => { setOpen(true); refreshRecent(); }}
+            autoFocus={autoFocus}
+            placeholder={t.nav.search}
+            className="min-w-0 flex-1 bg-transparent text-sm text-text placeholder:text-primary-400 focus:outline-none"
+            autoComplete="off"
+            aria-expanded={showDropdown}
+            aria-autocomplete="list"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => { setQuery(''); setOpen(true); }}
+              className="flex shrink-0 items-center text-primary-400 hover:text-primary-700"
+              aria-label={isAr ? 'مسح' : 'Clear'}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </form>
+      ) : (
       <div className="flex overflow-hidden rounded-xl border border-border bg-white shadow-sm">
       <form onSubmit={handleSubmit} className="flex min-w-0 flex-1">
         {showCategorySelect && (
@@ -345,6 +377,7 @@ export default function SearchAutocomplete({
         </button>
       </form>
       </div>
+      )}
 
       {showDropdown && (
         <div className="absolute start-0 end-0 top-full z-[60] mt-1 max-h-[min(70vh,420px)] overflow-y-auto rounded-2xl border border-border bg-white py-2 shadow-2xl">

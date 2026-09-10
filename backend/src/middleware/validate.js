@@ -34,8 +34,8 @@ export const createAdminUserValidation = [
 
 export const bulkAdminUsersValidation = [
   body('ids').isArray({ min: 1 }).withMessage('Select at least one user'),
-  body('ids.*').trim().notEmpty().withMessage('Invalid user id'),
-  body('action').trim().equals('delete').withMessage('Invalid bulk action'),
+  body('ids.*').isMongoId().withMessage('Invalid user id'),
+  body('action').isIn(['delete', 'suspend', 'activate']).withMessage('Invalid bulk action'),
 ];
 
 export const adminLoginValidation = [
@@ -63,6 +63,13 @@ export const driverLoginValidation = [
 
 export const updateProfileValidation = [
   body('name').optional().trim().isLength({ min: 2, max: 100 }).withMessage('Name must be 2–100 characters'),
+  body('email').optional().trim().custom((value) => {
+    if (value === '' || value == null) return true;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) {
+      throw new Error('Invalid email address');
+    }
+    return true;
+  }),
 ];
 
 export const addAddressValidation = [
@@ -80,6 +87,7 @@ export const addAddressValidation = [
   body('formattedAddress').optional().trim().isLength({ max: 500 }),
   body('placeId').optional().trim().isLength({ max: 200 }),
   body('deliveryZoneId').optional().trim().isLength({ max: 100 }),
+  body('locationSource').optional().trim().isLength({ max: 20 }),
 ];
 
 export const updateAddressValidation = [

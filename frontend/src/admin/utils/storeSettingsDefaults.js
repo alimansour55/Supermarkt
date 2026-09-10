@@ -1,5 +1,60 @@
 import { mergeFreeDeliveryBanner, parseFreeDeliveryMethodsFromApi } from '../../utils/freeDelivery';
 
+/** Keep in sync with DEFAULT_DRIVER_SETTINGS (backend/src/constants/storeDefaults.js). */
+export const DEFAULT_DRIVER_SETTINGS = {
+  autoAssignEnabled: false,
+  autoAssignMaxActive: 0,
+  availabilityEnabled: true,
+  pickingChecklistEnabled: true,
+  cashCalculatorEnabled: true,
+};
+
+export function normalizeDriverSettings(raw = {}) {
+  const data = raw || {};
+  const maxActive = Math.round(Number(data.autoAssignMaxActive));
+  return {
+    autoAssignEnabled: data.autoAssignEnabled === true,
+    autoAssignMaxActive: Number.isFinite(maxActive) ? Math.min(50, Math.max(0, maxActive)) : 0,
+    availabilityEnabled: data.availabilityEnabled !== false,
+    pickingChecklistEnabled: data.pickingChecklistEnabled !== false,
+    cashCalculatorEnabled: data.cashCalculatorEnabled !== false,
+  };
+}
+
+/** Keep in sync with DEFAULT_LOCATION_GATE (backend/src/constants/storeDefaults.js). */
+export const DEFAULT_LOCATION_GATE = {
+  enabled: false,
+  mandatory: true,
+  enforceCoverage: true,
+  titleAr: 'اختر منطقتك',
+  titleEn: 'Choose your area',
+  subtitleAr: 'حدّد منطقة التوصيل لعرض المنتجات والأسعار ومواعيد التوصيل الصحيحة',
+  subtitleEn: 'Set your delivery area to see the right products, prices and delivery slots',
+  mapCenterLat: 29.8453,
+  mapCenterLng: 31.3339,
+  mapZoom: 12,
+};
+
+export function normalizeLocationGate(raw = {}) {
+  const data = raw || {};
+  const num = (value, fallback) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  };
+  return {
+    enabled: data.enabled === true,
+    mandatory: data.mandatory !== false,
+    enforceCoverage: data.enforceCoverage !== false,
+    titleAr: data.titleAr ?? DEFAULT_LOCATION_GATE.titleAr,
+    titleEn: data.titleEn ?? DEFAULT_LOCATION_GATE.titleEn,
+    subtitleAr: data.subtitleAr ?? DEFAULT_LOCATION_GATE.subtitleAr,
+    subtitleEn: data.subtitleEn ?? DEFAULT_LOCATION_GATE.subtitleEn,
+    mapCenterLat: num(data.mapCenterLat, DEFAULT_LOCATION_GATE.mapCenterLat),
+    mapCenterLng: num(data.mapCenterLng, DEFAULT_LOCATION_GATE.mapCenterLng),
+    mapZoom: Math.round(num(data.mapZoom, DEFAULT_LOCATION_GATE.mapZoom)),
+  };
+}
+
 export const emptyStoreSettings = {
   storeNameAr: '',
   storeNameEn: '',
@@ -29,6 +84,8 @@ export const emptyStoreSettings = {
   freeDeliveryEnabled: true,
   gpsDeliveryEnabled: true,
   aiChatEnabled: true,
+  locationGate: { ...DEFAULT_LOCATION_GATE },
+  driverSettings: { ...DEFAULT_DRIVER_SETTINGS },
   freeDeliveryMethods: ['scheduled', 'recurring'],
   freeDeliveryBanner: mergeFreeDeliveryBanner(),
   scheduledMinLeadMinutes: 120,
@@ -61,6 +118,8 @@ export const emptyStoreSettings = {
   invoice: {
     titleAr: 'فاتورة ضريبية',
     titleEn: 'Tax Invoice',
+    documentPrefixAr: '',
+    documentPrefixEn: '',
     companyNameAr: 'سوق+ للتجارة',
     companyNameEn: 'MarketPlus Retail',
     companyAddressAr: 'شارع التحرير، مدينة نصر، القاهرة، مصر',
@@ -68,16 +127,32 @@ export const emptyStoreSettings = {
     taxRegistrationNumber: '123-456-789',
     taxIdLabelAr: 'الرقم الضريبي',
     taxIdLabelEn: 'Tax ID',
+    paymentMethodLabelAr: 'طريقة الدفع',
+    paymentMethodLabelEn: 'Payment method',
     headerNoteAr: 'شكراً لاختياركم سوق+ — نتمنى لكم تسوقاً ممتعاً',
     headerNoteEn: 'Thank you for choosing MarketPlus — happy shopping!',
     footerNoteAr: 'للاستفسارات: اتصل بنا على الرقم الموضح أعلاه',
     footerNoteEn: 'For questions, call the support number shown above.',
     termsAr: 'هذه فاتورة إلكترونية صادرة من نظام سوق+ ولا تحتاج إلى توقيع أو ختم.',
     termsEn: 'This is an electronic invoice issued by MarketPlus and does not require a signature or stamp.',
+    bankDetailsAr: '',
+    bankDetailsEn: '',
+    accentColor: '#0f766e',
+    pageSize: 'A4',
+    logoPosition: 'end',
+    logoSize: 'md',
     showLogo: true,
     showTaxId: true,
     showOrderStatus: true,
     showPaymentStatus: true,
+    showPaymentMethod: true,
+    showSavings: true,
+    showBankDetails: false,
+    showStamp: false,
+    showQr: false,
+    stampUrl: '',
+    columns: { sku: false, unitPrice: true, lineTotal: true },
+    customRows: [],
     labels: {
       invoiceAr: 'فاتورة',
       invoiceEn: 'Invoice',
@@ -128,11 +203,15 @@ export function normalizeStoreSettings(data = {}) {
       ...emptyStoreSettings.invoice,
       ...(data.invoice || {}),
       labels: { ...emptyStoreSettings.invoice.labels, ...(data.invoice?.labels || {}) },
+      columns: { ...emptyStoreSettings.invoice.columns, ...(data.invoice?.columns || {}) },
+      customRows: Array.isArray(data.invoice?.customRows) ? data.invoice.customRows : [],
     },
     freeDeliveryThreshold: data.freeDeliveryThreshold ?? 0,
     freeDeliveryEnabled: data.freeDeliveryEnabled !== false,
     gpsDeliveryEnabled: data.gpsDeliveryEnabled !== false,
     aiChatEnabled: data.aiChatEnabled !== false,
+    locationGate: normalizeLocationGate(data.locationGate),
+    driverSettings: normalizeDriverSettings(data.driverSettings),
     freeDeliveryMethods: parseFreeDeliveryMethodsFromApi(data.freeDeliveryMethods),
     freeDeliveryBanner: mergeFreeDeliveryBanner(data.freeDeliveryBanner),
     scheduledMinLeadMinutes: Number(data.scheduledMinLeadMinutes) || 120,

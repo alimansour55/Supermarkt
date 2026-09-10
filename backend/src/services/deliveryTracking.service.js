@@ -5,10 +5,27 @@ import {
   HIDE_TRACKING_MAP_MS,
   STALE_DRIVER_LOCATION_MS,
 } from '../constants/deliveryTracking.js';
-import { geocodeAddress, getDirections } from './googleMaps.service.js';
+import { geocodeAddress, haversineMeters } from './googleMaps.service.js';
+import { getOsmSuggestions } from './osmGeocode.service.js';
+import { getDrivingRoute } from './osrmRoute.service.js';
 import { getGpsDeliveryEnabled } from './storeSettings.service.js';
+import { pathLengthMeters, snapToPath } from '../utils/geoPath.js';
+import { formatAddressForGeocoding } from '../utils/addressGeo.js';
 
 const DEFAULT_ORIGIN = { lat: 30.0444, lng: 31.2357 };
+
+/** How often the customer app should re-poll the tracking snapshot. */
+export const TRACKING_POLL_INTERVAL_MS = 9000;
+
+/** Recompute the route once the driver strays this far off the cached polyline. */
+const ROUTE_RECOMPUTE_DRIFT_M = 150;
+
+/** ...or once the cached route is older than this (safety net for detours). */
+const ROUTE_RECOMPUTE_MAX_AGE_MS = 120 * 1000;
+
+/** Remaining distance / ETA at or below which the driver is "arriving". */
+const ARRIVING_DISTANCE_M = 150;
+const ARRIVING_ETA_SECONDS = 90;
 
 export { STALE_DRIVER_LOCATION_MS, HIDE_TRACKING_MAP_MS };
 
@@ -26,31 +43,73 @@ export function isTrackingMapVisible(updatedAt, now = Date.now()) {
   return now - ts <= HIDE_TRACKING_MAP_MS;
 }
 
+/** True when we have (or can look up) a delivery destination for the order. */
+export function hasResolvableDestination(order) {
+  const addr = order?.shippingAddress || {};
+  if (addr.lat != null && addr.lng != null) return true;
+  // A text address we can geocode is enough — resolveDestination() will look it up.
+  return Boolean(
+    (addr.formattedAddress && addr.formattedAddress.trim())
+    || (addr.street && addr.street.trim())
+    || (addr.area && addr.area.trim()),
+  );
+}
+
 export function canShowOrderTracking(order, { gpsDeliveryEnabled = true } = {}) {
   if (!gpsDeliveryEnabled) return false;
   if (!order) return false;
   return order.orderStatus === 'out_for_delivery'
     && Boolean(order.assignedDriver)
     && order.trackingEnabled === true
-    && order.shippingAddress?.lat != null
-    && order.shippingAddress?.lng != null;
+    && hasResolvableDestination(order);
 }
 
-async function resolveDestination(order) {
+/**
+ * Delivery destination coordinates. Uses the saved map pin, then Google geocoding,
+ * then the free OSM (Nominatim) fallback. A successful lookup is written back onto
+ * the order so it only happens once.
+ */
+export async function resolveDestination(order) {
   const addr = order.shippingAddress || {};
   if (addr.lat != null && addr.lng != null) {
     return { lat: addr.lat, lng: addr.lng, formattedAddress: addr.formattedAddress || '' };
   }
 
-  const geocoded = await geocodeAddress(addr);
-  if (geocoded) {
-    return { lat: geocoded.lat, lng: geocoded.lng, formattedAddress: geocoded.formattedAddress };
+  const geocoded = await geocodeAddress(addr).catch(() => null);
+  let resolved = geocoded
+    ? { lat: geocoded.lat, lng: geocoded.lng, formattedAddress: geocoded.formattedAddress }
+    : null;
+
+  if (!resolved) {
+    const query = formatAddressForGeocoding(addr);
+    if (query) {
+      const hits = await getOsmSuggestions(query, { language: 'ar' }).catch(() => []);
+      const hit = hits.find((h) => Number.isFinite(h.lat) && Number.isFinite(h.lng));
+      if (hit) {
+        resolved = { lat: hit.lat, lng: hit.lng, formattedAddress: hit.formattedAddress || addr.formattedAddress || '' };
+      }
+    }
   }
 
-  return null;
+  if (resolved && order._id) {
+    await Order.updateOne(
+      { _id: order._id },
+      {
+        $set: {
+          'shippingAddress.lat': resolved.lat,
+          'shippingAddress.lng': resolved.lng,
+          ...(resolved.formattedAddress
+            ? { 'shippingAddress.formattedAddress': resolved.formattedAddress }
+            : {}),
+        },
+      },
+    ).catch(() => {});
+  }
+
+  return resolved;
 }
 
-async function resolveOrigin(order) {
+export async function resolveOrigin(order) {
   if (order.fulfillmentLocationId) {
     const location = order.fulfillmentLocationId._id
       ? order.fulfillmentLocationId
@@ -153,6 +212,118 @@ export function isActiveDriverTrackingStatus(orderStatus) {
   return orderStatus === 'out_for_delivery';
 }
 
+/**
+ * Driving route driver → destination, served from the cache on `DeliveryTracking`.
+ * The cached polyline stays valid as the driver progresses ALONG it — we only
+ * recompute when the driver leaves the route (snapped distance-to-path exceeds a
+ * threshold) or the cache ages out. Returns the full route plus the
+ * remaining-distance / remaining-ETA for the driver's current position.
+ */
+export async function resolveRoute(order, tracking, driver, destination) {
+  if (!driver || !destination) return null;
+
+  const cachedPath = Array.isArray(tracking?.routePath) ? tracking.routePath : [];
+  const ageMs = tracking?.routeComputedAt
+    ? Date.now() - new Date(tracking.routeComputedAt).getTime()
+    : Infinity;
+
+  let snapped = cachedPath.length >= 2
+    ? snapToPath({ lat: driver.lat, lng: driver.lng }, cachedPath)
+    : null;
+  const offRoute = !snapped || snapped.distance > ROUTE_RECOMPUTE_DRIFT_M;
+  // A destination change also invalidates the cache.
+  const destMoved = tracking?.routePath?.length
+    ? haversineMeters(
+      cachedPath[cachedPath.length - 1].lat,
+      cachedPath[cachedPath.length - 1].lng,
+      destination.lat,
+      destination.lng,
+    ) > 120
+    : true;
+
+  const cacheUsable = cachedPath.length >= 2
+    && ageMs < ROUTE_RECOMPUTE_MAX_AGE_MS
+    && !offRoute
+    && !destMoved;
+
+  let path = cachedPath;
+  let polyline = tracking?.routePolyline || '';
+  let totalEtaSeconds = tracking?.routeEtaSeconds ?? null;
+  let totalDistanceMeters = tracking?.routeDistanceMeters ?? null;
+  let distanceText = tracking?.routeDistanceText || '';
+
+  if (!cacheUsable) {
+    const fresh = await getDrivingRoute({
+      originLat: driver.lat,
+      originLng: driver.lng,
+      destLat: destination.lat,
+      destLng: destination.lng,
+    });
+    if (fresh?.path?.length >= 2) {
+      path = fresh.path;
+      polyline = fresh.polyline || '';
+      totalEtaSeconds = fresh.etaSeconds ?? null;
+      totalDistanceMeters = fresh.distanceMeters ?? pathLengthMeters(path);
+      distanceText = fresh.distanceText || '';
+      snapped = snapToPath({ lat: driver.lat, lng: driver.lng }, path);
+      await DeliveryTracking.updateOne(
+        { orderId: order._id },
+        {
+          $set: {
+            routePath: path,
+            routePolyline: polyline,
+            routeEtaSeconds: totalEtaSeconds,
+            routeDistanceMeters: totalDistanceMeters,
+            routeDistanceText: distanceText,
+            routeComputedAt: new Date(),
+            routeComputedFrom: { lat: driver.lat, lng: driver.lng },
+          },
+        },
+      );
+    }
+  }
+
+  if (!path || path.length < 2) return null;
+
+  const total = totalDistanceMeters || pathLengthMeters(path);
+  const along = snapped?.distanceAlong ?? 0;
+  const remainingMeters = Math.max(0, total - along);
+  const remainingEtaSeconds = total > 0 && totalEtaSeconds != null
+    ? Math.round(totalEtaSeconds * (remainingMeters / total))
+    : totalEtaSeconds;
+
+  return {
+    path,
+    polyline,
+    etaSeconds: remainingEtaSeconds,
+    etaText: formatEtaText(remainingEtaSeconds),
+    distanceText,
+    distanceMeters: Math.round(remainingMeters),
+    totalDistanceMeters: Math.round(total),
+    totalEtaSeconds,
+  };
+}
+
+function formatEtaText(seconds) {
+  if (seconds == null) return '';
+  const mins = Math.max(1, Math.round(seconds / 60));
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
+function computeArrivalState(order, driver, route) {
+  if (order.orderStatus === 'delivered') return 'delivered';
+  if (!driver) return 'preparing';
+  const remaining = route?.distanceMeters ?? null;
+  const eta = route?.etaSeconds ?? null;
+  if (driver.status === 'arrived' || (remaining != null && remaining < 60)) return 'arrived';
+  if ((remaining != null && remaining <= ARRIVING_DISTANCE_M)
+    || (eta != null && eta <= ARRIVING_ETA_SECONDS)) return 'arriving';
+  return 'on_the_way';
+}
+
 export async function buildTrackingSnapshot(order, { forCustomer = false, gpsDeliveryEnabled } = {}) {
   const gpsEnabled = gpsDeliveryEnabled ?? await getGpsDeliveryEnabled();
   if (!gpsEnabled) {
@@ -161,8 +332,12 @@ export async function buildTrackingSnapshot(order, { forCustomer = false, gpsDel
       canTrack: false,
       mapVisible: false,
       driverStale: true,
+      arrivalState: 'preparing',
+      pollIntervalMs: TRACKING_POLL_INTERVAL_MS,
+      origin: null,
       destination: null,
       driver: null,
+      driverInfo: null,
       route: null,
       estimatedDeliveryAt: null,
       trackingMeta: {
@@ -174,6 +349,7 @@ export async function buildTrackingSnapshot(order, { forCustomer = false, gpsDel
   }
 
   const destination = await resolveDestination(order);
+  const origin = await resolveOrigin(order).catch(() => null);
   const tracking = await DeliveryTracking.findOne({ orderId: order._id }).lean();
 
   const driverUpdatedAt = tracking?.updatedAt || null;
@@ -196,28 +372,35 @@ export async function buildTrackingSnapshot(order, { forCustomer = false, gpsDel
   let estimatedDeliveryAt = order.estimatedDeliveryAt || null;
 
   if (driver && destination && mapVisible) {
-    route = await getDirections({
-      originLat: driver.lat,
-      originLng: driver.lng,
-      destLat: destination.lat,
-      destLng: destination.lng,
-    });
+    route = await resolveRoute(order, tracking, driver, destination);
 
-    if (route?.etaSeconds) {
+    if (route?.etaSeconds != null) {
+      driver.etaSeconds = route.etaSeconds;
+      driver.distanceMeters = route.distanceMeters;
       estimatedDeliveryAt = new Date(Date.now() + route.etaSeconds * 1000);
-      if (!order.estimatedDeliveryAt) {
-        await Order.updateOne({ _id: order._id }, { estimatedDeliveryAt });
-      }
+      await Order.updateOne({ _id: order._id }, { estimatedDeliveryAt });
     }
   }
+
+  const assigned = order.assignedDriver && typeof order.assignedDriver === 'object'
+    ? order.assignedDriver
+    : null;
 
   return {
     trackingEnabled: order.trackingEnabled === true,
     canTrack: canShowOrderTracking(order, { gpsDeliveryEnabled: gpsEnabled }),
     mapVisible,
     driverStale,
+    orderStatus: order.orderStatus,
+    orderNumber: order.orderNumber,
+    arrivalState: computeArrivalState(order, mapVisible ? driver : null, route),
+    pollIntervalMs: TRACKING_POLL_INTERVAL_MS,
+    origin: origin && origin.lat != null
+      ? { lat: origin.lat, lng: origin.lng, name: origin.name || '' }
+      : null,
     destination,
     driver: mapVisible ? driver : null,
+    driverInfo: assigned ? { name: assigned.name || '', phone: assigned.phone || '' } : null,
     route: mapVisible ? route : null,
     estimatedDeliveryAt: mapVisible ? estimatedDeliveryAt : null,
     trackingMeta: {

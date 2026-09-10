@@ -56,10 +56,17 @@ import {
 import {
   getDriverDeliveries,
   getDriverDeliveryById,
+  getDriverConfig,
+  updateDriverAvailability,
   updateDriverOrderLocation,
   completeDriverDelivery,
   failDriverDelivery,
 } from '../controllers/driver.controller.js';
+import {
+  startDriverSimulation,
+  stopDriverSimulation,
+  getDriverSimulationStatus,
+} from '../controllers/deliveryTrackingSim.controller.js';
 import { optionalUploadSingle, parseOrderMultipartBody, uploadSingle } from '../middleware/upload.js';
 import { createOrderValidation, updateOrderItemsValidation, updateRecurringDeliveryValidation, driverTrackingLocationValidation, driverFailDeliveryValidation, validate } from '../middleware/validate.js';
 
@@ -101,6 +108,10 @@ router.post('/admin/:id/substitutions', ...adminOnly, suggestSubstitution);
 router.put('/admin/:id/assign-driver', ...adminOnly, assignDriver);
 router.get('/admin/:id/tracking', ...requirePermission('orders:read'), getAdminOrderTracking);
 router.put('/admin/:id/tracking', ...requirePermission('orders:write'), adminTrackingUpdateLimiter, updateAdminOrderTracking);
+// Dev-only driver simulator (no-op in production — see the controller).
+router.get('/admin/:id/tracking/simulate', ...requirePermission('orders:read'), getDriverSimulationStatus);
+router.post('/admin/:id/tracking/simulate', ...requirePermission('orders:write'), startDriverSimulation);
+router.delete('/admin/:id/tracking/simulate', ...requirePermission('orders:write'), stopDriverSimulation);
 router.get('/admin/:id/messages', ...adminOnly, getOrderMessages);
 router.post('/admin/:id/messages', ...adminOnly, addAdminMessage);
 router.post('/admin/:id/returns', ...adminOnly, requestAdminReturn);
@@ -116,6 +127,8 @@ router.put('/:id/substitutions/:subId', respondToSubstitution);
 router.get('/:id/messages', getOrderMessages);
 router.post('/:id/messages', addCustomerMessage);
 
+router.get('/driver/config', ...driverOnly, getDriverConfig);
+router.put('/driver/availability', ...driverOnly, updateDriverAvailability);
 router.get('/driver/deliveries', ...driverOnly, getDriverDeliveries);
 router.get('/driver/deliveries/:id', ...driverOnly, getDriverDeliveryById);
 router.post('/driver/deliveries/:id/complete', ...driverOnly, completeDriverDelivery);

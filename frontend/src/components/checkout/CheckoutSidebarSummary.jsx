@@ -10,6 +10,7 @@ import { pickProductImage } from '../../utils/imageHelpers';
 import ProductImage from '../ui/ProductImage';
 import DiscountCodeInput from '../cart/DiscountCodeInput';
 import CheckoutPointsRedeem from './CheckoutPointsRedeem';
+import CheckoutWalletApply from './CheckoutWalletApply';
 import CheckoutDeliveryMeta from './CheckoutDeliveryMeta';
 import CheckoutTotalsBlock from './CheckoutTotalsBlock';
 import CartPromoLine from '../cart/CartPromoLine';
@@ -167,7 +168,7 @@ function CheckoutItemRow({ item, isAr, onUpdateQuantity, onRemove }) {
               </button>
             </div>
 
-            <div className="text-end">
+            <div className="text-end" dir="ltr">
               {!isSecondItemPromo(item) && (
                 <p className="text-[10px] text-slate-500 tabular-nums">
                   {formatPrice(item.price)} × {item.quantity}
@@ -191,8 +192,16 @@ export default function CheckoutSidebarSummary({
   isAuthenticated,
   pointsToRedeem,
   onPointsToRedeemChange,
+  walletEnabled,
+  walletBalance,
+  walletSettings,
+  walletToRedeem,
+  onWalletToRedeemChange,
+  walletApplied,
+  walletPayableTotal,
   deliveryMethod,
   location,
+  deliverToLabel,
   form,
   selectedSlot,
   paymentMethod,
@@ -273,7 +282,7 @@ export default function CheckoutSidebarSummary({
             </p>
           )}
 
-          <ul className="max-h-[min(42vh,360px)] space-y-2 overflow-y-auto overscroll-contain pe-0.5 scrollbar-thin">
+          <ul className="space-y-2 pe-0.5 lg:max-h-[calc(100vh-20rem)] lg:overflow-y-auto lg:overscroll-contain lg:scrollbar-thin">
             {items.map((item) => (
               <CheckoutItemRow
                 key={item.cartKey || item.productId}
@@ -298,7 +307,19 @@ export default function CheckoutSidebarSummary({
           pointsPreview={pointsPreview}
           quotedSubtotal={displaySubtotal}
           quotedDiscountAmount={displayDiscountAmount}
-          quotedTotal={checkoutQuote?.total ?? total}
+          quotedTotal={checkoutQuote?.totalBeforeWallet ?? checkoutQuote?.total ?? total}
+        />
+
+        <CheckoutWalletApply
+          language={language}
+          isAuthenticated={isAuthenticated}
+          walletEnabled={walletEnabled}
+          walletBalance={walletBalance}
+          walletSettings={walletSettings}
+          walletToRedeem={walletToRedeem}
+          onWalletChange={onWalletToRedeemChange}
+          walletApplied={walletApplied}
+          payableTotal={walletPayableTotal}
         />
 
         <CheckoutPointsBadge
@@ -313,6 +334,7 @@ export default function CheckoutSidebarSummary({
           language={language}
           deliveryMethod={deliveryMethod}
           location={location}
+          deliverToLabel={deliverToLabel}
           form={form}
           selectedSlot={selectedSlot}
           paymentMethod={paymentMethod}

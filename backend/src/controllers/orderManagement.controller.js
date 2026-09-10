@@ -16,6 +16,8 @@ import {
   pushStatusHistory,
   visibleMessages,
 } from '../services/orderManagement.service.js';
+import { reverseOrderWallet } from '../services/wallet.service.js';
+import { getActiveDeliveryCounts } from '../services/deliveryDispatch.service.js';
 import { notifyOrderCustomerMessage } from '../services/notification.service.js';
 import {
   countUnreadCustomerMessages,
@@ -117,6 +119,7 @@ async function cancelOrderInternal(order, { reason, actor, isAdmin }) {
 
   await restoreOrderInventory(order.items);
   await reverseOrderLoyalty(order);
+  await reverseOrderWallet(order);
   await reverseCouponUsage(order);
 
   if (order.paymentStatus === 'paid' && order.paymentMethod === 'stripe') {
@@ -205,6 +208,7 @@ export const refundAdminOrder = asyncHandler(async (req, res) => {
 
   if (refundAmount >= order.total) {
     await reverseOrderLoyalty(order);
+    await reverseOrderWallet(order);
   }
 
   await order.save();
@@ -376,21 +380,10 @@ export const assignDriver = asyncHandler(async (req, res) => {
 
 export const getDeliveryStaff = asyncHandler(async (_req, res) => {
   const drivers = await User.find({ role: 'driver', isActive: { $ne: false } })
-    .select('name phone email username lastLoginAt isActive')
+    .select('name phone email username lastLoginAt isActive driverAvailable')
     .sort({ name: 1 });
 
-  const activeCounts = await Order.aggregate([
-    {
-      $match: {
-        orderStatus: 'out_for_delivery',
-        assignedDriver: { $ne: null },
-      },
-    },
-    { $group: { _id: '$assignedDriver', count: { $sum: 1 } } },
-  ]);
-  const countByDriver = Object.fromEntries(
-    activeCounts.map((row) => [String(row._id), row.count]),
-  );
+  const countByDriver = await getActiveDeliveryCounts();
 
   res.json({
     success: true,
@@ -401,6 +394,7 @@ export const getDeliveryStaff = asyncHandler(async (_req, res) => {
       email: d.email || null,
       username: d.username || null,
       lastLoginAt: d.lastLoginAt || null,
+      available: d.driverAvailable !== false,
       activeDeliveries: countByDriver[String(d._id)] || 0,
     })),
   });
@@ -505,9 +499,15 @@ export const downloadOrderInvoice = asyncHandler(async (req, res) => {
   const storeSettings = await StoreSettings.findOne({ key: 'main' }).lean();
   const pdf = await generateOrderInvoicePdf(order, user, { lang, storeSettings });
 
+  const safeName = String(order.orderNumber || 'order').replace(/[^\w.-]+/g, '_');
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="invoice-${order.orderNumber}.pdf"`);
-  res.send(pdf);
+  res.setHeader('Content-Length', pdf.length);
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="invoice-${safeName}.pdf"; filename*=UTF-8''invoice-${encodeURIComponent(order.orderNumber || 'order')}.pdf`,
+  );
+  res.end(pdf);
 });
 
 export const updateMyOrderItems = asyncHandler(async (req, res) => {

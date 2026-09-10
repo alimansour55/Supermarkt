@@ -45,37 +45,28 @@ export async function findFirstActiveLeaf(parentId) {
 }
 
 /**
- * Resolve a category ref to an active leaf for repair.
- * Descends through non-leaf nodes; for inactive leaves, picks another active leaf under the same parent.
+ * Resolve a category ref to a valid active target for repair.
+ * Any active category (at any depth) is a valid target; for an inactive one,
+ * fall back to another active category under the same parent.
  */
 export async function resolveRepairLeafId(categoryId, categoryCache = new Map()) {
-  let currentId = normalizeId(categoryId);
+  const currentId = normalizeId(categoryId);
   if (!currentId) return { leafId: null, reason: 'missing' };
 
-  let cat = await getCachedCategory(currentId, categoryCache);
+  const cat = await getCachedCategory(currentId, categoryCache);
   if (!cat) return { leafId: null, reason: 'orphaned' };
 
-  const activeChildCount = await Category.countDocuments({ parentCategory: cat._id, isActive: true });
-  if (activeChildCount > 0) {
-    const leafId = await findFirstActiveLeaf(cat._id);
-    return {
-      leafId,
-      reason: leafId ? 'non_leaf' : 'non_leaf_no_active_children',
-      repairedFrom: cat._id,
-    };
+  if (cat.isActive) {
+    return { leafId: cat._id, reason: null };
   }
 
-  if (!cat.isActive) {
-    if (cat.parentCategory) {
-      const siblingLeaf = await findFirstActiveLeaf(cat.parentCategory);
-      if (siblingLeaf && String(siblingLeaf) !== String(cat._id)) {
-        return { leafId: siblingLeaf, reason: 'inactive_category', repairedFrom: cat._id };
-      }
+  if (cat.parentCategory) {
+    const siblingLeaf = await findFirstActiveLeaf(cat.parentCategory);
+    if (siblingLeaf && String(siblingLeaf) !== String(cat._id)) {
+      return { leafId: siblingLeaf, reason: 'inactive_category', repairedFrom: cat._id };
     }
-    return { leafId: null, reason: 'inactive_category', repairedFrom: cat._id };
   }
-
-  return { leafId: cat._id, reason: null };
+  return { leafId: null, reason: 'inactive_category', repairedFrom: cat._id };
 }
 
 export async function diagnoseProductCategory(product, categoryCache = new Map()) {
@@ -124,14 +115,8 @@ export async function diagnoseProductCategory(product, categoryCache = new Map()
     return { issues, healthy: false, repairable: false };
   }
 
-  const activeChildCount = await Category.countDocuments({ parentCategory: leafCat._id, isActive: true });
-  if (activeChildCount > 0) {
-    issues.push({
-      code: PRODUCT_CATEGORY_ISSUES.NON_LEAF,
-      message: 'Product is assigned to a parent category, not a leaf',
-      details: { categoryId: String(leafCat._id), slug: leafCat.slug },
-    });
-  }
+  // A product may now be attached to a category at any depth — parent categories
+  // are valid targets, so NON_LEAF is no longer flagged as an issue.
 
   if (!leafCat.isActive) {
     issues.push({
@@ -379,22 +364,39 @@ export async function repairCategoryLinks({ dryRun = false } = {}) {
   const categoryCache = new Map();
 
   const categories = await Category.find({});
-  for (const cat of categories) {
-    let expectedLevel = 1;
-    if (cat.parentCategory) {
-      const parent = await Category.findById(cat.parentCategory).select('level');
-      expectedLevel = Math.min((parent?.level || 1) + 1, 4);
+  const catById = new Map(categories.map((c) => [String(c._id), c]));
+
+  const pathFor = (cat) => {
+    const ancestors = [];
+    const guard = new Set();
+    let cursor = cat.parentCategory ? catById.get(String(cat.parentCategory)) : null;
+    while (cursor && !guard.has(String(cursor._id))) {
+      guard.add(String(cursor._id));
+      ancestors.unshift(cursor._id);
+      cursor = cursor.parentCategory ? catById.get(String(cursor.parentCategory)) : null;
     }
-    if (cat.level !== expectedLevel) {
+    return ancestors;
+  };
+
+  for (const cat of categories) {
+    const ancestors = pathFor(cat);
+    const depth = ancestors.length;
+    const level = depth + 1;
+    const outOfSync = cat.level !== level
+      || cat.depth !== depth
+      || String((cat.ancestors || []).map(String)) !== String(ancestors.map(String));
+    if (outOfSync) {
       if (!dryRun) {
-        cat.level = expectedLevel;
+        cat.ancestors = ancestors;
+        cat.depth = depth;
+        cat.level = level;
         await cat.save({ validateBeforeSave: false });
       }
       categoriesFixed += 1;
     }
   }
 
-  const products = await Product.find({}).select('slug mainCategory subCategory category');
+  const products = await Product.find({}).select('slug mainCategory subCategory category categoryAncestors');
   let productsFixed = 0;
   let productsWouldFix = 0;
   let productsUnrepairable = 0;
@@ -409,7 +411,8 @@ export async function repairCategoryLinks({ dryRun = false } = {}) {
       });
       const changed = ['mainCategory', 'subCategory', 'category'].some(
         (key) => String(product[key] || '') !== String(fields[key] || ''),
-      );
+      ) || String((product.categoryAncestors || []).map(String))
+        !== String((fields.categoryAncestors || []).map(String));
       if (changed) {
         if (!dryRun) {
           await Product.updateOne({ _id: product._id }, { $set: fields });

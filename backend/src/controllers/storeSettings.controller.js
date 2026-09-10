@@ -3,10 +3,13 @@ import {
   DEFAULT_NAVIGATION,
   DEFAULT_PAYMENT_METHODS,
   DEFAULT_SEARCH_SETTINGS,
+  DEFAULT_TRENDING_CONFIG,
   DEFAULT_ADMIN_PANEL,
   DEFAULT_PARTNER_REVENUE,
   DEFAULT_SEO,
   DEFAULT_LOW_STOCK_ALERT,
+  DEFAULT_LOCATION_GATE,
+  DEFAULT_DRIVER_SETTINGS,
   DEFAULT_THEME_COLOR,
   DEFAULT_SITE_FONT,
 } from '../constants/storeDefaults.js';
@@ -16,6 +19,7 @@ import { isValidSiteFont } from '../constants/siteFonts.js';
 import { DEFAULT_INVOICE } from '../constants/invoiceDefaults.js';
 import { DEFAULT_FREE_DELIVERY_BANNER } from '../constants/freeDeliveryBannerDefaults.js';
 import { getDefaultProductFilterSettings, normalizeProductFilterSettings } from '../utils/productFilterSettings.js';
+import { normalizeSearchQuery } from '../utils/searchQuery.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import {
@@ -53,6 +57,7 @@ const ALLOWED_FIELDS = [
   'freeDeliveryEnabled',
   'gpsDeliveryEnabled',
   'aiChatEnabled',
+  'locationGate',
   'freeDeliveryMethods',
   'freeDeliveryBanner',
   'scheduledMinLeadMinutes',
@@ -61,6 +66,7 @@ const ALLOWED_FIELDS = [
   'socialLinks',
   'appLinks',
   'loyalty',
+  'wallet',
   'navigation',
   'seo',
   'paymentMethods',
@@ -72,6 +78,7 @@ const ALLOWED_FIELDS = [
   'themeColor',
   'themeShade',
   'themeRotation',
+  'driverSettings',
   'siteFont',
   'isActive',
 ];
@@ -109,14 +116,17 @@ const getOrCreateSettings = async () => {
       }
     }
   }
-  if (!settings.invoice?.titleAr || !settings.invoice?.labels?.itemAr) {
+  if (!settings.invoice?.titleAr || !settings.invoice?.labels?.itemAr || !settings.invoice?.accentColor) {
+    const current = settings.invoice?.toObject?.() || settings.invoice || {};
     settings.invoice = {
       ...DEFAULT_INVOICE,
-      ...(settings.invoice?.toObject?.() || settings.invoice),
+      ...current,
       labels: {
         ...DEFAULT_INVOICE.labels,
-        ...(settings.invoice?.labels?.toObject?.() || settings.invoice?.labels || {}),
+        ...(settings.invoice?.labels?.toObject?.() || current.labels || {}),
       },
+      columns: { ...DEFAULT_INVOICE.columns, ...(current.columns || {}) },
+      customRows: Array.isArray(current.customRows) ? current.customRows : [],
     };
     changed = true;
   }
@@ -145,6 +155,19 @@ const getOrCreateSettings = async () => {
       settings.searchSettings.trendingSearches = normalizedTrending;
       changed = true;
     }
+  }
+  if (settings.searchSettings && settings.searchSettings.trendingConfig?.displayLimit === undefined) {
+    const currentSearch = settings.searchSettings.toObject?.() || settings.searchSettings;
+    settings.searchSettings = {
+      ...currentSearch,
+      trendingConfig: {
+        ...DEFAULT_TRENDING_CONFIG,
+        ...(settings.searchSettings.trendingConfig?.toObject?.()
+          || currentSearch.trendingConfig
+          || {}),
+      },
+    };
+    changed = true;
   }
   if (settings.adminPanel?.showRevenue === undefined) {
     settings.adminPanel = {
@@ -182,6 +205,24 @@ const getOrCreateSettings = async () => {
   }
   if (settings.aiChatEnabled === undefined) {
     settings.aiChatEnabled = true;
+    changed = true;
+  }
+  if (!settings.locationGate || typeof settings.locationGate !== 'object' || settings.locationGate.enabled === undefined) {
+    settings.locationGate = {
+      ...DEFAULT_LOCATION_GATE,
+      ...(settings.locationGate?.toObject?.() || settings.locationGate || {}),
+    };
+    settings.markModified('locationGate');
+    changed = true;
+  }
+  if (!settings.driverSettings
+    || typeof settings.driverSettings !== 'object'
+    || settings.driverSettings.autoAssignEnabled === undefined) {
+    settings.driverSettings = {
+      ...DEFAULT_DRIVER_SETTINGS,
+      ...(settings.driverSettings?.toObject?.() || settings.driverSettings || {}),
+    };
+    settings.markModified('driverSettings');
     changed = true;
   }
   if (settings.lowStockAlertThreshold === undefined || settings.lowStockAlertThreshold === null) {
@@ -241,6 +282,7 @@ const NESTED_SETTINGS_FIELDS = new Set([
   'socialLinks',
   'appLinks',
   'loyalty',
+  'wallet',
   'navigation',
   'seo',
   'paymentMethods',
@@ -253,6 +295,8 @@ const NESTED_SETTINGS_FIELDS = new Set([
   'freeDeliveryMethods',
   'reviewSettings',
   'themeRotation',
+  'locationGate',
+  'driverSettings',
 ]);
 
 const applySettingsUpdates = (settings, updates) => {
@@ -348,6 +392,49 @@ const pickSettings = (payload) => {
       || updates.aiChatEnabled === '1';
   }
 
+  if (updates.locationGate !== undefined) {
+    const raw = updates.locationGate || {};
+    const toBool = (value, fallback) => {
+      if (value === undefined) return fallback;
+      return value === true || value === 'true' || value === '1';
+    };
+    const clampNum = (value, min, max, fallback) => {
+      const num = Number(value);
+      if (Number.isNaN(num)) return fallback;
+      return Math.min(max, Math.max(min, num));
+    };
+    updates.locationGate = {
+      enabled: toBool(raw.enabled, false),
+      mandatory: toBool(raw.mandatory, true),
+      enforceCoverage: toBool(raw.enforceCoverage, true),
+      titleAr: String(raw.titleAr ?? '').trim() || DEFAULT_LOCATION_GATE.titleAr,
+      titleEn: String(raw.titleEn ?? '').trim() || DEFAULT_LOCATION_GATE.titleEn,
+      subtitleAr: String(raw.subtitleAr ?? '').trim() || DEFAULT_LOCATION_GATE.subtitleAr,
+      subtitleEn: String(raw.subtitleEn ?? '').trim() || DEFAULT_LOCATION_GATE.subtitleEn,
+      mapCenterLat: clampNum(raw.mapCenterLat, -90, 90, DEFAULT_LOCATION_GATE.mapCenterLat),
+      mapCenterLng: clampNum(raw.mapCenterLng, -180, 180, DEFAULT_LOCATION_GATE.mapCenterLng),
+      mapZoom: Math.round(clampNum(raw.mapZoom, 3, 18, DEFAULT_LOCATION_GATE.mapZoom)),
+    };
+  }
+
+  if (updates.driverSettings !== undefined) {
+    const raw = updates.driverSettings || {};
+    const toBool = (value, fallback) => {
+      if (value === undefined) return fallback;
+      return value === true || value === 'true' || value === '1';
+    };
+    const maxActive = Math.round(Number(raw.autoAssignMaxActive));
+    updates.driverSettings = {
+      autoAssignEnabled: toBool(raw.autoAssignEnabled, DEFAULT_DRIVER_SETTINGS.autoAssignEnabled),
+      autoAssignMaxActive: Number.isFinite(maxActive)
+        ? Math.min(50, Math.max(0, maxActive))
+        : DEFAULT_DRIVER_SETTINGS.autoAssignMaxActive,
+      availabilityEnabled: toBool(raw.availabilityEnabled, DEFAULT_DRIVER_SETTINGS.availabilityEnabled),
+      pickingChecklistEnabled: toBool(raw.pickingChecklistEnabled, DEFAULT_DRIVER_SETTINGS.pickingChecklistEnabled),
+      cashCalculatorEnabled: toBool(raw.cashCalculatorEnabled, DEFAULT_DRIVER_SETTINGS.cashCalculatorEnabled),
+    };
+  }
+
   if (updates.freeDeliveryMethods !== undefined) {
     const allowed = ['scheduled', 'express', 'recurring'];
     const methods = (Array.isArray(updates.freeDeliveryMethods) ? updates.freeDeliveryMethods : [])
@@ -417,8 +504,15 @@ const pickSettings = (payload) => {
 
   if (updates.searchSettings !== undefined) {
     const current = updates.searchSettings || {};
+    const cfg = current.trendingConfig || {};
+    const clamp = (value, min, max, dflt) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return dflt;
+      return Math.min(Math.max(Math.round(num), min), max);
+    };
+    const bool = (v, dflt) => (v === undefined ? dflt : (v !== false && v !== 'false' && v !== '0'));
     updates.searchSettings = {
-      trendingMode: current.trendingMode === 'auto' ? 'auto' : 'manual',
+      trendingMode: ['auto', 'hybrid'].includes(current.trendingMode) ? current.trendingMode : 'manual',
       trendingSearches: (Array.isArray(current.trendingSearches) ? current.trendingSearches : [])
         .map((item, index) => ({
           query: String(item.query || item.labelAr || item.labelEn || '').trim(),
@@ -429,6 +523,18 @@ const pickSettings = (payload) => {
           isActive: item.isActive !== false && item.isActive !== 'false',
         }))
         .filter((item) => item.query),
+      trendingConfig: {
+        displayLimit: clamp(cfg.displayLimit, 1, 20, DEFAULT_TRENDING_CONFIG.displayLimit),
+        autoLookbackDays: clamp(cfg.autoLookbackDays, 1, 30, DEFAULT_TRENDING_CONFIG.autoLookbackDays),
+        autoMinCount: clamp(cfg.autoMinCount, 1, 1000, DEFAULT_TRENDING_CONFIG.autoMinCount),
+        requireConversion: bool(cfg.requireConversion, DEFAULT_TRENDING_CONFIG.requireConversion),
+        dedupeByProduct: bool(cfg.dedupeByProduct, DEFAULT_TRENDING_CONFIG.dedupeByProduct),
+        autoBlocklist: [...new Set(
+          (Array.isArray(cfg.autoBlocklist) ? cfg.autoBlocklist : [])
+            .map((entry) => normalizeSearchQuery(String(entry || '')))
+            .filter(Boolean),
+        )].slice(0, 50),
+      },
     };
   }
 
@@ -445,15 +551,45 @@ const pickSettings = (payload) => {
 
   if (updates.invoice !== undefined) {
     const current = updates.invoice || {};
+    const bool = (v, dflt) => (v === undefined ? dflt : (v !== false && v !== 'false' && v !== '0'));
+    const hex = /^#[0-9a-fA-F]{6}$/.test(String(current.accentColor || '').trim())
+      ? String(current.accentColor).trim().toLowerCase()
+      : DEFAULT_INVOICE.accentColor;
+    const customRows = (Array.isArray(current.customRows) ? current.customRows : [])
+      .map((r) => ({
+        labelAr: String(r?.labelAr || '').trim().slice(0, 60),
+        labelEn: String(r?.labelEn || '').trim().slice(0, 60),
+        valueAr: String(r?.valueAr || '').trim().slice(0, 120),
+        valueEn: String(r?.valueEn || '').trim().slice(0, 120),
+      }))
+      .filter((r) => r.labelAr || r.labelEn || r.valueAr || r.valueEn)
+      .slice(0, 8);
     updates.invoice = {
       ...DEFAULT_INVOICE,
       ...current,
+      accentColor: hex,
+      pageSize: current.pageSize === 'Letter' ? 'Letter' : 'A4',
+      logoPosition: ['start', 'center', 'end'].includes(current.logoPosition) ? current.logoPosition : 'end',
+      logoSize: ['sm', 'md', 'lg'].includes(current.logoSize) ? current.logoSize : 'md',
       labels: { ...DEFAULT_INVOICE.labels, ...(current.labels || {}) },
-      showLogo: current.showLogo !== false && current.showLogo !== 'false',
-      showTaxId: current.showTaxId !== false && current.showTaxId !== 'false',
-      showOrderStatus: current.showOrderStatus !== false && current.showOrderStatus !== 'false',
-      showPaymentStatus: current.showPaymentStatus !== false && current.showPaymentStatus !== 'false',
+      columns: {
+        sku: current.columns?.sku === true || current.columns?.sku === 'true',
+        unitPrice: bool(current.columns?.unitPrice, true),
+        lineTotal: bool(current.columns?.lineTotal, true),
+      },
+      customRows,
+      showLogo: bool(current.showLogo, true),
+      showTaxId: bool(current.showTaxId, true),
+      showOrderStatus: bool(current.showOrderStatus, true),
+      showPaymentStatus: bool(current.showPaymentStatus, true),
+      showPaymentMethod: bool(current.showPaymentMethod, true),
+      showSavings: bool(current.showSavings, true),
+      showBankDetails: current.showBankDetails === true || current.showBankDetails === 'true',
+      showStamp: current.showStamp === true || current.showStamp === 'true',
+      showQr: current.showQr === true || current.showQr === 'true',
     };
+    // stampUrl / stampPublicId are managed by the upload handler, not the JSON body.
+    delete updates.invoice.stampPublicId;
   }
 
   if (updates.themeColor !== undefined) {
@@ -529,8 +665,19 @@ export const updateAdminStoreSettings = asyncHandler(async (req, res) => {
 
   const previousLogoUrl = settings.logoUrl;
   const previousFaviconUrl = settings.faviconUrl;
+  const previousStampPublicId = settings.invoice?.stampPublicId || '';
+  const previousStampUrl = settings.invoice?.stampUrl || '';
 
   applySettingsUpdates(settings, updates);
+
+  // The JSON body has no stamp fields — carry the stored stamp forward unless a
+  // new file is uploaded or the form explicitly cleared it.
+  if (updates.invoice !== undefined) {
+    const clearedStamp = 'stampUrl' in (payload.invoice || {}) && !payload.invoice.stampUrl;
+    settings.invoice.stampUrl = clearedStamp ? '' : previousStampUrl;
+    settings.invoice.stampPublicId = clearedStamp ? '' : previousStampPublicId;
+    settings.markModified('invoice');
+  }
 
   const logoFile = req.files?.logo?.[0];
   const faviconFile = req.files?.favicon?.[0];
@@ -561,6 +708,21 @@ export const updateAdminStoreSettings = asyncHandler(async (req, res) => {
     settings.faviconPublicId = '';
   }
 
+  const invoiceStampFile = req.files?.invoiceStamp?.[0];
+  const uploadedStamp = await uploadOptionalImage({
+    file: invoiceStampFile,
+    folder: CLOUDINARY_FOLDERS.store,
+    previousPublicId: previousStampPublicId,
+  });
+  if (uploadedStamp) {
+    settings.invoice.stampUrl = uploadedStamp.url;
+    settings.invoice.stampPublicId = uploadedStamp.publicId;
+    settings.markModified('invoice');
+  } else if (previousStampPublicId && settings.invoice?.stampUrl === '') {
+    // Stamp cleared from the form — drop the Cloudinary asset.
+    await deleteFromCloudinary(previousStampPublicId);
+  }
+
   await settings.save();
   invalidateStoreSettingsCache();
   res.json({ success: true, data: serializeSettings(settings) });
@@ -572,6 +734,8 @@ export const previewInvoicePdf = asyncHandler(async (req, res) => {
   const pdf = await generateSampleInvoicePdf(settings, lang);
 
   res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Length', pdf.length);
+  res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Content-Disposition', `inline; filename="invoice-preview-${lang}.pdf"`);
-  res.send(pdf);
+  res.end(pdf);
 });

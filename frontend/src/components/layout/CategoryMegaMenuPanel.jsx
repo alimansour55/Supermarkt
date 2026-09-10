@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { getCategoryLabel, useCategories } from '../../context/CategoriesContext';
 import { buildCategoryPath, buildCategorySlugChain } from '../../utils/categoryHelpers';
@@ -12,33 +13,60 @@ import {
 function CategoryBlock({ block, isAr, onNavigate }) {
   const { category, href, items } = block;
   const label = getCategoryLabel(category, isAr);
+  const subCategories = items.filter((item) => item.type !== 'product');
+  const products = items.filter((item) => item.type === 'product');
+  const showViewAll = items.length > 4;
 
   return (
-    <article className="mb-8 break-inside-avoid">
+    <article className="mb-7 break-inside-avoid">
       <Link
         to={href}
         onClick={onNavigate}
-        className="mb-2.5 block text-sm font-bold leading-snug text-text transition-colors hover:text-primary-700"
+        className="group/head mb-2.5 flex items-center gap-2 text-sm font-bold leading-snug text-text transition-colors hover:text-primary-700"
       >
-        {label}
+        <span className="h-3.5 w-1 shrink-0 rounded-full bg-primary-500 transition-colors group-hover/head:bg-primary-600" />
+        <span className="min-w-0 truncate">{label}</span>
       </Link>
 
       {items.length > 0 ? (
-        <ul className="space-y-2">
-          {items.map((item) => (
-            <li key={item.key}>
-              <Link
-                to={item.href}
-                onClick={onNavigate}
-                className={`block text-sm leading-snug transition-colors hover:text-primary-700 ${
-                  item.type === 'product' ? 'text-text' : item.muted ? 'text-text-muted/80' : 'text-text-muted'
-                }`}
-              >
-                {item.type === 'product' ? `• ${item.label}` : item.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="space-y-0.5">
+            {subCategories.map((item) => (
+              <li key={item.key}>
+                <Link
+                  to={item.href}
+                  onClick={onNavigate}
+                  className="-mx-2 flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-text-muted transition-colors hover:bg-primary-50 hover:text-primary-800"
+                >
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </Link>
+              </li>
+            ))}
+            {products.map((item) => (
+              <li key={item.key}>
+                <Link
+                  to={item.href}
+                  onClick={onNavigate}
+                  className="-mx-2 flex items-center gap-2 rounded-lg px-2 py-1 text-[13px] text-text-muted/90 transition-colors hover:bg-surface hover:text-text"
+                >
+                  <span className="h-1 w-1 shrink-0 rounded-full bg-current opacity-40" />
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          {showViewAll && (
+            <Link
+              to={href}
+              onClick={onNavigate}
+              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary-600 transition-colors hover:text-primary-700"
+            >
+              {isAr ? 'عرض الكل' : 'View all'}
+              <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" />
+            </Link>
+          )}
+        </>
       ) : (
         <Link
           to={href}
@@ -143,7 +171,10 @@ export default function CategoryMegaMenuPanel({
   return (
     <div className="flex min-h-[320px] max-h-[min(72vh,560px)] overflow-hidden bg-white">
       {showSidebar && (
-        <aside className="w-52 shrink-0 overflow-y-auto border-e border-border bg-surface/30 py-1">
+        <aside className="w-60 shrink-0 overflow-y-auto border-e border-border bg-surface/40 p-2">
+          <p className="px-3 pb-1.5 pt-2 text-[11px] font-bold uppercase tracking-wide text-text-muted">
+            {isAr ? 'الأقسام' : 'Departments'}
+          </p>
           {menuCategories.map((cat) => {
             const isActive = cat.slug === activeCategory?.slug;
             return (
@@ -152,13 +183,18 @@ export default function CategoryMegaMenuPanel({
                 type="button"
                 onMouseEnter={() => handleSidebarHover(cat.slug)}
                 onFocus={() => handleSidebarHover(cat.slug)}
-                className={`block w-full px-4 py-3 text-start text-sm transition-colors ${
+                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-start text-sm transition-colors ${
                   isActive
-                    ? 'border-s-[3px] border-primary-600 bg-white font-semibold text-text'
-                    : 'border-s-[3px] border-transparent text-text-muted hover:bg-white/90 hover:text-text'
+                    ? 'bg-white font-semibold text-primary-800 shadow-sm ring-1 ring-black/[0.04]'
+                    : 'text-text-muted hover:bg-white/70 hover:text-text'
                 }`}
               >
-                {getCategoryLabel(cat, isAr)}
+                <span className="min-w-0 flex-1 truncate">{getCategoryLabel(cat, isAr)}</span>
+                <ChevronLeft
+                  className={`h-4 w-4 shrink-0 transition-opacity rtl:rotate-180 ${
+                    isActive ? 'text-primary-600 opacity-100' : 'opacity-0 group-hover:opacity-50'
+                  }`}
+                />
               </button>
             );
           })}
@@ -167,23 +203,31 @@ export default function CategoryMegaMenuPanel({
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex shrink-0 items-center justify-between gap-4 border-b border-border/60 px-6 py-3.5">
-          <h3 className="text-base font-bold text-text">
-            {activeCategory ? getCategoryLabel(activeCategory, isAr) : (isAr ? 'تصفح الأقسام' : 'Browse categories')}
-          </h3>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate text-[15px] font-bold text-text">
+                {activeCategory ? getCategoryLabel(activeCategory, isAr) : (isAr ? 'تصفح الأقسام' : 'Browse categories')}
+              </h3>
+              <p className="truncate text-xs text-text-muted">
+                {isAr ? 'كل المنتجات والأقسام الفرعية' : 'All products & subcategories'}
+              </p>
+            </div>
+          </div>
           {activeCategory && (
             <Link
               to={categoryHref}
               onClick={onNavigate}
-              className="shrink-0 text-sm font-medium text-primary-700 hover:underline"
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-700 transition-colors hover:bg-primary-100"
             >
               {isAr ? 'عرض الكل' : 'View all'}
+              <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
             </Link>
           )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {blocks.length > 0 ? (
-            <div className="columns-2 gap-x-10 sm:columns-3 lg:columns-4 xl:columns-5">
+            <div className="columns-2 gap-x-8 sm:columns-3 lg:columns-4 xl:columns-5">
               {blocks.map((block) => (
                 <CategoryBlock
                   key={block.category.slug || block.category._id}
@@ -201,9 +245,10 @@ export default function CategoryMegaMenuPanel({
               <Link
                 to={categoryHref}
                 onClick={onNavigate}
-                className="mt-4 text-sm font-semibold text-primary-700 hover:underline"
+                className="mt-4 inline-flex items-center gap-1 rounded-full bg-primary-50 px-4 py-2 text-sm font-semibold text-primary-700 transition-colors hover:bg-primary-100"
               >
                 {isAr ? 'فتح القسم' : 'Open department'}
+                <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
               </Link>
             </div>
           )}

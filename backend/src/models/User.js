@@ -110,6 +110,15 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    /** Delivery drivers only — whether the driver is on shift and can receive auto-assigned orders. */
+    driverAvailable: {
+      type: Boolean,
+      default: true,
+    },
+    driverAvailableAt: {
+      type: Date,
+      default: null,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -180,6 +189,12 @@ const userSchema = new mongoose.Schema(
     pointsHistory: {
       type: [pointsHistorySchema],
       default: [],
+    },
+    /** Store-wallet balance in EGP. Ledger lives in the WalletTransaction collection. */
+    walletBalance: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
     reviewBlocked: {
       type: Boolean,

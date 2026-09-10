@@ -14,6 +14,7 @@ export default function AccountSettingsPage() {
   const isAr = language === 'ar';
   const { user, refreshUser } = useAuth();
   const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -24,7 +25,7 @@ export default function AccountSettingsPage() {
     setError('');
     setSaved(false);
     try {
-      await authService.updateProfile({ name: name.trim() });
+      await authService.updateProfile({ name: name.trim(), email: email.trim() });
       await refreshUser();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -50,6 +51,14 @@ export default function AccountSettingsPage() {
           </div>
           <form onSubmit={handleSaveName} className="max-w-lg space-y-4">
             <Input label={t.auth.name} value={name} onChange={(e) => setName(e.target.value)} />
+            <Input
+              type="email"
+              label={isAr ? 'البريد الإلكتروني' : 'Email'}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={isAr ? 'name@example.com' : 'name@example.com'}
+              dir="ltr"
+            />
             <PhoneInput
               label={isAr ? 'رقم الموبايل' : 'Mobile number'}
               value={parseLocalPhone(user?.phoneDisplay || user?.phone || '')}

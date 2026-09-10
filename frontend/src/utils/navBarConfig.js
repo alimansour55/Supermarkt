@@ -9,6 +9,32 @@ export const DEFAULT_HOME_NAV = {
   showOnMobile: true,
 };
 
+/**
+ * Hard cap on storefront nav items (excluding the built-in "All categories"
+ * button). Keeps the header from breaking when an admin adds too many links /
+ * categories — extra items past the cap are dropped from the bar (they stay
+ * reachable through the mega menu / category pages).
+ */
+export const STORE_NAV_MAX_ITEMS = 8;
+
+/** Drop items past [max], but always keep Home and any Offers / highlighted link. */
+export function clampStoreNavItems(items = [], max = STORE_NAV_MAX_ITEMS) {
+  if (!Array.isArray(items) || items.length <= max) return items;
+
+  const isPinned = (item) => item.type === 'home' || item.isOffers || item.highlight;
+  const keep = new Set(items.filter(isPinned));
+
+  let budget = Math.max(0, max - keep.size);
+  for (const item of items) {
+    if (keep.has(item)) continue;
+    if (budget <= 0) break;
+    keep.add(item);
+    budget -= 1;
+  }
+
+  return items.filter((item) => keep.has(item));
+}
+
 function normalizeHref(href) {
   const raw = String(href || '/').trim();
   if (!raw || raw === '/') return '/';

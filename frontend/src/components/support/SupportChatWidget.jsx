@@ -2322,7 +2322,7 @@ export default function SupportChatWidget() {
           ? 'support-chat-mobile-sheet pointer-events-auto fixed z-[70] flex flex-col bg-white'
           : `pointer-events-none fixed z-[60] flex flex-col items-end left-auto right-4 ${
               onCheckoutPage
-                ? 'bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] md:bottom-6'
+                ? 'bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-6'
                 : 'bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-6'
             }`
       }
@@ -2337,7 +2337,7 @@ export default function SupportChatWidget() {
               : [
                   'mb-4 w-[min(100vw-2rem,24rem)] rounded-3xl shadow-2xl shadow-slate-900/15 ring-1 ring-slate-200/80 sm:w-[26rem]',
                   onCheckoutPage
-                    ? 'max-h-[calc(100dvh-env(safe-area-inset-bottom,0px)-env(safe-area-inset-top,0px)-6.5rem)]'
+                    ? 'max-h-[calc(100dvh-env(safe-area-inset-bottom,0px)-env(safe-area-inset-top,0px)-10.5rem)]'
                     : 'max-h-[calc(100dvh-env(safe-area-inset-bottom,0px)-env(safe-area-inset-top,0px)-10.5rem)]',
                   'md:max-h-[calc(100dvh-env(safe-area-inset-bottom,0px)-env(safe-area-inset-top,0px)-5.5rem)]',
                 ].join(' '),

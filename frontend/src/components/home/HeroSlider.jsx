@@ -47,8 +47,10 @@ export default function HeroSlider({
   if (!slides.length) return null;
 
   return (
-    <section className="relative overflow-hidden bg-surface-muted">
-      <div className="relative h-[190px] sm:h-[260px] md:h-[330px] lg:h-[390px]">
+    <section className="bg-surface-muted py-3 md:py-4">
+      <div className="container-app">
+        <div className="relative overflow-hidden rounded-2xl">
+          <div className="relative h-[190px] sm:h-[260px] md:h-[330px] lg:h-[390px]">
         {slides.map((slide, index) => {
           const hasImage = Boolean(slide.desktopImage || slide.mobileImage || slide.image);
           const imageSrc = slide.desktopImage || slide.image || slide.mobileImage;
@@ -162,6 +164,8 @@ export default function HeroSlider({
           </button>
         </>
       )}
+        </div>
+      </div>
     </section>
   );
 }

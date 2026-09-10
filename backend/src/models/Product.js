@@ -185,6 +185,16 @@ const productSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    /**
+     * Ordered category path (root → assigned category) maintained from `category`.
+     * A category's product listing matches `{ categoryAncestors: <categoryId> }`,
+     * covering products attached to that category or any of its descendants.
+     */
+    categoryAncestors: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
+      default: [],
+      index: true,
+    },
     brand: {
       type: String,
       trim: true,
@@ -378,6 +388,7 @@ async function syncProductCategoryFields(doc) {
   doc.mainCategory = fields.mainCategory;
   doc.subCategory = fields.subCategory;
   doc.category = fields.category;
+  doc.categoryAncestors = fields.categoryAncestors;
 }
 
 productSchema.pre('validate', async function enforceCategoryIntegrity() {

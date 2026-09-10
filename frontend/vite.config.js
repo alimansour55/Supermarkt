@@ -29,6 +29,20 @@ function printMobileUrls() {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), printMobileUrls()],
+  // Pre-bundle the heavy libs that are only reached through lazy() admin routes.
+  // Without this, Vite discovers them mid-session on first navigation, re-optimizes,
+  // and the already-loaded page requests a now-stale dep hash -> 504 "Outdated
+  // Optimize Dep" and a failed dynamic import (e.g. DashboardPage / recharts).
+  optimizeDeps: {
+    include: [
+      'recharts',
+      'leaflet',
+      'react-leaflet',
+      '@vis.gl/react-google-maps',
+      '@stripe/stripe-js',
+      '@stripe/react-stripe-js',
+    ],
+  },
   build: {
     rollupOptions: {
       output: {

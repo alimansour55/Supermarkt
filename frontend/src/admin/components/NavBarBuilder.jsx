@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import {
   DEFAULT_HOME_NAV,
+  STORE_NAV_MAX_ITEMS,
   isHomeHref,
   normalizeHref,
   parseNavigationConfig,
@@ -185,6 +186,13 @@ export default function NavBarBuilder({ isAr, navigation, onChange }) {
     (cat) => cat.isActive !== false && cat.slug && !usedCategorySlugs.has(cat.slug),
   );
 
+  // How many items would actually show on the desktop bar (Home + active links
+  // + active categories). Past the cap, extra items are dropped from the bar.
+  const activeNavCount = (homeNav.isActive !== false ? 1 : 0)
+    + headerLinks.filter((l) => l.isActive !== false).length
+    + navCategories.filter((c) => c.isActive !== false).length;
+  const overNavCap = activeNavCount > STORE_NAV_MAX_ITEMS;
+
   return (
     <section className="space-y-4 rounded-2xl border border-border bg-white p-6 shadow-sm">
       <div>
@@ -195,6 +203,14 @@ export default function NavBarBuilder({ isAr, navigation, onChange }) {
             : 'Home shows all categories and subcategories. Add direct links (e.g. Offers) or separate custom categories — reorder with arrows. Use Mobile to show or hide each item in the mobile menu.'}
         </p>
       </div>
+
+      {overNavCap && (
+        <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {isAr
+            ? `شريط التنقل يعرض أول ${STORE_NAV_MAX_ITEMS} عناصر فقط للحفاظ على تنسيق الصفحة (لديك ${activeNavCount} عنصراً نشطاً). العناصر الزائدة تبقى متاحة عبر «كل الأقسام» وصفحات الأقسام.`
+            : `The nav bar shows only the first ${STORE_NAV_MAX_ITEMS} items to keep the header from breaking (you have ${activeNavCount} active). Extra items stay reachable via “All categories” and category pages.`}
+        </p>
+      )}
 
       <div className="space-y-3">
         {orderedRows.map((row) => {

@@ -12,6 +12,7 @@ export function useAdminListPage({
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSizeState, setPageSizeState] = useState(pageSize);
   const [filters, setFilters] = useState(initialFilters);
   const [sort, setSort] = useState(initialSort);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -30,7 +31,7 @@ export function useAdminListPage({
   const queryParams = useMemo(() => {
     const params = {
       page,
-      limit: pageSize,
+      limit: pageSizeState,
       sort: sort.field,
       order: sort.order,
     };
@@ -39,7 +40,7 @@ export function useAdminListPage({
       if (value !== '' && value != null) params[key] = value;
     });
     return params;
-  }, [page, pageSize, sort, debouncedQ, filters]);
+  }, [page, pageSizeState, sort, debouncedQ, filters]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -47,7 +48,7 @@ export function useAdminListPage({
     fetchRef.current(queryParams)
       .then(({ data: res }) => {
         setData(res.data ?? []);
-        setPagination(res.pagination ?? { page: 1, pages: 1, total: 0, limit: pageSize });
+        setPagination(res.pagination ?? { page: 1, pages: 1, total: 0, limit: pageSizeState });
         setSelectedIds((prev) => prev.filter((id) => res.data?.some((row) => (row._id ?? row.id ?? row.code) === id)));
       })
       .catch((err) => {
@@ -60,11 +61,11 @@ export function useAdminListPage({
         );
       })
       .finally(() => setLoading(false));
-  }, [queryParams, pageSize]);
+  }, [queryParams, pageSizeState]);
 
   const filterKey = useMemo(
-    () => JSON.stringify({ debouncedQ, filters }),
-    [debouncedQ, filters],
+    () => JSON.stringify({ debouncedQ, filters, pageSizeState }),
+    [debouncedQ, filters, pageSizeState],
   );
 
   useEffect(() => {
@@ -116,6 +117,8 @@ export function useAdminListPage({
     setQ,
     page,
     setPage,
+    pageSize: pageSizeState,
+    setPageSize: setPageSizeState,
     filters,
     setFilter,
     patchFilters,

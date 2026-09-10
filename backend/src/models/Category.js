@@ -32,10 +32,27 @@ const categorySchema = new mongoose.Schema(
       ref: 'Category',
       default: null,
     },
-    /** 1 = main, 2 = category, 3 = sub, 4 = sub-sub (products attach to leaf nodes) */
+    /**
+     * Materialized path — ordered root → immediate parent.
+     * Maintained by the pre-save hook and rebuildDescendantPaths() on reparent.
+     * A product's listing for a category matches `{ categoryAncestors: <id> }`.
+     */
+    ancestors: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
+      default: [],
+    },
+    /** Distance from the root (root = 0). Equals ancestors.length. Display/sort only. */
+    depth: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+    /**
+     * @deprecated Use `depth` (depth + 1). Kept written for backward compatibility
+     * while the storefront/admin migrate off the fixed 1–4 level model.
+     */
     level: {
       type: Number,
-      enum: [1, 2, 3, 4],
       default: 1,
       index: true,
     },
@@ -57,16 +74,31 @@ const categorySchema = new mongoose.Schema(
 );
 
 categorySchema.index({ parentCategory: 1, isActive: 1 });
+categorySchema.index({ ancestors: 1 });
 
-categorySchema.pre('save', async function setLevel(next) {
+categorySchema.pre('save', async function setPath(next) {
   try {
+    if (!this.isModified('parentCategory') && !this.isNew) return next();
+
     if (!this.parentCategory) {
+      this.ancestors = [];
+      this.depth = 0;
       this.level = 1;
       return next();
     }
-    const parent = await mongoose.model('Category').findById(this.parentCategory).select('level');
+
+    const parent = await mongoose.model('Category')
+      .findById(this.parentCategory)
+      .select('ancestors parentCategory');
     if (!parent) return next(new Error('Parent category not found'));
-    this.level = Math.min((parent.level || 1) + 1, 4);
+
+    const parentAncestors = Array.isArray(parent.ancestors) && parent.ancestors.length
+      ? parent.ancestors
+      : (parent.parentCategory ? [parent.parentCategory] : []);
+
+    this.ancestors = [...parentAncestors, parent._id];
+    this.depth = this.ancestors.length;
+    this.level = this.depth + 1;
     return next();
   } catch (err) {
     return next(err);

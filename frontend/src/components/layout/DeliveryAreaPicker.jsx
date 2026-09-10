@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, MapPin, Search, X, Check } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLocation } from '../../context/LocationContext';
+import { useStoreSettings } from '../../context/StoreSettingsContext';
+import { deliveryLocationLabel } from '../../utils/locationGate';
 
 const estimateLabel = (loc) => {
   if (!loc) return '';
@@ -216,16 +218,33 @@ export default function DeliveryAreaPicker({
 }) {
   const { language } = useLanguage();
   const isAr = language === 'ar';
-  const { location } = useLocation();
+  const { location, pin, manualAddress, openGate } = useLocation();
+  const { settings } = useStoreSettings();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  const locationName = isAr ? location.nameAr : location.nameEn;
+  // When the startup location popup is enabled it becomes the single "change area" UI.
+  const gateEnabled = Boolean(settings?.locationGate?.enabled);
+
+  // A precise pin dropped in the startup popup is what the customer chose — show it
+  // instead of the admin zone label (the zone is still used silently for pricing).
+  const locationName = deliveryLocationLabel(
+    pin,
+    isAr ? location.nameAr : location.nameEn,
+    isAr,
+    manualAddress,
+  );
   const estimate = estimateLabel(location);
   const useSheet = sheetOnly || variant !== 'header';
 
   const close = useCallback(() => setOpen(false), []);
-  const toggle = () => setOpen((v) => !v);
+  const toggle = () => {
+    if (gateEnabled) {
+      openGate();
+      return;
+    }
+    setOpen((v) => !v);
+  };
 
   useEffect(() => {
     if (!open || useSheet) return undefined;
@@ -306,12 +325,12 @@ export default function DeliveryAreaPicker({
     trigger = (
       <button
         {...triggerProps}
-        className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-white/10"
+        className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-white/80 transition-colors hover:bg-white/10"
       >
         <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="hidden max-w-[140px] truncate sm:inline">{locationName}</span>
-        <span className="hidden text-white/75 lg:inline">{estimate ? `· ${estimate}` : ''}</span>
-        <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+        <span className="hidden sm:inline">{isAr ? 'التوصيل إلى:' : 'Deliver to:'}</span>
+        <span className="max-w-[180px] truncate font-semibold text-white">{locationName}</span>
+        <ChevronDown className={`h-3.5 w-3.5 shrink-0 opacity-80 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
       </button>
     );
   }

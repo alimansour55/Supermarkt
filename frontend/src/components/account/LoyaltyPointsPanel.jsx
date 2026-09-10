@@ -1,91 +1,132 @@
 import { Link } from 'react-router-dom';
-import { Gift, Sparkles } from 'lucide-react';
+import { Gift, Sparkles, Clock } from 'lucide-react';
 import { formatPrice } from '../../utils/formatters';
-import {
-  calculateEarnPoints,
-  formatHistoryType,
-  getCashbackPercent,
-  pointsToCashValue,
-} from '../../utils/loyaltyHelpers';
+import { formatHistoryType, getCashbackPercent, pointsToCashValue } from '../../utils/loyaltyHelpers';
+
+const TYPE_TONE = {
+  earn: 'bg-emerald-50 text-emerald-700',
+  redeem: 'bg-blue-50 text-blue-700',
+  refund: 'bg-amber-50 text-amber-700',
+  adjust: 'bg-violet-50 text-violet-700',
+  expire: 'bg-slate-100 text-slate-600',
+};
+
+function fmtDate(value, isAr) {
+  if (!value) return '';
+  return new Date(value).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
+function isExpiringSoon(entry) {
+  if (entry.type !== 'earn' || !entry.expiresAt) return false;
+  const days = (new Date(entry.expiresAt).getTime() - new Date().getTime()) / 86400000;
+  return days > 0 && days <= 30;
+}
+
+function HistoryRow({ entry, isAr }) {
+  const positive = entry.points >= 0;
+  const soon = isExpiringSoon(entry);
+
+  return (
+    <div className="flex items-start justify-between gap-3 py-3 text-sm">
+      <div className="min-w-0">
+        <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-semibold ${TYPE_TONE[entry.type] || 'bg-slate-100 text-slate-600'}`}>
+          {formatHistoryType(entry.type, isAr)}
+        </span>
+        <p className="mt-1 text-xs text-text-muted">
+          {entry.orderNumber
+            ? `${isAr ? 'طلب' : 'Order'} #${entry.orderNumber}`
+            : (entry.note || '')}
+          {(entry.orderNumber || entry.note) && ' · '}
+          {fmtDate(entry.createdAt, isAr)}
+        </p>
+        {entry.expiresAt && entry.type === 'earn' && (
+          <p className={`mt-0.5 text-[11px] ${soon ? 'font-semibold text-amber-700' : 'text-text-muted/70'}`}>
+            {isAr ? 'تنتهي' : 'Expires'} {fmtDate(entry.expiresAt, isAr)}
+          </p>
+        )}
+      </div>
+      <div className="shrink-0 text-end">
+        <p className={`font-bold tabular-nums ${positive ? 'text-emerald-700' : 'text-red-600'}`} dir="ltr">
+          {positive ? '+' : '−'}{Math.abs(entry.points)}
+        </p>
+        {entry.cashValue > 0 && (
+          <p className="text-[11px] text-text-muted tabular-nums" dir="ltr">{formatPrice(entry.cashValue)}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function LoyaltyPointsPanel({ isAr, loyalty, user, showAllHistory = false }) {
   const pointsBalance = loyalty?.pointsBalance ?? user?.pointsBalance ?? 0;
   const rules = loyalty?.rules || {};
   const cashbackValue = loyalty?.cashbackValue ?? pointsToCashValue(pointsBalance, rules);
   const cashbackPercent = rules.cashbackPercent ?? getCashbackPercent(rules);
-  const history = showAllHistory
-    ? (loyalty?.history || [])
-    : (loyalty?.history || []).slice(0, 5);
+  const minRedeem = rules.minRedeemPoints ?? 10;
+  const canRedeem = rules.enabled !== false && pointsBalance >= minRedeem;
+  const history = showAllHistory ? (loyalty?.history || []) : (loyalty?.history || []).slice(0, 6);
 
   return (
-    <section className="rounded-2xl border border-border bg-white p-6">
-      <div className="mb-4 flex items-start gap-3">
-        <div className="rounded-xl bg-amber-100 p-2.5 text-amber-700">
-          <Gift className="h-5 w-5" aria-hidden />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-medium text-text-muted">{isAr ? 'نقاطي — استرداد نقدي' : 'My points — cashback'}</p>
-          <h2 className="mt-1 text-3xl font-bold text-primary-700">
-            {pointsBalance.toLocaleString()} {isAr ? 'نقطة' : 'pts'}
-          </h2>
-          <p className="mt-1 text-sm font-semibold text-emerald-700">
-            ≈ {formatPrice(cashbackValue)} {isAr ? 'قيمة استرداد' : 'redeemable value'}
-          </p>
-        </div>
+    <section className="overflow-hidden rounded-2xl border border-border bg-white">
+      {/* balance */}
+      <div className="bg-primary-700 p-6 text-white">
+        <p className="flex items-center gap-2 text-sm text-white/80">
+          <Gift className="h-4 w-4" aria-hidden />
+          {isAr ? 'رصيد نقاطي' : 'My points balance'}
+        </p>
+        <p className="mt-1 text-4xl font-extrabold tabular-nums">
+          {pointsBalance.toLocaleString()}<span className="ms-2 text-base font-medium text-white/70">{isAr ? 'نقطة' : 'pts'}</span>
+        </p>
+        <p className="mt-1 text-sm font-semibold text-emerald-200">
+          ≈ {formatPrice(cashbackValue)} · {isAr ? 'قابلة للاستبدال' : 'redeemable'}
+        </p>
+        {canRedeem && (
+          <Link
+            to="/checkout"
+            className="mt-4 inline-flex rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur hover:bg-white/25"
+          >
+            {isAr ? 'استبدل عند الدفع' : 'Redeem at checkout'}
+          </Link>
+        )}
       </div>
 
-      {rules.enabled !== false && (
-        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm">
-          <p className="flex items-center gap-2 font-semibold text-amber-900">
-            <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
-            {isAr
-              ? `استرداد نقدي ${cashbackPercent}% على كل طلب`
-              : `${cashbackPercent}% cashback on every order`}
-          </p>
-          <p className="mt-1 text-amber-800">
-            {rules.earnDescription || (isAr
-              ? `مثال: طلب بـ ${formatPrice(500)} = ${calculateEarnPoints(500, rules)} نقطة (${formatPrice(pointsToCashValue(calculateEarnPoints(500, rules), rules))})`
-              : `Example: ${formatPrice(500)} order = ${calculateEarnPoints(500, rules)} points (${formatPrice(pointsToCashValue(calculateEarnPoints(500, rules), rules))})`)}
-          </p>
-          <p className="mt-1 text-xs text-amber-700">
-            {rules.redeemDescription || (isAr
-              ? `استبدل نقاطك عند الدفع — الحد الأدنى ${rules.minRedeemPoints ?? 10} نقطة`
-              : `Redeem at checkout — minimum ${rules.minRedeemPoints ?? 10} points`)}
-          </p>
+      {/* expiring nudge */}
+      {loyalty?.expiringPoints > 0 && loyalty?.nextExpiry && (
+        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-5 py-3 text-xs font-semibold text-amber-900">
+          <Clock className="h-4 w-4 shrink-0" aria-hidden />
+          {isAr
+            ? `${loyalty.expiringPoints} نقطة (≈ ${formatPrice(loyalty.expiringCashValue || 0)}) تنتهي في ${fmtDate(loyalty.nextExpiry, isAr)}`
+            : `${loyalty.expiringPoints} points (≈ ${formatPrice(loyalty.expiringCashValue || 0)}) expire on ${fmtDate(loyalty.nextExpiry, isAr)}`}
         </div>
       )}
 
+      {/* how it works */}
       {rules.enabled !== false && (
-        <Link
-          to="/checkout"
-          className="mb-5 inline-flex rounded-xl bg-primary-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-primary-700"
-        >
-          {isAr ? 'استبدل عند الدفع' : 'Redeem at checkout'}
-        </Link>
+        <div className="space-y-1.5 border-b border-border px-5 py-4 text-sm">
+          <p className="flex items-center gap-2 font-semibold text-text">
+            <Sparkles className="h-4 w-4 shrink-0 text-primary-600" aria-hidden />
+            {isAr ? `استرداد نقدي ${cashbackPercent}% على كل طلب` : `${cashbackPercent}% cashback on every order`}
+          </p>
+          {rules.redeemDescription && <p className="text-text-muted">{rules.redeemDescription}</p>}
+          {rules.expiryDescription && <p className="text-xs text-text-muted/80">{rules.expiryDescription}</p>}
+        </div>
       )}
 
-      <div className="divide-y divide-border">
-        {history.map((entry) => (
-          <div key={entry.id} className="flex items-center justify-between py-3 text-sm">
-            <div>
-              <p className="font-medium">{entry.note || formatHistoryType(entry.type, isAr)}</p>
-              <p className="text-xs text-text-muted">
-                {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB') : ''}
-                {entry.amount ? ` · ${formatPrice(entry.amount)}` : ''}
-              </p>
-            </div>
-            <span className={entry.points >= 0 ? 'font-semibold text-primary-700' : 'font-semibold text-red-600'}>
-              {entry.points >= 0 ? '+' : ''}{entry.points}
-            </span>
-          </div>
-        ))}
-        {(!loyalty?.history || loyalty.history.length === 0) && (
-          <p className="py-3 text-sm text-text-muted">
-            {isAr
-              ? 'لا توجد حركة نقاط بعد. ستظهر نقاط الاسترداد النقدي بعد إتمام طلبك.'
-              : 'No points activity yet. Cashback appears after you place an order.'}
-          </p>
-        )}
+      {/* history */}
+      <div className="px-5 py-2">
+        <p className="pt-2 text-xs font-bold text-text">{isAr ? 'سجل النقاط' : 'Points history'}</p>
+        <div className="divide-y divide-border">
+          {history.map((entry) => <HistoryRow key={entry.id} entry={entry} isAr={isAr} />)}
+          {(!loyalty?.history || loyalty.history.length === 0) && (
+            <p className="py-4 text-sm text-text-muted">
+              {isAr
+                ? 'لا توجد حركة نقاط بعد — تظهر نقاط الاسترداد النقدي بعد توصيل أول طلب.'
+                : 'No points activity yet — cashback appears after your first order is delivered.'}
+            </p>
+          )}
+        </div>
       </div>
     </section>
   );
