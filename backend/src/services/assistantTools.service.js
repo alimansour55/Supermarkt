@@ -14,7 +14,7 @@ import {
   formatCoupon,
   formatCartItem,
 } from '../utils/formatters.js';
-import { resolveProductSearchFilter } from '../utils/searchQuery.js';
+import { resolveProductSearchFilter, fetchRankedProducts } from '../utils/searchQuery.js';
 import { getAvailableStock } from '../utils/productCatalog.js';
 import { buildOffersProductFilter } from '../utils/offersFilter.js';
 import { buildNestedCategoryTree } from '../utils/categoryTree.js';
@@ -95,19 +95,20 @@ export async function toolSearchProducts({ query, limit = 5 }) {
 
   const max = Math.min(Math.max(Number(limit) || 5, 1), 8);
   const baseFilter = { isActive: true };
-  const { filter, useTextScore } = await resolveProductSearchFilter(baseFilter, q, Product, Category);
+  const { filter, useTextScore, rankedIds } = await resolveProductSearchFilter(baseFilter, q, Product, Category);
 
-  const productQuery = Product.find(filter).limit(max);
-  if (useTextScore) {
-    productQuery.sort({ score: { $meta: 'textScore' } });
+  let products;
+  let total;
+  if (rankedIds) {
+    ({ products, total } = await fetchRankedProducts(Product, filter, rankedIds, { limit: max, lean: true }));
   } else {
-    productQuery.sort({ soldCount: -1, rating: -1 });
+    const productQuery = Product.find(filter).limit(max);
+    productQuery.sort(useTextScore ? { score: { $meta: 'textScore' } } : { soldCount: -1, rating: -1 });
+    [products, total] = await Promise.all([
+      productQuery.lean(),
+      Product.countDocuments(filter),
+    ]);
   }
-
-  const [products, total] = await Promise.all([
-    productQuery.lean(),
-    Product.countDocuments(filter),
-  ]);
 
   return {
     query: q,

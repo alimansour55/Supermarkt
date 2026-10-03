@@ -26,7 +26,8 @@ import { parsePagination, parseSort, paginationMeta } from '../utils/listQuery.j
 import { toCsv, sendCsv, parseCsv } from '../utils/csvExport.js';
 import { logAudit, pickChanges } from '../services/auditLog.service.js';
 import { checkInventoryAlert } from '../services/inventoryAlert.service.js';
-import { resolveProductSearchFilter, arabicSearchPattern } from '../utils/searchQuery.js';
+import { resolveProductSearchFilter, arabicSearchPattern, fetchRankedProducts } from '../utils/searchQuery.js';
+import { searchProductIds } from '../services/searchIndex.service.js';
 import { applyOffersOnlyFilter } from '../utils/offersFilter.js';
 import StoreSettings from '../models/StoreSettings.js';
 import { normalizeProductFilterSettings } from '../utils/productFilterSettings.js';
@@ -276,6 +277,11 @@ const buildFilter = async (query, { includeSearch = true } = {}) => {
   }
 
   if (includeSearch && q?.trim()) {
+    const rankedIds = await searchProductIds(q.trim());
+    if (rankedIds) {
+      filter.$and = [...(filter.$and || []), { _id: { $in: rankedIds } }];
+      return filter;
+    }
     const pattern = arabicSearchPattern(q.trim());
     const searchOr = [
       { nameAr: { $regex: pattern, $options: 'i' } },
@@ -359,20 +365,27 @@ export const getProducts = asyncHandler(async (req, res) => {
 
   let filter = baseFilter;
   let useTextScore = false;
+  let rankedIds = null;
 
   if (q?.trim()) {
     const resolved = await resolveProductSearchFilter(baseFilter, q.trim(), Product, Category);
     filter = resolved.filter;
     useTextScore = resolved.useTextScore;
+    rankedIds = resolved.rankedIds || null;
   }
 
-  const { products, total, page: p, limit: l } = await fetchProducts(
-    filter,
-    sort,
-    page,
-    limit,
-    { useTextScore },
-  );
+  // No explicit sort on a search → most relevant first (search-engine order).
+  const { products, total, page: p, limit: l } = rankedIds && (!sort || sort === 'relevance')
+    ? {
+      ...(await fetchRankedProducts(Product, filter, rankedIds, {
+        page,
+        limit,
+        populate: ['category', 'slug nameAr nameEn'],
+      })),
+      page: Number(page),
+      limit: Number(limit),
+    }
+    : await fetchProducts(filter, sort, page, limit, { useTextScore });
 
   res.json({
     success: true,

@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 import { VARIANT_TYPES } from '../constants/productCatalog.js';
 import { resolveProductCategoryFields } from '../utils/productCategorySync.js';
+import {
+  SEARCH_INDEXED_FIELDS,
+  scheduleProductSync,
+  scheduleFullSync,
+} from '../services/searchIndex.service.js';
 
 const reviewSchema = new mongoose.Schema(
   {
@@ -471,6 +476,84 @@ async function syncCategoryFieldsOnQueryUpdate(next) {
 productSchema.pre('findOneAndUpdate', syncCategoryFieldsOnQueryUpdate);
 productSchema.pre('updateOne', syncCategoryFieldsOnQueryUpdate);
 productSchema.pre('updateMany', syncCategoryFieldsOnQueryUpdate);
+
+// ── Search engine sync: re-index products whose searchable fields change ──
+
+/** Top-level field names an update writes, across operators ($set, $inc, …) and plain keys. */
+function updatedFieldNames(update) {
+  const names = new Set();
+  for (const [key, value] of Object.entries(update || {})) {
+    if (key.startsWith('$') && value && typeof value === 'object') {
+      Object.keys(value).forEach((field) => names.add(field.split('.')[0]));
+    } else {
+      names.add(key.split('.')[0]);
+    }
+  }
+  return names;
+}
+
+function touchesSearchFields(update) {
+  const names = updatedFieldNames(update);
+  return SEARCH_INDEXED_FIELDS.some((field) => names.has(field));
+}
+
+/** Product ids named directly by a query filter (`_id: x` or `_id: { $in: [...] }`), else null. */
+function idsFromFilter(filter) {
+  const id = filter?._id;
+  if (!id) return null;
+  if (Array.isArray(id.$in)) return id.$in;
+  if (typeof id === 'string' || mongoose.Types.ObjectId.isValid(id)) return [id];
+  return null;
+}
+
+productSchema.pre('save', function flagSearchDirty(next) {
+  this.$locals.searchDirty = this.isNew || SEARCH_INDEXED_FIELDS.some((field) => this.isModified(field));
+  next();
+});
+productSchema.post('save', (doc) => {
+  if (doc.$locals.searchDirty) scheduleProductSync(doc._id);
+});
+productSchema.post('insertMany', (docs) => {
+  scheduleProductSync((docs || []).map((doc) => doc._id));
+});
+
+productSchema.pre(['findOneAndUpdate', 'updateOne'], async function captureSearchSyncId() {
+  if (!touchesSearchFields(this.getUpdate())) return;
+  const ids = idsFromFilter(this.getFilter());
+  if (ids) {
+    this._searchSyncIds = ids;
+    return;
+  }
+  const doc = await this.model.findOne(this.getFilter()).select('_id').lean();
+  this._searchSyncIds = doc ? [doc._id] : [];
+});
+productSchema.post(['findOneAndUpdate', 'updateOne'], function syncAfterQueryUpdate(result) {
+  if (!this._searchSyncIds) return;
+  scheduleProductSync([...this._searchSyncIds, result?._id].filter(Boolean));
+});
+productSchema.post('updateMany', function syncAfterBulkUpdate() {
+  if (!touchesSearchFields(this.getUpdate())) return;
+  const ids = idsFromFilter(this.getFilter());
+  if (ids) scheduleProductSync(ids);
+  else scheduleFullSync();
+});
+
+productSchema.post('findOneAndDelete', (doc) => {
+  if (doc) scheduleProductSync(doc._id);
+});
+productSchema.post('deleteOne', { document: true, query: false }, (doc) => {
+  scheduleProductSync(doc._id);
+});
+productSchema.post('deleteOne', { document: false, query: true }, function syncAfterQueryDelete() {
+  const ids = idsFromFilter(this.getFilter());
+  if (ids) scheduleProductSync(ids);
+  else scheduleFullSync();
+});
+productSchema.post('deleteMany', function syncAfterBulkDelete() {
+  const ids = idsFromFilter(this.getFilter());
+  if (ids) scheduleProductSync(ids);
+  else scheduleFullSync();
+});
 
 const Product = mongoose.model('Product', productSchema);
 

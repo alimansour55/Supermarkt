@@ -9,8 +9,11 @@ import {
   normalizeSearchQuery,
   resolveProductSearchFilter,
   findCategorySuggestions,
+  fetchRankedProducts,
 } from '../utils/searchQuery.js';
 import { resolveCategoryProductFilter } from '../utils/categoryTree.js';
+import { fullSync, getSearchEngineStatus, isSearchEngineConfigured } from '../services/searchIndex.service.js';
+import { AppError } from '../utils/AppError.js';
 
 async function getStoreSearchSettings() {
   const settings = await StoreSettings.findOne({ key: 'main' }).select('searchSettings');
@@ -153,19 +156,24 @@ async function getAnalyticsTrendingSearches(limit, opts = {}) {
     const query = item.lastQuery || item._id;
     if (!isTrackableSearchQuery(query)) continue;
 
-    const { filter, useTextScore } = await resolveProductSearchFilter(
+    const { filter, useTextScore, rankedIds } = await resolveProductSearchFilter(
       { isActive: true },
       query,
       Product,
       Category,
     );
-    const productQuery = Product.findOne(filter).select('nameAr nameEn slug images soldCount rating');
-    productQuery.sort(
-      useTextScore
-        ? { score: { $meta: 'textScore' }, soldCount: -1, rating: -1 }
-        : { soldCount: -1, rating: -1 },
-    );
-    const product = await productQuery.lean();
+    let product;
+    if (rankedIds) {
+      ({ products: [product] } = await fetchRankedProducts(Product, filter, rankedIds, { limit: 1, lean: true }));
+    } else {
+      const productQuery = Product.findOne(filter).select('nameAr nameEn slug images soldCount rating');
+      productQuery.sort(
+        useTextScore
+          ? { score: { $meta: 'textScore' }, soldCount: -1, rating: -1 }
+          : { soldCount: -1, rating: -1 },
+      );
+      product = await productQuery.lean();
+    }
 
     if (!product) continue;
     if (dedupeByProduct && seenProductIds.has(String(product._id))) continue;
@@ -201,21 +209,25 @@ export const getSearchSuggestions = asyncHandler(async (req, res) => {
   }
 
   const baseFilter = await buildActiveProductFilter(req.query);
-  const { filter, useTextScore } = await resolveProductSearchFilter(baseFilter, q, Product, Category);
+  const { filter, useTextScore, rankedIds } = await resolveProductSearchFilter(baseFilter, q, Product, Category);
 
-  const productQuery = Product.find(filter)
-    .populate('category', 'slug nameAr nameEn')
-    .limit(limit);
-
-  if (useTextScore) {
-    productQuery.sort({ score: { $meta: 'textScore' } });
+  let productsPromise;
+  if (rankedIds) {
+    productsPromise = fetchRankedProducts(Product, filter, rankedIds, {
+      limit,
+      populate: ['category', 'slug nameAr nameEn'],
+    });
   } else {
-    productQuery.sort({ soldCount: -1, rating: -1 });
+    const productQuery = Product.find(filter)
+      .populate('category', 'slug nameAr nameEn')
+      .limit(limit);
+    productQuery.sort(useTextScore ? { score: { $meta: 'textScore' } } : { soldCount: -1, rating: -1 });
+    productsPromise = Promise.all([productQuery, Product.countDocuments(filter)])
+      .then(([products, total]) => ({ products, total }));
   }
 
-  const [products, totalProducts, matchedCategories] = await Promise.all([
-    productQuery,
-    Product.countDocuments(filter),
+  const [{ products, total: totalProducts }, matchedCategories] = await Promise.all([
+    productsPromise,
     findCategorySuggestions(q, categoryLimit, Category),
   ]);
 
@@ -421,4 +433,18 @@ export const getSearchAnalytics = asyncHandler(async (req, res) => {
       })),
     },
   });
+});
+
+/** Admin: which engine is serving search, index size, last rebuild. */
+export const getSearchEngineInfo = asyncHandler(async (_req, res) => {
+  res.json({ success: true, data: getSearchEngineStatus() });
+});
+
+/** Admin: rebuild the search index from MongoDB now. */
+export const rebuildSearchIndex = asyncHandler(async (_req, res) => {
+  if (!isSearchEngineConfigured()) {
+    throw new AppError('Search engine is not configured (set MEILI_HOST)', 400);
+  }
+  const result = await fullSync();
+  res.json({ success: true, data: { ...result, status: getSearchEngineStatus() } });
 });

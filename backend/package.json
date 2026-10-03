@@ -17,7 +17,9 @@
     "repair:superadmin": "node scripts/repair-superadmin-login.js",
     "repair:user-indexes": "node scripts/repair-user-indexes.js",
     "check:maps": "node scripts/check-google-maps.js",
-    "test:acceptance:categories": "node scripts/acceptance-category-product-sync.js"
+    "test:acceptance:categories": "node scripts/acceptance-category-product-sync.js",
+    "search:reindex": "node scripts/search-reindex.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "keywords": [
     "supermarket",
@@ -40,6 +42,7 @@
     "express-validator": "^7.2.1",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
+    "meilisearch": "^0.62.0",
     "mongoose": "^8.15.1",
     "multer": "^1.4.5-lts.2",
     "nodemailer": "^9.0.1",

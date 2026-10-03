@@ -1,5 +1,6 @@
 import Category from '../models/Category.js';
 import { getSelfAndDescendantIds } from './categoryTree.js';
+import { searchProductIds } from '../services/searchIndex.service.js';
 
 /** Escape special regex characters */
 function escapeRegex(str) {
@@ -209,13 +210,51 @@ export async function findCategorySuggestions(q, limit, CategoryModel = Category
   }));
 }
 
+/** Narrow a filter to the given product ids without clobbering an existing `_id` clause. */
+function withIdRestriction(baseFilter, ids) {
+  const idClause = { _id: { $in: ids } };
+  if (baseFilter._id === undefined) return { ...baseFilter, ...idClause };
+  return { ...baseFilter, $and: [...(baseFilter.$and || []), idClause] };
+}
+
+/**
+ * One page of products matching `filter`, in search-engine relevance order.
+ * `rankedIds` is the engine's best-first list; Mongo decides which of them pass the filter.
+ */
+export async function fetchRankedProducts(Product, filter, rankedIds, {
+  page = 1,
+  limit = 24,
+  populate = null,
+  lean = false,
+} = {}) {
+  const matching = new Set((await Product.distinct('_id', filter)).map(String));
+  const ordered = rankedIds.filter((id) => matching.has(String(id)));
+  const skip = (Math.max(Number(page) || 1, 1) - 1) * Number(limit);
+  const pageIds = ordered.slice(skip, skip + Number(limit));
+
+  let query = Product.find({ _id: { $in: pageIds } });
+  if (populate) query = query.populate(...[].concat(populate));
+  if (lean) query = query.lean();
+  const docs = await query;
+
+  const rank = new Map(pageIds.map((id, index) => [String(id), index]));
+  docs.sort((a, b) => rank.get(String(a._id)) - rank.get(String(b._id)));
+  return { products: docs, total: ordered.length };
+}
+
 /**
  * Resolve product filter for a search query.
- * Matches product text (Arabic-aware), category names/paths, and Latin typo tolerance.
+ * With the search engine up, returns `rankedIds` (best first) and an `_id` restriction;
+ * otherwise matches product text (Arabic-aware), category names/paths, and Latin typo tolerance.
  */
 export async function resolveProductSearchFilter(baseFilter, q, Product, CategoryModel = Category) {
   const trimmed = q?.trim();
   if (!trimmed) return { filter: baseFilter, useTextScore: false };
+
+  const rankedIds = await searchProductIds(trimmed);
+  if (rankedIds) {
+    return { filter: withIdRestriction(baseFilter, rankedIds), useTextScore: false, rankedIds };
+  }
 
   const categoryIds = await findMatchingCategoryIds(trimmed, CategoryModel);
   const categoryConditions = buildCategoryProductConditions(categoryIds);

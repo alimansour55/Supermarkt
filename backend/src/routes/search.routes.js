@@ -8,6 +8,8 @@ import {
   trackSearch,
   trackSearchConversion,
   getSearchAnalytics,
+  getSearchEngineInfo,
+  rebuildSearchIndex,
 } from '../controllers/search.controller.js';
 
 const router = Router();
@@ -36,5 +38,7 @@ router.get('/trending', getTrendingSearches);
 router.post('/track', optionalUser, trackSearch);
 router.post('/convert', optionalUser, trackSearchConversion);
 router.get('/admin/analytics', ...requirePermission('reports:read'), getSearchAnalytics);
+router.get('/admin/engine', ...requirePermission('products:read'), getSearchEngineInfo);
+router.post('/admin/engine/reindex', ...requirePermission('products:write'), rebuildSearchIndex);
 
 export default router;

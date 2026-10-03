@@ -60,6 +60,7 @@ SITE_DOMAIN=www.yourstore.com
 REDIRECT_DOMAIN=yourstore.com
 SITE_URL=https://www.yourstore.com
 ACME_EMAIL=you@yourstore.com
+MEILI_MASTER_KEY=<openssl rand -hex 24>
 ```
 
 **`backend/.env` — production essentials:**
@@ -109,6 +110,7 @@ curl -I https://yourstore.com/ar               # 301 → https://www.yourstore.c
 curl https://www.yourstore.com/robots.txt
 curl https://www.yourstore.com/sitemap.xml
 curl https://www.yourstore.com/api/health
+docker compose logs api | grep "[search]"   # "Indexed N products" = search engine live
 ```
 
 Run the test suite against the live site from your PC:
@@ -127,6 +129,17 @@ git pull
 docker compose up -d --build
 docker image prune -f
 ```
+
+## Product search (Meilisearch)
+
+Search runs on Meilisearch: typo-tolerant, Arabic-normalized (أ/إ/آ → ا, ة → ه, ى → ي, Arabic digits),
+bilingual synonyms (`backend/src/constants/searchSynonyms.js` — milk / حليب / لبن …), ranked by relevance,
+then by best sellers. MongoDB still applies every filter (category, brand, price, stock).
+
+- The index is rebuilt from MongoDB on every API start and every 6 hours; product and category edits sync within ~2 seconds.
+- Rebuild by hand: `docker compose exec api npm run search:reindex`, or `POST /api/search/admin/engine/reindex` (admin, `products:write`).
+- Status: `GET /api/search/admin/engine` (admin) shows which engine is serving and the index size.
+- If Meilisearch is down, search falls back to MongoDB automatically and switches back when it recovers.
 
 ## 8. Backups & monitoring
 

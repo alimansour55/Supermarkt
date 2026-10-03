@@ -1,5 +1,5 @@
 # Production stack for a single VPS:
-#   caddy (HTTPS, ports 80/443) ─┬─ /api/* → api  (Express, :5001)
+#   caddy (HTTPS, ports 80/443) ─┬─ /api/* → api  (Express, :5001) → meilisearch (search, internal)
 #                                └─ /*     → web  (React Router SSR, :3000)
 #
 #   cp deploy/.env.example .env            # domain + site URL
@@ -19,8 +19,24 @@ services:
       NODE_ENV: production
       PORT: 5001
       CLIENT_URL: ${SITE_URL}
+      MEILI_HOST: http://meilisearch:7700
+      MEILI_API_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY in .env}
     volumes:
       - uploads:/app/uploads
+    depends_on:
+      - meilisearch
+    restart: unless-stopped
+
+  # Product search engine. The API rebuilds the index from MongoDB on start, so the
+  # volume is only a cache: losing it costs one re-index, never data.
+  meilisearch:
+    image: getmeili/meilisearch:v1.54
+    environment:
+      MEILI_ENV: production
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY in .env}
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
     restart: unless-stopped
 
   web:
@@ -75,3 +91,4 @@ volumes:
   caddy_data:
   caddy_config:
   mongo_data:
+  meili_data:

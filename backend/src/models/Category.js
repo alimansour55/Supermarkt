@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { scheduleFullSync } from '../services/searchIndex.service.js';
 
 const categorySchema = new mongoose.Schema(
   {
@@ -103,6 +104,22 @@ categorySchema.pre('save', async function setPath(next) {
   } catch (err) {
     return next(err);
   }
+});
+
+// Product search documents embed category names — rebuild when a name or parent changes.
+const SEARCH_CATEGORY_FIELDS = ['nameAr', 'nameEn', 'parentCategory'];
+
+categorySchema.pre('save', function flagSearchDirty(next) {
+  this.$locals.searchDirty = !this.isNew && SEARCH_CATEGORY_FIELDS.some((field) => this.isModified(field));
+  next();
+});
+categorySchema.post('save', (doc) => {
+  if (doc.$locals.searchDirty) scheduleFullSync();
+});
+categorySchema.post(['findOneAndUpdate', 'updateOne', 'updateMany'], function syncAfterQueryUpdate() {
+  const update = this.getUpdate() || {};
+  const fields = Object.keys({ ...update, ...(update.$set || {}) });
+  if (SEARCH_CATEGORY_FIELDS.some((field) => fields.includes(field))) scheduleFullSync();
 });
 
 const Category = mongoose.model('Category', categorySchema);

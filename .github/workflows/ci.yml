@@ -39,6 +39,8 @@ jobs:
         run: |
           for f in $(find src scripts -name '*.js'); do node --check "$f"; done
           node -e "import('./src/app.js').then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); })"
+      - name: Backend unit tests
+        run: npm test --prefix backend
 
   e2e:
     name: End-to-end (smoke + SEO)
@@ -48,11 +50,19 @@ jobs:
       mongo:
         image: mongo:7
         ports: ['27017:27017']
+      meilisearch:
+        image: getmeili/meilisearch:v1.54
+        ports: ['7700:7700']
+        env:
+          MEILI_MASTER_KEY: ci_meili_master_key_0123456789
+          MEILI_NO_ANALYTICS: 'true'
     env:
       MONGODB_URI: mongodb://127.0.0.1:27017/marketplus
       JWT_SECRET: ci_jwt_secret_that_is_at_least_32_characters
       CLIENT_URL: http://localhost:3000
       SMS_DEV_MODE: 'true'
+      MEILI_HOST: http://127.0.0.1:7700
+      MEILI_API_KEY: ci_meili_master_key_0123456789
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -71,6 +81,8 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Seed database
         run: npm run seed --prefix backend
+      - name: Build search index
+        run: npm run search:reindex --prefix backend
       - name: Build storefront
         run: npm run build --prefix frontend
       - name: Start API and storefront
