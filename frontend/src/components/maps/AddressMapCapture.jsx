@@ -8,6 +8,7 @@ import Input from '../ui/Input';
 import AddressSearchInput from './AddressSearchInput';
 import { InteractiveMapCanvas } from './InteractiveGoogleMap';
 import CurrentLocationButton from './CurrentLocationButton';
+import GeoErrorNotice from '../location/GeoErrorNotice';
 
 const DEFAULT_CENTER = { lat: 30.0444, lng: 31.2357 };
 
@@ -23,6 +24,7 @@ export default function AddressMapCapture({
   const [livePin, setLivePin] = useState(null);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [gpsWarning, setGpsWarning] = useState('');
+  const [locateErrorCode, setLocateErrorCode] = useState(null);
   const { locate, loading: locating, error: locateError, progress: locateProgress, setError: setLocateError, clearError: clearLocateError } = useCurrentGeolocation();
 
   useEffect(() => {
@@ -271,6 +273,7 @@ export default function AddressMapCapture({
 
   const handleUseCurrentLocation = useCallback(async () => {
     clearLocateError();
+    setLocateErrorCode(null);
     setZoneWarning('');
     setGpsWarning('');
 
@@ -309,6 +312,7 @@ export default function AddressMapCapture({
         gpsConfirmed: Boolean(value?.gpsConfirmed),
       });
       setLocateError(getGeolocationErrorMessage(err, isAr));
+      setLocateErrorCode(err?.code ?? err?.name ?? null);
     }
   }, [clearLocateError, handleMapUpdate, isAr, locate, onChange, setLocateError, value]);
 
@@ -320,10 +324,10 @@ export default function AddressMapCapture({
 
   if (!enableMap) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         {showManualFields && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
               <Input
                 label={isAr ? 'الشارع' : 'Street'}
                 value={value?.street || ''}
@@ -354,16 +358,20 @@ export default function AddressMapCapture({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5 sm:space-y-4">
       <CurrentLocationButton
         isAr={isAr}
         loading={locating}
         statusText={locating ? getGeolocationProgressMessage(locateProgress, isAr) : ''}
         onClick={handleUseCurrentLocation}
       />
-      {locateError && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{locateError}</p>
-      )}
+      <GeoErrorNotice
+        message={locateError}
+        code={locateErrorCode}
+        isAr={isAr}
+        onRetry={handleUseCurrentLocation}
+        retrying={locating}
+      />
       {gpsWarning && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{gpsWarning}</p>
       )}
@@ -384,9 +392,35 @@ export default function AddressMapCapture({
         onSelect={handlePlaceSelect}
       />
 
+      <div>
+        <InteractiveMapCanvas
+          center={center}
+          zoom={zoom}
+          position={position}
+          accuracyMeters={gpsAccuracy}
+          isAr={isAr}
+          heightClass="h-36 sm:h-72"
+          onClick={(event) => {
+            const lat = event.detail?.latLng?.lat;
+            const lng = event.detail?.latLng?.lng;
+            if (lat != null && lng != null) handleMapUpdate(lat, lng);
+          }}
+          onDragEnd={(event) => {
+            const lat = event.latLng?.lat?.();
+            const lng = event.latLng?.lng?.();
+            if (lat != null && lng != null) handleMapUpdate(lat, lng);
+          }}
+        />
+        <p className="mt-1.5 hidden text-xs text-text-muted sm:block">
+          {isAr
+            ? 'استخدم موقعك الحالي، أو ابحث واختر من الاقتراحات، أو حرّك الدبوس على الخريطة.'
+            : 'Use current location, search and pick a suggestion, or drag the pin on the map.'}
+        </p>
+      </div>
+
       {showManualFields && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="col-span-2">
             <Input
               id="checkout-street-input"
               label={isAr ? 'الشارع' : 'Street'}
@@ -408,31 +442,6 @@ export default function AddressMapCapture({
           />
         </div>
       )}
-
-      <InteractiveMapCanvas
-        center={center}
-        zoom={zoom}
-        position={position}
-        accuracyMeters={gpsAccuracy}
-        isAr={isAr}
-        heightClass="h-64 sm:h-72"
-        onClick={(event) => {
-          const lat = event.detail?.latLng?.lat;
-          const lng = event.detail?.latLng?.lng;
-          if (lat != null && lng != null) handleMapUpdate(lat, lng);
-        }}
-        onDragEnd={(event) => {
-          const lat = event.latLng?.lat?.();
-          const lng = event.latLng?.lng?.();
-          if (lat != null && lng != null) handleMapUpdate(lat, lng);
-        }}
-      />
-
-      <p className="text-xs text-text-muted">
-        {isAr
-          ? 'استخدم موقعك الحالي، أو ابحث واختر من الاقتراحات، أو حرّك الدبوس على الخريطة.'
-          : 'Use current location, search and pick a suggestion, or drag the pin on the map.'}
-      </p>
 
       {value?.gpsConfirmed && value?.locationSource === 'gps' && value?.lat != null && !gpsWarning && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">

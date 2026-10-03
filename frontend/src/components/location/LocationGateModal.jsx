@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Check, Crosshair, MapPin, PencilLine, Search, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, Crosshair, MapPin, PencilLine, Search, X } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useLocation } from '../../context/LocationContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../ui/Toast';
 import { deliveryZoneService, authService } from '../../services/apiServices';
 import { getGeolocationErrorMessage } from '../../hooks/useCurrentGeolocation';
+import { useGeolocationPermission } from '../../hooks/useGeolocationPermission';
 import { getApproximatePosition } from '../../utils/approxLocate';
-import { anyZoneHasCoords, findCoveringZone, nearestZone } from '../../utils/zoneDistance';
+import { anyZoneHasCoords, findCoveringZone, haversineKm, nearestZone } from '../../utils/zoneDistance';
 import { markLocationGateDismissed } from '../../utils/locationGate';
 import OsmMapCanvas from '../maps/OsmMapCanvas';
+import GeoErrorNotice from './GeoErrorNotice';
 
 const HELWAN = { lat: 29.8453, lng: 31.3339 };
 
@@ -28,6 +31,7 @@ export default function LocationGateModal({ open }) {
   const isAr = language === 'ar';
   const { settings } = useStoreSettings();
   const { user, refreshUser } = useAuth();
+  const toast = useToast();
   const {
     locations, location, confirmLocation, closeGate, confirmed,
     pin: savedPin, manualAddress: savedManual,
@@ -45,6 +49,17 @@ export default function LocationGateModal({ open }) {
   }), [gate.mapCenterLat, gate.mapCenterLng]);
   const mapZoom = Number.isFinite(Number(gate.mapZoom)) ? Number(gate.mapZoom) : 12;
 
+  // The coverage areas (the umbrella) — one or more independent circles, separate from any
+  // single delivery zone's own radius, and not necessarily adjacent to each other (e.g. Cairo
+  // and Alexandria as two separate circles). When any are set, they are the hard boundary:
+  // delivery zones are sub-areas inside them, and cannot extend service beyond them.
+  const coverageAreas = useMemo(() => {
+    if (!Array.isArray(gate.coverageAreas)) return [];
+    return gate.coverageAreas
+      .map((a) => ({ lat: Number(a.lat), lng: Number(a.lng), radiusKm: Number(a.radiusKm) }))
+      .filter((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng) && Number.isFinite(a.radiusKm) && a.radiusKm > 0);
+  }, [gate.coverageAreas]);
+
   const [search, setSearch] = useState('');
   const [selectedZoneId, setSelectedZoneId] = useState(location?.id || '');
   const [zoneTouched, setZoneTouched] = useState(false);
@@ -54,11 +69,15 @@ export default function LocationGateModal({ open }) {
   const [pinSource, setPinSource] = useState(savedPin?.source || null);
   const [formattedAddress, setFormattedAddress] = useState(savedPin?.formattedAddress || '');
   const [geoError, setGeoError] = useState('');
+  const [geoErrorCode, setGeoErrorCode] = useState(null);
   const [coverageError, setCoverageError] = useState('');
   const [resolving, setResolving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [locateSuccess, setLocateSuccess] = useState(false);
   const listRef = useRef(null);
+  const geoPermission = useGeolocationPermission();
+  const prevGeoPermissionRef = useRef(geoPermission);
 
   // 'area' = pick a zone / drop a pin; 'manual' = type the full address by hand.
   const [mode, setMode] = useState('area');
@@ -88,35 +107,69 @@ export default function LocationGateModal({ open }) {
     }
   }, [language]);
 
-  /** Derive the delivery zone from a dropped pin + apply the coverage rule. */
+  /**
+   * Derive the delivery zone from a dropped pin + apply the coverage rule.
+   * Returns whether the pin was blocked.
+   *
+   * Order matters: the coverage areas (the umbrella — one or more independent circles) are
+   * checked first and always win when configured — a delivery zone can never accept an order
+   * outside all of them. Only once a pin clears the umbrella do we look for the specific zone
+   * (for pricing/schedule), falling back to the nearest zone within a sane bound rather than
+   * silently accepting a pin from anywhere on the planet.
+   */
   const resolvePinZone = useCallback((point) => {
+    if (enforceCoverage && coverageAreas.length) {
+      const withinAnyArea = coverageAreas.some((area) => haversineKm(point, area) <= area.radiusKm);
+      if (!withinAnyArea) {
+        setCoverageError(isAr ? NOT_COVERED.ar : NOT_COVERED.en);
+        return true;
+      }
+    }
+
     const covering = findCoveringZone(locations, point);
     if (covering?.id) {
       setSelectedZoneId(covering.id);
       setZoneTouched(false);
       setCoverageError('');
-      return;
+      return false;
     }
-    if (enforceCoverage && anyZoneHasCoords(locations)) {
+
+    if (enforceCoverage && !coverageAreas.length && anyZoneHasCoords(locations)) {
       setCoverageError(isAr ? NOT_COVERED.ar : NOT_COVERED.en);
-      return;
+      return true;
     }
+
     const near = nearestZone(locations, point);
-    if (near?.zone?.id) setSelectedZoneId(near.zone.id);
-    setCoverageError('');
-  }, [locations, enforceCoverage, isAr]);
+    const fallbackCapKm = coverageAreas.length
+      ? Math.max(...coverageAreas.map((area) => area.radiusKm))
+      : (near?.zone?.radiusKm ? near.zone.radiusKm * 1.5 : 15);
+    if (near?.zone?.id && near.distanceKm <= fallbackCapKm) {
+      setSelectedZoneId(near.zone.id);
+      setCoverageError('');
+      return false;
+    }
+
+    setCoverageError(isAr ? NOT_COVERED.ar : NOT_COVERED.en);
+    return true;
+  }, [locations, enforceCoverage, isAr, coverageAreas]);
 
   const applyPin = useCallback(async (lat, lng, source = 'map') => {
     const point = { lat: Number(lat), lng: Number(lng) };
     setPin(point);
     setPinSource(source);
     setGeoError('');
-    resolvePinZone(point);
+    setGeoErrorCode(null);
+    setLocateSuccess(false);
+    const blocked = resolvePinZone(point);
+    if (blocked) {
+      toast.error(isAr ? NOT_COVERED.ar : NOT_COVERED.en, 3500);
+    }
     setResolving(true);
     const addr = await reverseGeocode(point.lat, point.lng);
     setFormattedAddress(addr);
     setResolving(false);
-  }, [resolvePinZone, reverseGeocode]);
+    return { blocked };
+  }, [resolvePinZone, reverseGeocode, toast, isAr]);
 
   // Re-check coverage for a restored pin once zones are loaded / when reopened.
   useEffect(() => {
@@ -154,6 +207,7 @@ export default function LocationGateModal({ open }) {
     if (!open) return;
     setMode('area');
     setManualError('');
+    setLocateSuccess(false);
     if (savedManual) {
       setManual({
         governorate: savedManual.governorate || '',
@@ -184,16 +238,58 @@ export default function LocationGateModal({ open }) {
   const handleUseMyLocation = useCallback(async () => {
     if (locating) return;
     setGeoError('');
+    setGeoErrorCode(null);
+    setLocateSuccess(false);
     setLocating(true);
     try {
       const coords = await getApproximatePosition();
-      await applyPin(coords.lat, coords.lng, 'gps');
+      const { blocked } = await applyPin(coords.lat, coords.lng, 'gps');
+      if (!blocked) {
+        setLocateSuccess(true);
+        toast.success(isAr ? 'تم تحديد موقعك بنجاح' : 'Your location was detected successfully');
+      }
     } catch (err) {
       setGeoError(getGeolocationErrorMessage(err, isAr));
+      setGeoErrorCode(err?.code ?? err?.name ?? null);
     } finally {
       setLocating(false);
     }
-  }, [applyPin, isAr, locating]);
+  }, [applyPin, isAr, locating, toast]);
+
+  // Chromium browsers report permission changes live (no reload needed): if the customer
+  // left this open, went to the browser/site settings, and flipped location on, re-run the
+  // locate automatically the moment that happens instead of leaving them stuck on the error
+  // waiting for a manual retry. Only fires on an actual denied/prompt -> granted transition,
+  // never on first mount, so we don't request location before the customer has asked for it.
+  useEffect(() => {
+    const prev = prevGeoPermissionRef.current;
+    prevGeoPermissionRef.current = geoPermission;
+    if (!open || mode !== 'area') return;
+    if (geoPermission === 'granted' && (prev === 'denied' || prev === 'prompt')) {
+      handleUseMyLocation();
+    }
+  }, [geoPermission, open, mode, handleUseMyLocation]);
+
+  // Mobile fallback: on Android/iOS, flipping location on happens in the OS Settings app —
+  // outside the browser — and mobile Chrome/Safari often never fire the Permissions API's
+  // `onchange` for a change made there (it's reliable only for changes made through the
+  // browser's own lock-icon UI, which is basically desktop-only in practice). What does fire
+  // everywhere is the tab going hidden and visible again as the customer alt-tabs to Settings
+  // and back — so re-attempt the locate at that moment whenever the last attempt left an error
+  // on screen, instead of waiting on a permission event that may never come.
+  useEffect(() => {
+    if (!open || mode !== 'area') return undefined;
+    const retryIfStuck = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (geoError && !pin) handleUseMyLocation();
+    };
+    document.addEventListener('visibilitychange', retryIfStuck);
+    window.addEventListener('focus', retryIfStuck);
+    return () => {
+      document.removeEventListener('visibilitychange', retryIfStuck);
+      window.removeEventListener('focus', retryIfStuck);
+    };
+  }, [open, mode, geoError, pin, handleUseMyLocation]);
 
   // Manual area pick — the pin (if any) no longer applies.
   const pickZone = (zoneId) => {
@@ -203,9 +299,34 @@ export default function LocationGateModal({ open }) {
     setPinSource(null);
     setFormattedAddress('');
     setCoverageError('');
+    setLocateSuccess(false);
   };
 
-  const pinBlocked = Boolean(pin) && Boolean(coverageError) && enforceCoverage;
+  // Light hints on the map for the delivery areas already configured — so the customer can
+  // see roughly where coverage exists before dropping a pin, instead of guessing blindly.
+  const zoneHints = useMemo(() => locations
+    .filter((zone) => zone.centerLat != null && zone.centerLng != null)
+    .map((zone) => ({
+      id: zone.id,
+      lat: zone.centerLat,
+      lng: zone.centerLng,
+      radiusKm: zone.radiusKm,
+      label: isAr ? zone.nameAr : zone.nameEn,
+      selectLabel: isAr ? 'اختر هذه المنطقة' : 'Select this area',
+      onSelect: () => pickZone(zone.id),
+    })), [locations, isAr]);
+
+  // Fade the inline "location found" confirmation out after a few seconds.
+  useEffect(() => {
+    if (!locateSuccess) return undefined;
+    const t = setTimeout(() => setLocateSuccess(false), 4000);
+    return () => clearTimeout(t);
+  }, [locateSuccess]);
+
+  // coverageError is only ever set when resolvePinZone genuinely found nowhere sensible to
+  // deliver (umbrella check, strict zone check, or the bounded nearest-zone fallback) — so it
+  // always blocks confirmation, regardless of the legacy enforceCoverage flag.
+  const pinBlocked = Boolean(pin) && Boolean(coverageError);
   const canConfirm = !submitting && Boolean(selectedZoneId) && !pinBlocked;
 
   const handleConfirm = async () => {
@@ -307,7 +428,7 @@ export default function LocationGateModal({ open }) {
         tabIndex={dismissible ? 0 : -1}
       />
 
-      <div className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl ring-1 ring-slate-200 sm:rounded-3xl">
+      <div className="relative flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl ring-1 ring-slate-200 sm:max-h-[92dvh] sm:rounded-3xl">
         <div className="relative shrink-0 bg-gradient-to-br from-primary-600 to-primary-800 px-5 py-4 text-white">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -334,6 +455,88 @@ export default function LocationGateModal({ open }) {
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           {mode === 'area' && (
           <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-medium text-text-muted">
+              {isAr ? 'حدّد موقعك على الخريطة' : 'Pin your spot on the map'}
+            </p>
+            <button
+              type="button"
+              onClick={handleUseMyLocation}
+              disabled={locating}
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
+                locateSuccess
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100'
+              }`}
+            >
+              {locateSuccess ? (
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <Crosshair className={`h-3.5 w-3.5 ${locating ? 'animate-spin' : ''}`} aria-hidden />
+              )}
+              {locating
+                ? (isAr ? 'جارٍ تحديد موقعك…' : 'Locating…')
+                : locateSuccess
+                  ? (isAr ? 'تم التحديد ✓' : 'Location found ✓')
+                  : (isAr ? 'موقعي الحالي' : 'Use my location')}
+            </button>
+          </div>
+
+          <OsmMapCanvas
+            center={mapCenter}
+            zoom={pin ? Math.max(mapZoom, 15) : mapZoom}
+            position={pin}
+            heightClass="h-52"
+            onClick={(lat, lng) => applyPin(lat, lng, 'map')}
+            onDragEnd={(lat, lng) => applyPin(lat, lng, 'map')}
+            zoneHints={zoneHints}
+          />
+          {zoneHints.length > 0 && (
+            <p className="flex items-center gap-1.5 text-[11px] text-text-muted">
+              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-white" style={{ border: '2px solid var(--color-primary-600)' }} aria-hidden />
+              {isAr ? 'النقاط البيضاء: مناطقنا المتاحة حالياً — اضغط عليها لمعرفة الاسم أو اختيارها مباشرة.' : 'White dots: our currently available areas — tap one to see its name or select it directly.'}
+            </p>
+          )}
+
+          <GeoErrorNotice
+            message={geoError}
+            code={geoErrorCode}
+            isAr={isAr}
+            onRetry={handleUseMyLocation}
+            retrying={locating}
+            autoDetect
+          />
+          {locateSuccess && !coverageError && (
+            <p className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+              {isAr ? 'تم تحديد موقعك بنجاح — تحقق من الدبوس على الخريطة.' : 'Your location was detected — check the pin on the map.'}
+            </p>
+          )}
+          {coverageError && (
+            <p className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                {coverageError}
+                {' '}
+                <span className="font-normal">
+                  {isAr ? 'جرّب موقعاً أقرب أو اختر منطقة من القائمة.' : 'Try a nearby spot or pick an area from the list.'}
+                </span>
+              </span>
+            </p>
+          )}
+          {resolving && (
+            <p className="text-xs text-text-muted">{isAr ? 'جارٍ تحديد العنوان…' : 'Resolving address…'}</p>
+          )}
+          {formattedAddress && !resolving && !coverageError && (
+            <p className="text-xs text-slate-600">
+              {isAr ? 'العنوان على الخريطة: ' : 'Mapped address: '}{formattedAddress}
+            </p>
+          )}
+
+          <p className="text-xs font-medium text-text-muted">
+            {isAr ? 'أو اختر منطقة محفوظة' : 'Or choose a saved area'}
+          </p>
+
           <div className="relative">
             <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" aria-hidden />
             <input
@@ -372,56 +575,6 @@ export default function LocationGateModal({ open }) {
               })
             )}
           </ul>
-
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-medium text-text-muted">
-              {isAr ? 'أو حدّد موقعك على الخريطة' : 'Or pin your spot on the map'}
-            </p>
-            <button
-              type="button"
-              onClick={handleUseMyLocation}
-              disabled={locating}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-60"
-            >
-              <Crosshair className={`h-3.5 w-3.5 ${locating ? 'animate-spin' : ''}`} aria-hidden />
-              {locating
-                ? (isAr ? 'جارٍ تحديد موقعك…' : 'Locating…')
-                : (isAr ? 'موقعي الحالي' : 'Use my location')}
-            </button>
-          </div>
-
-          <OsmMapCanvas
-            center={mapCenter}
-            zoom={pin ? Math.max(mapZoom, 15) : mapZoom}
-            position={pin}
-            heightClass="h-52"
-            onClick={(lat, lng) => applyPin(lat, lng, 'map')}
-            onDragEnd={(lat, lng) => applyPin(lat, lng, 'map')}
-          />
-
-          {geoError && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{geoError}</p>
-          )}
-          {coverageError && (
-            <p className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              <span>
-                {coverageError}
-                {' '}
-                <span className="font-normal">
-                  {isAr ? 'جرّب موقعاً أقرب أو اختر منطقة من القائمة.' : 'Try a nearby spot or pick an area from the list.'}
-                </span>
-              </span>
-            </p>
-          )}
-          {resolving && (
-            <p className="text-xs text-text-muted">{isAr ? 'جارٍ تحديد العنوان…' : 'Resolving address…'}</p>
-          )}
-          {formattedAddress && !resolving && !coverageError && (
-            <p className="text-xs text-slate-600">
-              {isAr ? 'العنوان على الخريطة: ' : 'Mapped address: '}{formattedAddress}
-            </p>
-          )}
           </div>
           )}
 
@@ -590,7 +743,7 @@ export default function LocationGateModal({ open }) {
                 >
                   {submitting
                     ? (isAr ? 'جارٍ الحفظ…' : 'Saving…')
-                    : (isAr ? 'تحديد الموقع' : 'Select location')}
+                    : (isAr ? 'اختر هذا الموقع' : 'Select location')}
                 </button>
               </>
             ) : (

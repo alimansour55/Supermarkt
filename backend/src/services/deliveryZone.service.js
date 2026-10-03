@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 import DeliveryZone from '../models/DeliveryZone.js';
+import StoreSettings from '../models/StoreSettings.js';
 import { AppError } from '../utils/AppError.js';
 import { filterFreeDeliveryMethods } from '../utils/freeDelivery.js';
+import { haversineKm } from '../utils/zoneCoverage.js';
 
 export const DEFAULT_DELIVERY_ZONES = [
   {
@@ -142,10 +144,38 @@ export const formatDeliveryZone = (zone) => {
   };
 };
 
+/**
+ * Geographic coverage (centerLat/Lng + radiusKm) is the source of truth for what is
+ * serviceable — a zone name alone must never let a customer order from outside it.
+ */
+const hasCoverage = (zone) => zone.centerLat != null && zone.centerLng != null;
+
+/**
+ * The coverage areas (the umbrella) the admin has configured — one or more independent
+ * circles, not necessarily adjacent (e.g. separate circles for Cairo and Alexandria).
+ * Delivery zones are sub-areas inside them — a zone can never grant coverage beyond them.
+ */
+async function getCoverageAreas() {
+  const settings = await StoreSettings.findOne({ key: 'main' }).lean();
+  const areas = settings?.locationGate?.coverageAreas;
+  if (!Array.isArray(areas) || !areas.length) return [];
+  return areas.filter((a) => Number.isFinite(a?.lat) && Number.isFinite(a?.lng)
+    && Number.isFinite(a?.radiusKm) && a.radiusKm > 0);
+}
+
+const withinCoverageAreas = (zone, coverageAreas) => {
+  if (!coverageAreas.length) return true;
+  if (!hasCoverage(zone)) return false;
+  return coverageAreas.some(
+    (area) => haversineKm({ lat: zone.centerLat, lng: zone.centerLng }, area) <= area.radiusKm,
+  );
+};
+
 export async function listPublicDeliveryZones() {
   const zones = await DeliveryZone.find({ isActive: true }).sort({ priority: -1, cityEn: 1, areaEn: 1 });
-  if (!zones.length) return DEFAULT_DELIVERY_ZONES;
-  return zones.map(formatDeliveryZone);
+  const formatted = (zones.length ? zones.map(formatDeliveryZone) : DEFAULT_DELIVERY_ZONES).filter(hasCoverage);
+  const coverageAreas = await getCoverageAreas();
+  return formatted.filter((zone) => withinCoverageAreas(zone, coverageAreas));
 }
 
 function normalizeSearchText(value) {
@@ -208,7 +238,12 @@ export async function findDeliveryZone(zoneId) {
     isActive: true,
   });
 
-  if (zone) return formatDeliveryZone(zone);
+  if (zone) {
+    const formatted = formatDeliveryZone(zone);
+    if (!hasCoverage(formatted)) return null;
+    const coverageAreas = await getCoverageAreas();
+    return withinCoverageAreas(formatted, coverageAreas) ? formatted : null;
+  }
   return DEFAULT_DELIVERY_ZONES.find((item) => item.id === zoneId || item.slug === zoneId) || null;
 }
 

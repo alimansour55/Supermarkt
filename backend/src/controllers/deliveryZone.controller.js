@@ -22,31 +22,40 @@ const normalizeFreeDeliveryMethodsInput = (body) => {
   return methods;
 };
 
-const normalizePayload = (body) => ({
-  cityAr: body.cityAr,
-  cityEn: body.cityEn,
-  areaAr: body.areaAr,
-  areaEn: body.areaEn,
-  scheduledFee: Number(body.scheduledFee) || 0,
-  expressFee: Number(body.expressFee) || 0,
-  minimumOrder: Number(body.minimumOrder) || 0,
-  freeDeliveryThreshold: Number(body.freeDeliveryThreshold) || 0,
-  freeDeliveryOverride: body.freeDeliveryOverride === true,
-  freeDeliveryMethods: normalizeFreeDeliveryMethodsInput(body),
-  scheduledAvailable: body.scheduledAvailable !== false,
-  expressAvailable: body.expressAvailable !== false,
-  estimatedScheduled: body.estimatedScheduled || '',
-  estimatedExpress: body.estimatedExpress || '',
-  timeSlots: Array.isArray(body.timeSlots) ? body.timeSlots : [],
-  leadTimeOverride: body.leadTimeOverride === true,
-  scheduledMinLeadMinutes: Math.min(1440, Math.max(0, Math.round(Number(body.scheduledMinLeadMinutes) || 120))),
-  expressMinLeadMinutes: Math.min(1440, Math.max(0, Math.round(Number(body.expressMinLeadMinutes) || 120))),
-  priority: Number(body.priority) || 0,
-  centerLat: body.centerLat === '' || body.centerLat == null ? null : Number(body.centerLat),
-  centerLng: body.centerLng === '' || body.centerLng == null ? null : Number(body.centerLng),
-  radiusKm: Math.max(0, Number(body.radiusKm) || 8),
-  isActive: body.isActive !== false,
-});
+const normalizePayload = (body) => {
+  const centerLat = body.centerLat === '' || body.centerLat == null ? null : Number(body.centerLat);
+  const centerLng = body.centerLng === '' || body.centerLng == null ? null : Number(body.centerLng);
+
+  if (centerLat == null || centerLng == null || !Number.isFinite(centerLat) || !Number.isFinite(centerLng)) {
+    throw new AppError('Delivery zones require a coverage center on the map — geographic coverage is the source of truth for what is serviceable, a name alone is not enough', 400);
+  }
+
+  return {
+    cityAr: body.cityAr,
+    cityEn: body.cityEn,
+    areaAr: body.areaAr,
+    areaEn: body.areaEn,
+    scheduledFee: Number(body.scheduledFee) || 0,
+    expressFee: Number(body.expressFee) || 0,
+    minimumOrder: Number(body.minimumOrder) || 0,
+    freeDeliveryThreshold: Number(body.freeDeliveryThreshold) || 0,
+    freeDeliveryOverride: body.freeDeliveryOverride === true,
+    freeDeliveryMethods: normalizeFreeDeliveryMethodsInput(body),
+    scheduledAvailable: body.scheduledAvailable !== false,
+    expressAvailable: body.expressAvailable !== false,
+    estimatedScheduled: body.estimatedScheduled || '',
+    estimatedExpress: body.estimatedExpress || '',
+    timeSlots: Array.isArray(body.timeSlots) ? body.timeSlots : [],
+    leadTimeOverride: body.leadTimeOverride === true,
+    scheduledMinLeadMinutes: Math.min(1440, Math.max(0, Math.round(Number(body.scheduledMinLeadMinutes) || 120))),
+    expressMinLeadMinutes: Math.min(1440, Math.max(0, Math.round(Number(body.expressMinLeadMinutes) || 120))),
+    priority: Number(body.priority) || 0,
+    centerLat,
+    centerLng,
+    radiusKm: Math.max(0.3, Number(body.radiusKm) || 8),
+    isActive: body.isActive !== false,
+  };
+};
 
 export const getPublicDeliveryZones = asyncHandler(async (_req, res) => {
   const zones = await listPublicDeliveryZones();

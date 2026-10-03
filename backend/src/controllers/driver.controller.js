@@ -22,6 +22,7 @@ import { awardPointsForOrder } from '../services/loyalty.service.js';
 import { logAudit } from '../services/auditLog.service.js';
 import { getGpsDeliveryEnabled, getDriverSettings } from '../services/storeSettings.service.js';
 import User from '../models/User.js';
+import { CLOUDINARY_FOLDERS, uploadFileToCloudinary } from '../utils/cloudinaryUpload.js';
 
 function formatDriverItems(items = []) {
   return items.map((item) => ({
@@ -75,6 +76,28 @@ export function formatDriverOrder(order, {
     assignedDriverAt: raw.assignedDriverAt,
     createdAt: raw.createdAt,
     deliveredAt: raw.deliveredAt || null,
+    deliveryProofPhoto: raw.deliveryProofPhoto?.url || null,
+  };
+}
+
+function formatDriverHistoryOrder(order) {
+  const raw = order.toObject?.() ?? order;
+  const user = raw.user && typeof raw.user === 'object' ? raw.user : null;
+
+  return {
+    _id: raw._id,
+    orderNumber: raw.orderNumber,
+    orderStatus: raw.orderStatus,
+    customerName: user?.name || null,
+    total: raw.total,
+    paymentMethod: raw.paymentMethod,
+    paymentStatus: raw.paymentStatus,
+    itemCount: (raw.items || []).reduce((sum, item) => sum + (item.quantity || 0), 0),
+    shippingAddress: raw.shippingAddress,
+    deliveredAt: raw.deliveredAt || null,
+    deliveryFailureReasonAr: raw.deliveryFailureReasonAr || '',
+    deliveryFailureReasonEn: raw.deliveryFailureReasonEn || '',
+    deliveryProofPhoto: raw.deliveryProofPhoto?.url || null,
   };
 }
 
@@ -169,6 +192,21 @@ export const getDriverDeliveries = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: orders.map((order) => formatDriverOrder(order, flags)),
+  });
+});
+
+export const getDriverHistory = asyncHandler(async (req, res) => {
+  const orders = await Order.find({
+    assignedDriver: req.user._id,
+    orderStatus: { $in: ['delivered', 'delivery_failed'] },
+  })
+    .populate('user', 'name')
+    .sort({ deliveredAt: -1, updatedAt: -1 })
+    .limit(100);
+
+  res.json({
+    success: true,
+    data: orders.map(formatDriverHistoryOrder),
   });
 });
 
@@ -275,6 +313,11 @@ export const updateDriverOrderLocation = asyncHandler(async (req, res) => {
 export const completeDriverDelivery = asyncHandler(async (req, res) => {
   const order = await loadDriverOrder(req.params.id, req.user._id);
   if (!order) throw new AppError('Delivery not found', 404);
+
+  if (req.file) {
+    const uploaded = await uploadFileToCloudinary(req.file, CLOUDINARY_FOLDERS.deliveryProofs);
+    order.deliveryProofPhoto = { url: uploaded.url, publicId: uploaded.publicId };
+  }
 
   const { previousStatus, nextStatus } = await finalizeDriverOrderStatus(order, 'delivered', {
     driverId: req.user._id,

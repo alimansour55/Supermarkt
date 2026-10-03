@@ -1,9 +1,18 @@
 import { useOutletContext } from 'react-router-dom';
-import { LogOut, Phone, ShieldCheck, UserRound } from 'lucide-react';
+import { LogOut, Package, Phone, ShieldCheck, UserRound, XCircle } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
+import { orderService } from '../../services/apiServices';
+import { useAsyncData } from '../../hooks/useAsyncData';
 import Button from '../../components/ui/Button';
 import DriverAvailabilityToggle from '../../components/driver/DriverAvailabilityToggle';
+import DriverStatCard from './components/DriverStatCard';
+import { isToday } from './driverUtils';
+
+async function fetchHistory() {
+  const { data } = await orderService.getDriverHistory();
+  return data.data || [];
+}
 
 function Row({ icon: Icon, label, value }) {
   if (!value) return null;
@@ -21,8 +30,12 @@ export default function DriverAccountPage() {
   const { user, logout } = useAuth();
   const isAr = language === 'ar';
   const { config, setAvailability, availabilityBusy } = useOutletContext() || {};
+  const { data: history } = useAsyncData(fetchHistory, []);
 
   const availabilityEnabled = config?.availabilityEnabled === true;
+  const todayOrders = (history || []).filter((o) => isToday(o.deliveredAt));
+  const deliveredToday = todayOrders.filter((o) => o.orderStatus === 'delivered').length;
+  const failedToday = todayOrders.filter((o) => o.orderStatus === 'delivery_failed').length;
 
   return (
     <div className="space-y-5">
@@ -32,6 +45,18 @@ export default function DriverAccountPage() {
           {isAr ? 'بياناتك وحالة العمل' : 'Your details and work status'}
         </p>
       </div>
+
+      {history && history.length > 0 && (
+        <div>
+          <p className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-slate-400">
+            {isAr ? 'أداء اليوم' : "Today's performance"}
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <DriverStatCard icon={Package} label={isAr ? 'تم التسليم' : 'Delivered'} value={deliveredToday} accent="emerald" />
+            <DriverStatCard icon={XCircle} label={isAr ? 'فشل' : 'Failed'} value={failedToday} accent="red" />
+          </div>
+        </div>
+      )}
 
       {availabilityEnabled && (
         <DriverAvailabilityToggle

@@ -188,16 +188,26 @@ export default function FulfillmentLocationsPage() {
         )}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-        <section className="rounded-2xl border border-border bg-white p-4 shadow-sm">
-          <h2 className="mb-3 font-bold">{isAr ? 'المواقع' : 'Locations'}</h2>
-          {locations.length === 0 ? (
-            <EmptyState
-              icon={Warehouse}
-              title={isAr ? 'لا توجد مواقع بعد' : 'No locations yet'}
-              description={isAr ? 'أضف مستودعاً أو فرعاً لبدء الشحن.' : 'Add a warehouse or branch to start shipping.'}
-            />
-          ) : (
+      {locations.length === 0 && (
+        <EmptyState
+          icon={Warehouse}
+          title={isAr ? 'لا توجد مواقع بعد' : 'No locations yet'}
+          description={isAr
+            ? 'أضف مستودعاً أو فرعاً باستخدام النموذج أدناه لبدء الشحن.'
+            : 'Add a warehouse or branch using the form below to start shipping.'}
+          className="py-8"
+        />
+      )}
+
+      <div className={`grid gap-6 ${locations.length > 0 ? 'xl:grid-cols-[360px_1fr]' : ''}`}>
+        {locations.length > 0 && (
+          <section className="rounded-2xl border border-border bg-white p-4 shadow-sm xl:self-start">
+            <h2 className="mb-3 flex items-center gap-2 font-bold">
+              {isAr ? 'المواقع' : 'Locations'}
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-text-muted">
+                {locations.length}
+              </span>
+            </h2>
             <ul className="space-y-2">
               {locations.map((location) => {
                 const id = location.id || location._id;
@@ -236,8 +246,8 @@ export default function FulfillmentLocationsPage() {
                 );
               })}
             </ul>
-          )}
-        </section>
+          </section>
+        )}
 
         <form onSubmit={save} className="space-y-5 rounded-2xl border border-border bg-white p-6 shadow-sm">
           <h2 className="font-bold">

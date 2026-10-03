@@ -1,4 +1,7 @@
 import { formatPrice } from '../../utils/formatters';
+import { formatDistanceKm, haversineKm } from '../../utils/orderTracking';
+
+export { haversineKm, formatDistanceKm };
 
 export function formatDriverAddress(addr, isAr) {
   if (!addr) return '—';
@@ -42,29 +45,6 @@ export function normalizePhoneIntl(phone, countryCode = '20') {
 export function whatsappUrl(phone) {
   const n = normalizePhoneIntl(phone);
   return n ? `https://wa.me/${n}` : '';
-}
-
-/** Straight-line distance in km between two {lat,lng} points. */
-export function haversineKm(a, b) {
-  if (!a || !b || a.lat == null || a.lng == null || b.lat == null || b.lng == null) return null;
-  const R = 6371;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
-export function formatDistanceKm(km, isAr) {
-  if (km == null || Number.isNaN(km)) return '';
-  if (km < 1) {
-    const m = Math.round(km * 1000);
-    return isAr ? `${m} م` : `${m} m`;
-  }
-  return isAr ? `${km.toFixed(1)} كم` : `${km.toFixed(1)} km`;
 }
 
 export function deliveryZoneName(order, isAr) {
@@ -113,4 +93,13 @@ export function formatDeliverySlot(slot, isAr) {
 
 export function formatOrderTotal(order) {
   return formatPrice(order?.total || 0);
+}
+
+export function isToday(iso) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear()
+    && d.getMonth() === now.getMonth()
+    && d.getDate() === now.getDate();
 }

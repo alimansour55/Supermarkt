@@ -14,6 +14,18 @@ export function getApproximatePosition({ timeoutMs = 8000, maximumAge = 60_000 }
       return;
     }
 
+    // Phone browsers only expose geolocation on a "secure context" (https://, or http://
+    // localhost on the machine actually running the page). A LAN dev URL like
+    // http://192.168.x.x:5173 fails that check, so the browser silently pre-blocks the
+    // request with PERMISSION_DENIED before it ever reaches a real permission prompt — no
+    // app permission, browser site-setting, or OS location toggle can fix that. Report it
+    // as its own code instead of letting it masquerade as an ordinary user denial, which
+    // sends people toggling settings that were never the problem.
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      reject(Object.assign(new Error('INSECURE_CONTEXT'), { code: 'INSECURE_CONTEXT' }));
+      return;
+    }
+
     let settled = false;
     const done = (fn, value) => {
       if (settled) return;

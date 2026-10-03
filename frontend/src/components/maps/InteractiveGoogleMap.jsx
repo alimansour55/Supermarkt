@@ -3,6 +3,7 @@ import {
   APILoadingStatus,
   Map,
   AdvancedMarker,
+  Circle as GoogleCircle,
   Marker,
   useApiLoadingStatus,
   useMap,
@@ -18,6 +19,7 @@ import GoogleMapsProvider from './GoogleMapsProvider';
 import OsmMapCanvas from './OsmMapCanvas';
 import { useGoogleMapsAuth } from './GoogleMapsProvider';
 import Loader from '../ui/Loader';
+import { clampRadiusMeters } from '../../utils/geoCircle';
 
 function toOsmClickHandler(onClick) {
   if (!onClick) return undefined;
@@ -57,10 +59,39 @@ function GoogleMapMarker({ position, draggable, onDragEnd, useAdvanced }) {
   return <Marker position={position} draggable={draggable} onDragEnd={onDragEnd} />;
 }
 
+/** Editable/resizable coverage circle — dragging its edge handle resizes it, like a Facebook Marketplace radius filter. */
+function GoogleRadiusCircle({ position, radiusMeters, onRadiusChange, min, max }) {
+  if (!position || typeof onRadiusChange !== 'function') return null;
+  const clamped = clampRadiusMeters(Number(radiusMeters) || 0, min, max);
+
+  return (
+    <GoogleCircle
+      center={position}
+      radius={clamped}
+      editable
+      draggable={false}
+      clickable={false}
+      strokeColor="#2563eb"
+      strokeOpacity={0.9}
+      strokeWeight={2}
+      fillColor="#3b82f6"
+      fillOpacity={0.12}
+      onRadiusChanged={(nextRadius) => {
+        if (!Number.isFinite(nextRadius)) return;
+        onRadiusChange(clampRadiusMeters(nextRadius, min, max));
+      }}
+    />
+  );
+}
+
 function GoogleMapInner({
   center,
   zoom,
   position,
+  radiusMeters,
+  onRadiusChange,
+  radiusMinMeters,
+  radiusMaxMeters,
   onClick,
   onDragEnd,
   heightClass,
@@ -113,6 +144,13 @@ function GoogleMapInner({
           onDragEnd={onDragEnd}
           useAdvanced={useAdvanced}
         />
+        <GoogleRadiusCircle
+          position={position}
+          radiusMeters={radiusMeters}
+          onRadiusChange={onRadiusChange}
+          min={radiusMinMeters}
+          max={radiusMaxMeters}
+        />
       </Map>
     </div>
   );
@@ -123,6 +161,10 @@ function OsmMapWithHint({
   zoom,
   position,
   accuracyMeters,
+  radiusMeters,
+  onRadiusChange,
+  radiusMinMeters,
+  radiusMaxMeters,
   onClick,
   onDragEnd,
   isAr,
@@ -135,6 +177,10 @@ function OsmMapWithHint({
         zoom={zoom}
         position={position}
         accuracyMeters={accuracyMeters}
+        radiusMeters={radiusMeters}
+        onRadiusChange={onRadiusChange}
+        radiusMinMeters={radiusMinMeters}
+        radiusMaxMeters={radiusMaxMeters}
         onClick={toOsmClickHandler(onClick)}
         onDragEnd={toOsmDragHandler(onDragEnd)}
         heightClass={heightClass}
@@ -154,6 +200,10 @@ function MapPickerCanvas({
   center,
   zoom,
   position,
+  radiusMeters,
+  onRadiusChange,
+  radiusMinMeters,
+  radiusMaxMeters,
   onClick,
   onDragEnd,
   isAr,
@@ -172,6 +222,10 @@ function MapPickerCanvas({
         center={center}
         zoom={zoom}
         position={position}
+        radiusMeters={radiusMeters}
+        onRadiusChange={onRadiusChange}
+        radiusMinMeters={radiusMinMeters}
+        radiusMaxMeters={radiusMaxMeters}
         onClick={onClick}
         onDragEnd={onDragEnd}
         isAr={isAr}
@@ -185,6 +239,10 @@ function MapPickerCanvas({
       center={center}
       zoom={zoom}
       position={position}
+      radiusMeters={radiusMeters}
+      onRadiusChange={onRadiusChange}
+      radiusMinMeters={radiusMinMeters}
+      radiusMaxMeters={radiusMaxMeters}
       onClick={onClick}
       onDragEnd={onDragEnd}
       heightClass={heightClass}

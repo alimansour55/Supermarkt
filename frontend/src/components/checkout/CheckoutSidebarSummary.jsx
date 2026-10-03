@@ -208,6 +208,8 @@ export default function CheckoutSidebarSummary({
   paymentOptions,
   totalOverride,
   extraRows = [],
+  hideFreeDeliveryBar = false,
+  hideDeliveryMeta = false,
 }) {
   const { t } = useLanguage();
   const { settings } = useStoreSettings();
@@ -246,19 +248,21 @@ export default function CheckoutSidebarSummary({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 shadow-sm">
-      <div className="border-b border-slate-200/80 bg-white p-4">
-        <CheckoutFreeDeliveryBar
-          language={language}
-          subtotal={displaySubtotal}
-          freeDeliveryRemaining={freeDeliveryRemaining}
-          threshold={threshold}
-          deliveryMethod={deliveryMethod}
-          freeDeliveryMethods={freeDeliveryMethods}
-          freeDeliveryFromCoupon={freeDeliveryFromCoupon}
-          bannerSettings={settings?.freeDeliveryBanner}
-          onSwitchMethod={setDeliveryMethod}
-        />
-      </div>
+      {!hideFreeDeliveryBar && (
+        <div className="border-b border-slate-200/80 bg-white p-4">
+          <CheckoutFreeDeliveryBar
+            language={language}
+            subtotal={displaySubtotal}
+            freeDeliveryRemaining={freeDeliveryRemaining}
+            threshold={threshold}
+            deliveryMethod={deliveryMethod}
+            freeDeliveryMethods={freeDeliveryMethods}
+            freeDeliveryFromCoupon={freeDeliveryFromCoupon}
+            bannerSettings={settings?.freeDeliveryBanner}
+            onSwitchMethod={setDeliveryMethod}
+          />
+        </div>
+      )}
 
       <div className="space-y-4 p-4">
         <div>
@@ -329,20 +333,22 @@ export default function CheckoutSidebarSummary({
         />
       </div>
 
-      <div className="border-y border-slate-200/80 bg-white px-4 py-3.5">
-        <CheckoutDeliveryMeta
-          language={language}
-          deliveryMethod={deliveryMethod}
-          location={location}
-          deliverToLabel={deliverToLabel}
-          form={form}
-          selectedSlot={selectedSlot}
-          paymentMethod={paymentMethod}
-          paymentOptions={paymentOptions}
-        />
-      </div>
+      {!hideDeliveryMeta && (
+        <div className="border-y border-slate-200/80 bg-white px-4 py-3.5">
+          <CheckoutDeliveryMeta
+            language={language}
+            deliveryMethod={deliveryMethod}
+            location={location}
+            deliverToLabel={deliverToLabel}
+            form={form}
+            selectedSlot={selectedSlot}
+            paymentMethod={paymentMethod}
+            paymentOptions={paymentOptions}
+          />
+        </div>
+      )}
 
-      <div className="bg-white p-4">
+      <div className="border-t border-slate-200/80 bg-white p-4">
         <CheckoutTotalsBlock
           language={language}
           totalLabel={t.cart.total}

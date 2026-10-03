@@ -17,6 +17,8 @@ import Button from '../../components/ui/Button';
 import OsmDeliveryTrackingMap from '../../components/maps/OsmDeliveryTrackingMap';
 import DriverStatusBadge from './components/DriverStatusBadge';
 import DriverFailModal from './components/DriverFailModal';
+import DriverCompleteModal from './components/DriverCompleteModal';
+import DriverDeliveryStepper, { computeDeliveryStep } from './components/DriverDeliveryStepper';
 import {
   deliveryZoneName,
   formatDeliverySlot,
@@ -83,6 +85,7 @@ export default function DriverDeliveryPage() {
   const [cashReceived, setCashReceived] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [failOpen, setFailOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
   const [actionError, setActionError] = useState('');
   const [, setTick] = useState(0);
 
@@ -179,6 +182,13 @@ export default function DriverDeliveryPage() {
     return haversineKm(driverPin, { lat: Number(addr.lat), lng: Number(addr.lng) });
   }, [driverPin, hasMapCoords, addr]);
 
+  const step = computeDeliveryStep({
+    orderStatus: order?.orderStatus,
+    sharing,
+    trackingActive,
+    arrivedAt,
+  });
+
   const items = order?.items || [];
   const pickedCount = items.reduce((n, _, i) => n + (picked?.[i] ? 1 : 0), 0);
   const allPicked = items.length > 0 && pickedCount === items.length;
@@ -194,21 +204,15 @@ export default function DriverDeliveryPage() {
     setRefreshing(false);
   };
 
-  const handleComplete = async () => {
-    const msg = isCod
-      ? (isAr
-        ? `تأكيد تسليم الطلب وتحصيل ${formatPrice(order.total)} نقداً؟`
-        : `Confirm delivery and collect ${formatPrice(order.total)} cash?`)
-      : (isAr ? 'تأكيد تسليم الطلب؟' : 'Confirm order delivered?');
-    if (!window.confirm(msg)) return;
-
+  const handleComplete = async (photoFile) => {
     setActionLoading(true);
     setActionError('');
     try {
-      const { data } = await orderService.completeDriverDelivery(id);
+      const { data } = await orderService.completeDriverDelivery(id, photoFile);
       setOrder(data.data);
       stop();
       setTrackingActive(false);
+      setCompleteOpen(false);
     } catch (err) {
       setActionError(err.response?.data?.message || err.message);
     } finally {
@@ -403,6 +407,15 @@ export default function DriverDeliveryPage() {
             )}
           </div>
         )}
+      </section>
+
+      {/* Delivery progress */}
+      <section className="rounded-2xl bg-white p-4 pb-3 shadow-sm ring-1 ring-slate-200/80">
+        <DriverDeliveryStepper
+          step={step}
+          failed={order.orderStatus === 'delivery_failed'}
+          isAr={isAr}
+        />
       </section>
 
       {/* Map */}
@@ -751,6 +764,13 @@ export default function DriverDeliveryPage() {
           <p className="font-semibold text-emerald-900">
             {isAr ? 'تم تسليم الطلب بنجاح' : 'Order delivered successfully'}
           </p>
+          {order.deliveryProofPhoto && (
+            <img
+              src={order.deliveryProofPhoto}
+              alt={isAr ? 'إثبات التسليم' : 'Proof of delivery'}
+              className="mx-auto mt-4 h-40 w-full max-w-xs rounded-xl object-cover ring-1 ring-emerald-200"
+            />
+          )}
           <Button type="button" variant="outline" className="mt-4" onClick={() => navigate('/driver')}>
             {isAr ? 'العودة للطلبات' : 'Back to deliveries'}
           </Button>
@@ -782,7 +802,7 @@ export default function DriverDeliveryPage() {
           <Button
             type="button"
             className="w-full bg-emerald-600 py-3 text-base hover:bg-emerald-700"
-            onClick={handleComplete}
+            onClick={() => setCompleteOpen(true)}
             disabled={actionLoading}
           >
             <CheckCircle2 className="h-5 w-5" aria-hidden />
@@ -809,6 +829,15 @@ export default function DriverDeliveryPage() {
         loading={actionLoading}
         onClose={() => setFailOpen(false)}
         onConfirm={handleFail}
+      />
+      <DriverCompleteModal
+        open={completeOpen}
+        isAr={isAr}
+        loading={actionLoading}
+        isCod={isCod}
+        total={order.total}
+        onClose={() => setCompleteOpen(false)}
+        onConfirm={handleComplete}
       />
     </div>
   );

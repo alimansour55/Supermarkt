@@ -187,7 +187,7 @@ export default function DeliveryMethodSelector({
   const methodList = ['scheduled', 'express', 'recurring'];
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-1.5">
       {methodList.map((method) => {
         const meta = DELIVERY_METHODS[method];
         const disabled = (method === 'express' && (!expressAvailable || !expressOpenNow))
@@ -205,7 +205,7 @@ export default function DeliveryMethodSelector({
         return (
           <label
             key={method}
-            className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition-all ${
+            className={`flex cursor-pointer items-start gap-2.5 rounded-2xl border p-2.5 transition-all ${
               disabled ? 'cursor-not-allowed opacity-50' : ''
             } ${
               selected
@@ -219,36 +219,31 @@ export default function DeliveryMethodSelector({
               checked={selected}
               disabled={disabled}
               onChange={() => onDeliveryMethodChange(method)}
-              className="mt-1.5 shrink-0 accent-primary-600"
+              className="mt-1 shrink-0 accent-primary-600"
             />
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <MethodIcon method={method} />
                 <p className="font-semibold text-text">
                   {isAr ? meta.labelAr : meta.labelEn}
                 </p>
+                <span className="text-xs text-text-muted">· {isAr ? meta.etaAr : meta.etaEn}</span>
               </div>
-              <p className="mt-1 text-sm text-text-muted">
-                {isAr ? meta.descAr : meta.descEn}
-              </p>
-              <p className="mt-0.5 text-xs text-text-muted">
-                {isAr ? meta.etaAr : meta.etaEn}
-              </p>
               {method === 'express' && !expressOpenNow && expressAvailable && (
-                <p className="mt-2 text-xs text-amber-800">
+                <p className="mt-1.5 text-xs text-amber-800">
                   {isAr
-                    ? `التوصيل السريع غير متاح الآن — يتطلب ${formatLeadMinutesLabel(expressLeadMinutes, 'ar')} على الأقل قبل نهاية مواعيد اليوم`
-                    : `Express is unavailable now — needs at least ${formatLeadMinutesLabel(expressLeadMinutes, 'en')} before today's last slot ends`}
+                    ? `غير متاح الآن — يتطلب ${formatLeadMinutesLabel(expressLeadMinutes, 'ar')} على الأقل`
+                    : `Unavailable now — needs at least ${formatLeadMinutesLabel(expressLeadMinutes, 'en')}`}
                 </p>
               )}
-              {freeNote && (
-                <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-900">
+              {freeNote && selected && (
+                <p className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
                   {freeNote}
                 </p>
               )}
 
               {selected && showScheduleFields && method === deliveryMethod && (
-                <div className="mt-4 space-y-4 rounded-xl border border-primary-100 bg-white/80 p-4">
+                <div className="mt-2 space-y-2 rounded-xl border border-primary-100 bg-white/80 p-2.5">
                   {method === 'scheduled' && (
                     <DeliveryWeekPicker
                       value={form.scheduledDate}
@@ -260,44 +255,31 @@ export default function DeliveryMethodSelector({
                   )}
 
                   {method === 'recurring' && (
-                    <>
+                    <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-text">
-                          <CalendarClock className="h-4 w-4 text-violet-600" aria-hidden />
-                          {isAr ? 'تكرار التوصيل' : 'Delivery frequency'}
-                        </p>
-                        <div className="grid gap-2 sm:grid-cols-3">
+                        <label className="mb-1 flex items-center gap-1 text-xs font-semibold text-text">
+                          <CalendarClock className="h-3.5 w-3.5 text-violet-600" aria-hidden />
+                          {isAr ? 'التكرار' : 'Frequency'}
+                        </label>
+                        <select
+                          value={form.recurringFrequency || 'weekly'}
+                          onChange={(e) => onFormChange({
+                            recurringFrequency: e.target.value,
+                            scheduledDate: computeFirstRecurringDeliveryDate({
+                              frequency: e.target.value,
+                              preferredWeekday: form.recurringPreferredWeekday,
+                              preferredDayOfMonth: form.recurringPreferredDayOfMonth,
+                              slotFrom: selectedSlot?.from,
+                            }, new Date(), timeSlots, scheduledLeadMinutes),
+                          })}
+                          className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                        >
                           {RECURRING_FREQUENCIES.map((freq) => (
-                            <label
-                              key={freq.value}
-                              className={`cursor-pointer rounded-xl border px-3 py-2.5 text-center text-sm transition-colors ${
-                                form.recurringFrequency === freq.value
-                                  ? 'border-violet-500 bg-violet-50 font-semibold text-violet-900'
-                                  : 'border-border hover:border-violet-200'
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name="recurringFrequency"
-                                className="sr-only"
-                                checked={form.recurringFrequency === freq.value}
-                                onChange={() => onFormChange({
-                                  recurringFrequency: freq.value,
-                                  scheduledDate: computeFirstRecurringDeliveryDate({
-                                    frequency: freq.value,
-                                    preferredWeekday: form.recurringPreferredWeekday,
-                                    preferredDayOfMonth: form.recurringPreferredDayOfMonth,
-                                    slotFrom: selectedSlot?.from,
-                                  }, new Date(), timeSlots, scheduledLeadMinutes),
-                                })}
-                              />
-                              <span className="block">{isAr ? freq.labelAr : freq.labelEn}</span>
-                              <span className="mt-0.5 block text-[10px] text-text-muted">
-                                {isAr ? freq.hintAr : freq.hintEn}
-                              </span>
-                            </label>
+                            <option key={freq.value} value={freq.value}>
+                              {isAr ? freq.labelAr : freq.labelEn}
+                            </option>
                           ))}
-                        </div>
+                        </select>
                       </div>
 
                       <RecurringSchedulePicker
@@ -312,13 +294,7 @@ export default function DeliveryMethodSelector({
                         onChange={onFormChange}
                         language={language}
                       />
-
-                      <p className="text-[11px] leading-relaxed text-text-muted">
-                        {isAr
-                          ? 'يمكنك إيقاف أو إلغاء التوصيل الدوري في أي وقت من صفحة حسابك بعد الطلب.'
-                          : 'You can pause or cancel recurring delivery anytime from your account after ordering.'}
-                      </p>
-                    </>
+                    </div>
                   )}
 
                   {method !== 'express' && (
@@ -326,15 +302,10 @@ export default function DeliveryMethodSelector({
                       <label className="mb-1.5 block text-xs font-semibold text-text">
                         {isAr ? 'موعد التوصيل' : 'Time slot'}
                       </label>
-                      <p className="mb-2 text-[11px] text-text-muted">
-                        {isAr
-                          ? `المواعيد المتاحة تبدأ بعد ${formatLeadMinutesLabel(scheduledLeadMinutes, 'ar')} على الأقل من الآن`
-                          : `Available slots start at least ${formatLeadMinutesLabel(scheduledLeadMinutes, 'en')} from now`}
-                      </p>
                       <select
                         value={form.scheduledTime}
                         onChange={(e) => onFormChange({ scheduledTime: e.target.value })}
-                        className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                        className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
                         required
                         disabled={!availableSlotsForDate.length}
                       >

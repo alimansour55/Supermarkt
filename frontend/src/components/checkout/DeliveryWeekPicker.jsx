@@ -17,10 +17,10 @@ export default function DeliveryWeekPicker({
 
   return (
     <div className={className}>
-      <p className="mb-2 text-xs font-medium text-text-muted">
+      <p className="mb-1.5 text-xs font-medium text-text-muted">
         {isAr ? 'اختر يوم التوصيل (متاح خلال 7 أيام)' : 'Choose delivery day (available for 7 days)'}
       </p>
-      <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+      <div className="scrollbar-thin flex gap-1.5 overflow-x-auto pb-1">
         {days.map((day) => {
           const weekday = (isAr ? WEEKDAY_AR_FULL : WEEKDAY_EN_FULL)[day.date.getDay()];
           const dayNum = day.date.getDate();
@@ -34,7 +34,7 @@ export default function DeliveryWeekPicker({
               type="button"
               disabled={disabled}
               onClick={() => onChange(day.value)}
-              className={`flex min-h-[4.5rem] flex-col items-center justify-center rounded-xl border px-1 py-2 text-center transition-all ${
+              className={`flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-xl border px-1 py-1 text-center transition-all ${
                 disabled
                   ? 'cursor-not-allowed border-border/60 bg-slate-50 text-slate-300 opacity-60'
                   : selected
@@ -44,21 +44,13 @@ export default function DeliveryWeekPicker({
               aria-pressed={selected}
               aria-disabled={disabled}
             >
-              <span className={`text-[10px] font-semibold uppercase ${selected ? 'text-white/90' : 'text-text-muted'}`}>
-                {weekday}
+              <span className={`text-[9px] font-semibold uppercase ${selected ? 'text-white/90' : 'text-text-muted'}`}>
+                {day.isToday ? (isAr ? 'اليوم' : 'Today') : weekday}
               </span>
-              <span className="text-lg font-bold leading-none">{dayNum}</span>
-              <span className={`text-[10px] ${selected ? 'text-white/80' : 'text-text-muted'}`}>
-                {isAr ? `${month}/${day.date.getFullYear()}` : `${month}/${String(day.date.getFullYear()).slice(-2)}`}
+              <span className="text-base font-bold leading-none">{dayNum}</span>
+              <span className={`text-[9px] ${selected ? 'text-white/80' : 'text-text-muted'}`}>
+                {month}/{isAr ? day.date.getFullYear() : String(day.date.getFullYear()).slice(-2)}
               </span>
-              {day.isToday && !disabled && (
-                <span className={`mt-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                  selected ? 'bg-white/20 text-white' : 'bg-primary-100 text-primary-700'
-                }`}
-                >
-                  {isAr ? 'اليوم' : 'Today'}
-                </span>
-              )}
             </button>
           );
         })}

@@ -11,8 +11,8 @@ import {
 import { useMemo, useState } from 'react';
 import { getRecurringFrequencyLabel } from '../../../constants/deliveryOptions';
 import { ListFilterSelect } from '../list';
-import Loader from '../../../components/ui/Loader';
-import { formatPrice } from '../../../utils/formatters';
+import { Skeleton } from '../Skeleton';
+import { formatCount, formatPrice } from '../../../utils/formatters';
 
 const STATUS_TABS = [
   { value: 'active', labelAr: 'نشط', labelEn: 'Active' },
@@ -144,6 +144,28 @@ function hasAdvancedFilters(due, frequency) {
   return Boolean(due || frequency);
 }
 
+function SubscriptionRowSkeleton() {
+  return (
+    <div className="mx-2 mb-2 w-[calc(100%-1rem)] rounded-xl border border-border/80 border-s-[3px] border-s-transparent bg-white px-4 py-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-4 w-2/5" />
+          <Skeleton className="h-3 w-1/3" />
+          <Skeleton className="h-3 w-4/5" />
+        </div>
+        <div className="shrink-0 space-y-2 text-end">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-3 w-14" />
+        </div>
+      </div>
+      <div className="mt-3 flex gap-1.5 border-t border-border/50 pt-2.5">
+        <Skeleton className="h-4 w-12 rounded-full" />
+        <Skeleton className="h-4 w-16 rounded-full" />
+      </div>
+    </div>
+  );
+}
+
 export default function RecurringListPanel({
   isAr,
   items,
@@ -167,8 +189,8 @@ export default function RecurringListPanel({
 
   const totalLabel = useMemo(() => {
     if (loading) return '…';
-    return items.length.toLocaleString(isAr ? 'ar-EG' : 'en-US');
-  }, [loading, items.length, isAr]);
+    return formatCount(items.length);
+  }, [loading, items.length]);
 
   return (
     <aside
@@ -290,8 +312,10 @@ export default function RecurringListPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/30 px-0.5 py-2 scrollbar-thin">
         {loading ? (
-          <div className="flex justify-center py-16">
-            <Loader size="md" />
+          <div className="space-y-0 pt-2" aria-busy="true">
+            {Array.from({ length: 5 }, (_, i) => (
+              <SubscriptionRowSkeleton key={i} />
+            ))}
           </div>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center px-6 py-16 text-center">

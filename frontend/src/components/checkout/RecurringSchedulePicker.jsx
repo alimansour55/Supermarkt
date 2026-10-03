@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import {
-  RECURRING_FREQUENCIES,
   WEEKDAYS_DISPLAY_ORDER,
   buildRecurringScheduleSummary,
   computeFirstRecurringDeliveryDate,
@@ -38,95 +37,53 @@ export default function RecurringSchedulePicker({
   const monthlyDays = useMemo(() => Array.from({ length: 28 }, (_, i) => i + 1), []);
 
   return (
-    <div className="space-y-4">
+    <>
       <div>
-        <p className="mb-2 text-xs font-semibold text-text">
-          {isAr ? 'يوم التوصيل الدوري' : 'Your recurring delivery day'}
-        </p>
+        <label className="mb-1 block text-xs font-semibold text-text">
+          {frequency === 'monthly'
+            ? (isAr ? 'يوم الشهر' : 'Day of month')
+            : (isAr ? 'يوم الأسبوع' : 'Weekday')}
+        </label>
         {frequency === 'monthly' ? (
-          <>
-            <p className="mb-2 text-[11px] text-text-muted">
-              {isAr ? 'اختر رقم اليوم من كل شهر' : 'Choose the day of each month'}
-            </p>
-            <div className="grid grid-cols-7 gap-1.5">
-              {monthlyDays.map((day) => {
-                const selected = Number(preferredDayOfMonth) === day;
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => onChange({
-                      recurringPreferredDayOfMonth: day,
-                      scheduledDate: computeFirstRecurringDeliveryDate({
-                        frequency: 'monthly',
-                        preferredDayOfMonth: day,
-                        slotFrom,
-                      }, new Date(), timeSlots, minLeadMinutes),
-                    })}
-                    className={`rounded-lg border py-2 text-sm font-semibold transition-colors ${
-                      selected
-                        ? 'border-violet-600 bg-violet-600 text-white'
-                        : 'border-border bg-white text-text hover:border-violet-300 hover:bg-violet-50'
-                    }`}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-          </>
+          <select
+            value={preferredDayOfMonth || ''}
+            onChange={(e) => onChange({
+              recurringPreferredDayOfMonth: Number(e.target.value),
+              scheduledDate: computeFirstRecurringDeliveryDate({
+                frequency: 'monthly',
+                preferredDayOfMonth: Number(e.target.value),
+                slotFrom,
+              }, new Date(), timeSlots, minLeadMinutes),
+            })}
+            className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+          >
+            {monthlyDays.map((day) => (
+              <option key={day} value={day}>{day}</option>
+            ))}
+          </select>
         ) : (
-          <>
-            <p className="mb-2 text-[11px] text-text-muted">
-              {isAr ? 'اختر يوم الأسبوع للتوصيل المتكرر' : 'Choose the weekday for repeat delivery'}
-            </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {WEEKDAYS_DISPLAY_ORDER.map((day) => {
-                const selected = Number(preferredWeekday) === day.index;
-                return (
-                  <button
-                    key={day.index}
-                    type="button"
-                    onClick={() => onChange({
-                      recurringPreferredWeekday: day.index,
-                      scheduledDate: computeFirstRecurringDeliveryDate({
-                        frequency,
-                        preferredWeekday: day.index,
-                        slotFrom,
-                      }, new Date(), timeSlots, minLeadMinutes),
-                    })}
-                    className={`rounded-xl border px-2 py-2.5 text-sm font-semibold transition-colors ${
-                      selected
-                        ? 'border-violet-600 bg-violet-600 text-white shadow-sm'
-                        : 'border-border bg-white text-text hover:border-violet-300 hover:bg-violet-50'
-                    }`}
-                  >
-                    {isAr ? day.labelAr : day.labelEn}
-                  </button>
-                );
-              })}
-            </div>
-          </>
+          <select
+            value={preferredWeekday ?? ''}
+            onChange={(e) => onChange({
+              recurringPreferredWeekday: Number(e.target.value),
+              scheduledDate: computeFirstRecurringDeliveryDate({
+                frequency,
+                preferredWeekday: Number(e.target.value),
+                slotFrom,
+              }, new Date(), timeSlots, minLeadMinutes),
+            })}
+            className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+          >
+            {WEEKDAYS_DISPLAY_ORDER.map((day) => (
+              <option key={day.index} value={day.index}>{isAr ? day.labelAr : day.labelEn}</option>
+            ))}
+          </select>
         )}
       </div>
 
-      <div className="rounded-xl border border-violet-200 bg-violet-50/80 px-4 py-3 text-sm">
-        <p className="font-semibold text-violet-900">
-          {isAr ? 'جدول التوصيل' : 'Your schedule'}
-        </p>
-        <p className="mt-1 text-violet-800">{summary}</p>
-        <p className="mt-2 text-xs text-violet-700">
-          {isAr ? 'أول توصيل:' : 'First delivery:'}{' '}
-          <span className="font-semibold">{firstDelivery}</span>
-        </p>
-        <p className="mt-1 text-[11px] text-violet-600">
-          {RECURRING_FREQUENCIES.find((f) => f.value === frequency)
-            ? (isAr
-              ? RECURRING_FREQUENCIES.find((f) => f.value === frequency).hintAr
-              : RECURRING_FREQUENCIES.find((f) => f.value === frequency).hintEn)
-            : ''}
-        </p>
-      </div>
-    </div>
+      <p className="col-span-2 text-xs text-violet-700">
+        {summary} · {isAr ? 'أول توصيل:' : 'First delivery:'} <span className="font-semibold text-violet-900">{firstDelivery}</span>
+      </p>
+    </>
   );
 }

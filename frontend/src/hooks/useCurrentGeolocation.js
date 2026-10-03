@@ -3,6 +3,11 @@ import { locateDevicePosition } from '../utils/deviceLocate';
 
 export function getGeolocationErrorMessage(error, isAr = false) {
   const code = error?.code ?? error?.name;
+  if (code === 'INSECURE_CONTEXT') {
+    return isAr
+      ? 'تحديد الموقع يعمل فقط عبر اتصال آمن (HTTPS). هذا الرابط للاختبار عبر شبكة محلية غير آمن — استخدم رابط https المخصص للموبايل.'
+      : 'Location only works over a secure (HTTPS) connection. This LAN test link is not secure — use the mobile https test link instead.';
+  }
   if (code === 1 || code === 'PERMISSION_DENIED') {
     return isAr
       ? 'تم رفض إذن الموقع. فعّل الموقع من إعدادات المتصفح ثم حاول مرة أخرى.'

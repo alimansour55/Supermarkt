@@ -10,7 +10,9 @@ import { adminApi } from '../adminApi';
 import { useConfirm, useToast } from '../components';
 import RecurringDetailPanel from '../components/RecurringDetailPanel';
 import RecurringListPanel from '../components/recurring/RecurringListPanel';
-import { formatPrice } from '../../utils/formatters';
+import { Skeleton } from '../components/Skeleton';
+import Loader from '../../components/ui/Loader';
+import { formatCount, formatPrice } from '../../utils/formatters';
 import { scrollToTop } from '../../utils/scrollToTop';
 
 export default function RecurringDeliveriesPage() {
@@ -72,6 +74,13 @@ export default function RecurringDeliveriesPage() {
       setDetailLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!loading && !selectedId && items.length > 0) {
+      setSelectedId(items[0]._id);
+      loadDetail(items[0]._id);
+    }
+  }, [loading, items, selectedId, loadDetail]);
 
   const handleSelect = (sub) => {
     setSelectedId(sub._id);
@@ -145,11 +154,13 @@ export default function RecurringDeliveriesPage() {
     subtotal: sub.subtotal ?? (sub.items || []).reduce((sum, item) => sum + (item.price * item.quantity), 0),
   })), [items]);
 
+  const statsLoading = loading && !stats;
+
   const statChips = [
     {
       key: 'active',
       label: isAr ? 'نشط' : 'Active',
-      value: stats?.active ?? 0,
+      value: formatCount(stats?.active ?? 0),
       icon: RefreshCw,
       tone: 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 ring-emerald-200/60',
       active: status === 'active' && !due,
@@ -158,7 +169,7 @@ export default function RecurringDeliveriesPage() {
     {
       key: 'dueToday',
       label: isAr ? 'مستحق اليوم' : 'Due today',
-      value: stats?.dueToday ?? 0,
+      value: formatCount(stats?.dueToday ?? 0),
       icon: CalendarClock,
       tone: 'bg-violet-50 text-violet-800 hover:bg-violet-100 ring-violet-200/60',
       active: due === 'today',
@@ -167,7 +178,7 @@ export default function RecurringDeliveriesPage() {
     {
       key: 'overdue',
       label: isAr ? 'متأخر' : 'Overdue',
-      value: stats?.overdue ?? 0,
+      value: formatCount(stats?.overdue ?? 0),
       icon: AlertTriangle,
       tone: 'bg-amber-50 text-amber-900 hover:bg-amber-100 ring-amber-200/60',
       active: due === 'overdue',
@@ -218,7 +229,11 @@ export default function RecurringDeliveriesPage() {
                 </span>
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-wide opacity-70">{chip.label}</p>
-                  <p className="text-base font-bold tabular-nums leading-tight">{chip.value}</p>
+                  {statsLoading ? (
+                    <Skeleton className="mt-1 h-4 w-10" />
+                  ) : (
+                    <p className="text-base font-bold tabular-nums leading-tight">{chip.value}</p>
+                  )}
                 </div>
               </button>
             );
@@ -249,7 +264,7 @@ export default function RecurringDeliveriesPage() {
         <div
           className={[
             'min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-gradient-to-b from-slate-50/60 to-slate-50/20 scrollbar-thin',
-            !mobileShowDetail && !selectedId ? 'hidden lg:flex' : 'flex',
+            !mobileShowDetail ? 'hidden lg:flex' : 'flex',
           ].join(' ')}
         >
           {selectedId && (
@@ -268,7 +283,25 @@ export default function RecurringDeliveriesPage() {
           )}
 
           <div className="flex-1 p-4 lg:p-6">
-            {!selected && !detailLoading ? (
+            {loading && !selected ? (
+              <div className="flex h-full min-h-[320px] items-center justify-center rounded-2xl border border-border bg-white">
+                <Loader />
+              </div>
+            ) : !selected && !detailLoading && items.length === 0 ? (
+              <div className="flex h-full min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center">
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                  <CalendarClock className="h-8 w-8" strokeWidth={1.5} />
+                </div>
+                <h3 className="text-lg font-bold text-text">
+                  {isAr ? 'لا توجد اشتراكات' : 'No subscriptions here'}
+                </h3>
+                <p className="mt-2 max-w-sm text-sm text-text-muted">
+                  {isAr
+                    ? 'لا توجد اشتراكات مطابقة للفلاتر الحالية. جرّب تغيير الفلاتر أو البحث.'
+                    : 'Nothing matches the current filters. Try adjusting the filters or search.'}
+                </p>
+              </div>
+            ) : !selected && !detailLoading ? (
               <div className="flex h-full min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-white px-6 py-16 text-center">
                 <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-50 text-violet-500">
                   <CalendarClock className="h-8 w-8" strokeWidth={1.5} />

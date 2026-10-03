@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { X } from 'lucide-react';
 import InteractiveGoogleMap from './InteractiveGoogleMap';
 import AddressSearchInput from './AddressSearchInput';
 import CurrentLocationButton from './CurrentLocationButton';
@@ -11,6 +12,8 @@ import {
 import { deliveryZoneService } from '../../services/apiServices';
 import { parseOsmSelection } from '../../utils/osmGeocode';
 import { parseGeocodeResult, readGooglePlaceCoords } from '../../utils/parseGooglePlace';
+import { fitZoomForRadius } from '../../utils/geoCircle';
+import GeoErrorNotice from '../location/GeoErrorNotice';
 
 const DEFAULT_CENTER = { lat: 30.0444, lng: 31.2357 };
 
@@ -23,6 +26,10 @@ export default function GoogleMapPicker({
   heightClass = 'h-72',
   suggestPlaces,
   showCurrentLocation = true,
+  radiusMeters = null,
+  onRadiusChange = null,
+  radiusMinMeters = 300,
+  radiusMaxMeters = 50000,
 }) {
   const {
     locate,
@@ -36,6 +43,7 @@ export default function GoogleMapPicker({
   const [livePin, setLivePin] = useState(null);
   const [gpsAccuracy, setGpsAccuracy] = useState(null);
   const [gpsWarning, setGpsWarning] = useState('');
+  const [locateErrorCode, setLocateErrorCode] = useState(null);
 
   const savedPosition = lat != null && lng != null
     ? { lat: Number(lat), lng: Number(lng) }
@@ -44,7 +52,9 @@ export default function GoogleMapPicker({
 
   const center = position || DEFAULT_CENTER;
   const zoom = position
-    ? (gpsAccuracy != null && gpsAccuracy > 350 ? 14 : gpsAccuracy != null && gpsAccuracy > 120 ? 15 : 16)
+    ? (onRadiusChange
+      ? fitZoomForRadius(radiusMeters, position.lat)
+      : (gpsAccuracy != null && gpsAccuracy > 350 ? 14 : gpsAccuracy != null && gpsAccuracy > 120 ? 15 : 16))
     : 11;
 
   const applyGeocodeResult = useCallback((result, fallbackAddress = '') => {
@@ -163,6 +173,7 @@ export default function GoogleMapPicker({
 
   const handleUseCurrentLocation = useCallback(async () => {
     clearLocateError();
+    setLocateErrorCode(null);
     setGpsWarning('');
     try {
       const coords = await locate({
@@ -179,8 +190,18 @@ export default function GoogleMapPicker({
     } catch (err) {
       setGpsAccuracy(null);
       setLocateError(getGeolocationErrorMessage(err, isAr));
+      setLocateErrorCode(err?.code ?? err?.name ?? null);
     }
   }, [clearLocateError, isAr, locate, resolveCoords, setLocateError]);
+
+  const clearPin = useCallback(() => {
+    setLivePin(null);
+    setGpsAccuracy(null);
+    setGpsWarning('');
+    clearLocateError();
+    setLocateErrorCode(null);
+    onChange?.({ lat: null, lng: null, formattedAddress: '', placeId: '' });
+  }, [clearLocateError, onChange]);
 
   return (
     <div className="space-y-3">
@@ -192,9 +213,13 @@ export default function GoogleMapPicker({
             statusText={locating ? getGeolocationProgressMessage(locateProgress, isAr) : ''}
             onClick={handleUseCurrentLocation}
           />
-          {locateError && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{locateError}</p>
-          )}
+          <GeoErrorNotice
+            message={locateError}
+            code={locateErrorCode}
+            isAr={isAr}
+            onRetry={handleUseCurrentLocation}
+            retrying={locating}
+          />
           {gpsWarning && !locateError && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{gpsWarning}</p>
           )}
@@ -216,22 +241,51 @@ export default function GoogleMapPicker({
         suggestPlaces={suggestPlaces}
       />
 
-      <InteractiveGoogleMap
-        center={center}
-        zoom={zoom}
-        position={position}
-        accuracyMeters={gpsAccuracy}
-        onClick={handleMapClick}
-        onDragEnd={handleDragEnd}
-        isAr={isAr}
-        heightClass={heightClass}
-      />
+      <div className="relative">
+        <InteractiveGoogleMap
+          center={center}
+          zoom={zoom}
+          position={position}
+          accuracyMeters={gpsAccuracy}
+          radiusMeters={onRadiusChange ? radiusMeters : null}
+          onRadiusChange={onRadiusChange}
+          radiusMinMeters={radiusMinMeters}
+          radiusMaxMeters={radiusMaxMeters}
+          onClick={handleMapClick}
+          onDragEnd={handleDragEnd}
+          isAr={isAr}
+          heightClass={heightClass}
+        />
+        {onRadiusChange && position && (
+          <div className="pointer-events-none absolute start-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-primary-700 shadow-md ring-1 ring-primary-100">
+            {isAr
+              ? `نطاق التغطية: ${(Number(radiusMeters) / 1000).toFixed(1)} كم`
+              : `Coverage radius: ${(Number(radiusMeters) / 1000).toFixed(1)} km`}
+          </div>
+        )}
+      </div>
 
-      <p className="text-xs text-text-muted">
-        {isAr
-          ? 'استخدم موقعك الحالي، أو ابحث عن العنوان واختر من القائمة، أو انقر على الخريطة أو اسحب الدبوس.'
-          : 'Use your current location, search and pick a suggestion, or click the map / drag the pin.'}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs text-text-muted">
+          {onRadiusChange
+            ? (isAr
+              ? 'اسحب الدبوس لنقل مركز المنطقة، أو اسحب المقبض الأزرق على حافة الدائرة لتوسيع أو تصغير نطاق التغطية.'
+              : 'Drag the pin to move the zone center, or drag the blue handle on the circle\'s edge to widen or shrink the coverage radius.')
+            : (isAr
+              ? 'استخدم موقعك الحالي، أو ابحث عن العنوان واختر من القائمة، أو انقر على الخريطة أو اسحب الدبوس.'
+              : 'Use your current location, search and pick a suggestion, or click the map / drag the pin.')}
+        </p>
+        {position && (
+          <button
+            type="button"
+            onClick={clearPin}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-text-muted transition hover:bg-red-50 hover:text-red-700"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+            {isAr ? 'مسح التحديد' : 'Clear pin'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
