@@ -1,18 +1,54 @@
-import { Banknote, ChevronDown, ChevronUp, CreditCard, QrCode, Smartphone } from 'lucide-react';
+import { AlertTriangle, Banknote, ChevronDown, ChevronUp, CreditCard, Receipt, QrCode, Smartphone, WalletCards } from 'lucide-react';
 import Input from '../../components/ui/Input';
 import ToggleSwitch from './ToggleSwitch';
 import PaymentAccountNumbersEditor from './PaymentAccountNumbersEditor';
 import { requiresAccountNumbers } from '../../constants/paymentMethods';
 
 const METHOD_META = {
+  paymob_card: {
+    title: 'Paymob — Card / Apple Pay',
+    Icon: CreditCard,
+    iconBg: 'bg-sky-100 text-sky-700',
+    accentBorder: 'border-sky-200',
+    accentBg: 'bg-sky-50/40',
+    hintAr: 'فيزا / ماستركارد / ميزة و Apple Pay عبر صفحة دفع Paymob الآمنة',
+    hintEn: 'Visa / Mastercard / Meeza and Apple Pay on Paymob’s secure checkout',
+  },
+  paymob_wallet: {
+    title: 'Paymob — Mobile wallets',
+    Icon: Smartphone,
+    iconBg: 'bg-sky-100 text-sky-700',
+    accentBorder: 'border-sky-200',
+    accentBg: 'bg-sky-50/40',
+    hintAr: 'فودافون كاش، أورانج، اتصالات، WE Pay — تأكيد تلقائي بدون رفع إيصال',
+    hintEn: 'Vodafone Cash, Orange, Etisalat, WE Pay — confirmed automatically, no receipt upload',
+  },
+  paymob_valu: {
+    title: 'Paymob — valU',
+    Icon: WalletCards,
+    iconBg: 'bg-sky-100 text-sky-700',
+    accentBorder: 'border-sky-200',
+    accentBg: 'bg-sky-50/40',
+    hintAr: 'تقسيط valU عبر Paymob — الاسترداد يتم يدوياً من لوحة valU',
+    hintEn: 'valU instalments via Paymob — refunds are handled manually with valU',
+  },
+  fawry: {
+    title: 'Fawry',
+    Icon: Receipt,
+    iconBg: 'bg-yellow-100 text-yellow-800',
+    accentBorder: 'border-yellow-200',
+    accentBg: 'bg-yellow-50/40',
+    hintAr: 'رقم مرجعي يدفعه العميل في أي منفذ فوري — يتأكد الطلب تلقائياً',
+    hintEn: 'Reference number paid at any Fawry outlet — the order confirms automatically',
+  },
   stripe: {
     title: 'Stripe',
     Icon: CreditCard,
     iconBg: 'bg-indigo-100 text-indigo-700',
     accentBorder: 'border-indigo-200',
     accentBg: 'bg-indigo-50/40',
-    hintAr: 'دفع بالبطاقة عبر Stripe',
-    hintEn: 'Card payments processed by Stripe',
+    hintAr: 'غير متاح لحسابات التجار في مصر — محفوظ للطلبات القديمة',
+    hintEn: 'Not available to Egypt-based merchants — kept for older orders',
   },
   cod: {
     title: 'Cash on Delivery',
@@ -96,6 +132,12 @@ export default function PaymentMethodEditorCard({
             >
               {enabled ? (isAr ? 'مفعّل' : 'Active') : (isAr ? 'معطّل' : 'Inactive')}
             </span>
+            {method.gatewayConfigured === false && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                <AlertTriangle className="h-3 w-3" aria-hidden />
+                {isAr ? 'غير مُعدّ — مخفي عن العملاء' : 'Not configured — hidden from customers'}
+              </span>
+            )}
             {showAccounts && (
               <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-border">
                 {accountCount} {isAr ? 'أرقام' : 'numbers'}

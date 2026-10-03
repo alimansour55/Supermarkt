@@ -12,11 +12,12 @@ import {
   reverseCouponUsage,
   assertCustomerCanCancel,
   assertAdminCanCancel,
-  processStripeRefund,
   pushStatusHistory,
   visibleMessages,
 } from '../services/orderManagement.service.js';
 import { reverseOrderWallet } from '../services/wallet.service.js';
+import { processOnlineRefund } from '../services/payments/payment.service.js';
+import { isOnlinePaymentMethod } from '../constants/paymentMethods.js';
 import { getActiveDeliveryCounts } from '../services/deliveryDispatch.service.js';
 import { notifyOrderCustomerMessage } from '../services/notification.service.js';
 import {
@@ -122,9 +123,9 @@ async function cancelOrderInternal(order, { reason, actor, isAdmin }) {
   await reverseOrderWallet(order);
   await reverseCouponUsage(order);
 
-  if (order.paymentStatus === 'paid' && order.paymentMethod === 'stripe') {
-    const refundId = await processStripeRefund(order, order.total);
-    order.stripeRefundId = refundId;
+  if (order.paymentStatus === 'paid' && isOnlinePaymentMethod(order.paymentMethod)) {
+    const refund = await processOnlineRefund(order, order.total, reason || 'Order cancelled');
+    if (refund.refundId) order.paymentRefundId = refund.refundId;
     order.paymentStatus = 'refunded';
     order.refundAmount = order.total;
     order.refundedAt = new Date();
@@ -197,9 +198,8 @@ export const refundAdminOrder = asyncHandler(async (req, res) => {
     throw new AppError('Invalid refund amount', 400);
   }
 
-  if (order.paymentMethod === 'stripe') {
-    order.stripeRefundId = await processStripeRefund(order, refundAmount);
-  }
+  const refund = await processOnlineRefund(order, refundAmount, reason || 'Admin refund');
+  if (refund.refundId) order.paymentRefundId = refund.refundId;
 
   order.paymentStatus = 'refunded';
   order.refundAmount = refundAmount;
@@ -223,10 +223,15 @@ export const refundAdminOrder = asyncHandler(async (req, res) => {
     entityType: 'order',
     entityId: order._id,
     entityLabel: order.orderNumber,
-    changes: { refundAmount, paymentStatus: 'refunded' },
+    changes: { refundAmount, paymentStatus: 'refunded', gatewayRefund: refund.status },
   });
 
-  res.json({ success: true, order: await formatOrderResponse(order, { isStaff: true }) });
+  res.json({
+    success: true,
+    // 'manual_required' → the gateway can't refund this method (Fawry cash, valU): pay the customer back yourself.
+    refund: { status: refund.status, refundId: refund.refundId },
+    order: await formatOrderResponse(order, { isStaff: true }),
+  });
 });
 
 export const suggestSubstitution = asyncHandler(async (req, res) => {

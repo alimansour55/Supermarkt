@@ -12,6 +12,9 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
   /** Skip the next getMe fetch right after verifyOtp — avoids clearing a fresh session */
   const skipNextFetch = useRef(false);
+  /** Mirrors `user` so fetchUser can tell a background refresh from a first load. */
+  const userRef = useRef(null);
+  userRef.current = user;
 
   const fetchUser = useCallback(async () => {
     // After SSR the stored token is read post-hydration — stay "loading" until then
@@ -29,7 +32,11 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    setLoading(true);
+    // Only a first load shows the global loading state. A refresh of a signed-in user
+    // (refreshUser) stays silent: flipping `loading` makes ProtectedRoute unmount the
+    // page, and a page that refreshes on mount would then remount itself forever.
+    const silent = Boolean(userRef.current);
+    if (!silent) setLoading(true);
     try {
       const { data } = await authService.getMe();
       setUser(data.user);

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PAYMENT_METHOD_IDS } from '../constants/paymentMethods.js';
 
 const subscriptionItemSchema = new mongoose.Schema(
   {
@@ -78,7 +79,7 @@ const recurringDeliverySubscriptionSchema = new mongoose.Schema(
     nextDeliveryDate: { type: Date, required: true, index: true },
     paymentMethod: {
       type: String,
-      enum: ['stripe', 'cod', 'instapay', 'vodafone_cash'],
+      enum: PAYMENT_METHOD_IDS,
       default: 'cod',
     },
     isActive: { type: Boolean, default: true, index: true },

@@ -21,7 +21,7 @@ Caddy gets and renews the HTTPS certificate automatically (Let's Encrypt).
 | VPS | Ubuntu 24.04, **2 vCPU / 4 GB RAM** minimum (Hetzner, DigitalOcean, Contabo…). |
 | Domain | Pick one canonical host, e.g. `www.yourstore.com`; the other spelling redirects to it. |
 | MongoDB | [MongoDB Atlas](https://www.mongodb.com/atlas) M10+ (or the free M0 to start). Atlas is a replica set, which order/wallet transactions need. |
-| Secrets | Cloudinary, Stripe (live), SMTP, Twilio, Google Maps, OpenAI — whichever you use. |
+| Secrets | Paymob + Fawry (live), Cloudinary, SMTP, Twilio, Google Maps, OpenAI — whichever you use. |
 
 ## 2. DNS
 
@@ -72,8 +72,17 @@ JWT_SECRET=<64 random characters: openssl rand -hex 32>
 # CLIENT_URL is set from SITE_URL by docker-compose.yml
 # Capacitor app origins (Android / iOS) if you ship the mobile app:
 CORS_ORIGINS=https://localhost,capacitor://localhost
-STRIPE_SECRET_KEY=sk_live_...
-STRIPE_WEBHOOK_SECRET=whsec_...
+PAYMOB_SECRET_KEY=egy_sk_live_...
+PAYMOB_PUBLIC_KEY=egy_pk_live_...
+PAYMOB_HMAC_SECRET=...
+PAYMOB_API_KEY=...
+PAYMOB_INTEGRATION_CARD=...
+PAYMOB_INTEGRATION_APPLE_PAY=...
+PAYMOB_INTEGRATION_WALLET=...
+PAYMOB_INTEGRATION_VALU=...
+FAWRY_MERCHANT_CODE=...
+FAWRY_SECURE_KEY=...
+FAWRY_ENV=production
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
@@ -119,7 +128,7 @@ Run the test suite against the live site from your PC:
 E2E_BASE_URL=https://www.yourstore.com npm run test:e2e
 ```
 
-Stripe: add the webhook endpoint `https://www.yourstore.com/api/payment/webhook` in the Stripe dashboard.
+Payments: see **Online payments** below.
 
 ## 7. Updating
 
@@ -129,6 +138,43 @@ git pull
 docker compose up -d --build
 docker image prune -f
 ```
+
+## Online payments (Paymob + Fawry)
+
+| Checkout method | Gateway | Needs |
+|---|---|---|
+| Card (Visa / Mastercard / Meeza) + Apple Pay | Paymob | `PAYMOB_INTEGRATION_CARD` (+ `PAYMOB_INTEGRATION_APPLE_PAY`) |
+| Mobile wallets (Vodafone Cash, Orange, Etisalat, WE Pay) | Paymob | `PAYMOB_INTEGRATION_WALLET` |
+| valU instalments | Paymob | `PAYMOB_INTEGRATION_VALU` |
+| Pay at Fawry (reference number) | Fawry | `FAWRY_MERCHANT_CODE`, `FAWRY_SECURE_KEY` |
+| Cash on delivery | — | always available |
+
+All Paymob methods also need `PAYMOB_SECRET_KEY`, `PAYMOB_PUBLIC_KEY` and `PAYMOB_HMAC_SECRET`.
+A method only shows at checkout once its keys are set; the admin **Payment methods** page marks
+enabled-but-unconfigured methods with a warning. Customers pay after the order is placed — the
+order stays `pending` until the gateway confirms, and can be paid again from the order page.
+
+**Paymob setup**
+1. Dashboard → Settings → API Keys: copy the Secret key, Public key, HMAC secret and API key.
+2. Settings → Payment Integrations: copy each integration id (test ids while testing, live ids for launch — they must match the key mode).
+3. Nothing to configure for callbacks: every payment sends its own callback URL
+   (`https://www.yourstore.com/api/payment/paymob/webhook`, signed with your HMAC secret).
+4. Apple Pay: ask Paymob to enable it and verify your domain; then set `PAYMOB_INTEGRATION_APPLE_PAY`.
+5. Test with Paymob's sandbox cards (e.g. 5123 4567 8901 2346, 01/39, CVV 123) and wallet 01010101010 / PIN 123456 / OTP 123456.
+   valU and kiosk methods have no sandbox — verify them with one small live payment.
+
+**Fawry setup**
+1. Get the merchant code and secure key from Fawry (staging first, then production; set `FAWRY_ENV=production` for live).
+2. Ask Fawry to enable server notifications (V2). The callback URL is sent with every charge:
+   `https://www.yourstore.com/api/payment/fawry/webhook`.
+3. Reference numbers expire after `FAWRY_EXPIRY_HOURS` (default 48); an expired reference marks the order's payment failed.
+
+**Refunds** (order cancel, admin refund, approved return) go back through the gateway for cards and wallets.
+Fawry cash payments and valU can't be refunded electronically: the refund is recorded as
+`manual_required` on the order and the admin response says so — pay the customer back (e.g. store wallet).
+
+**Safety**: payment state changes only on a verified signature (Paymob HMAC-SHA512, Fawry SHA-256) or a direct
+status query to the gateway; amounts are checked against the order total; duplicate callbacks are no-ops.
 
 ## Product search (Meilisearch)
 

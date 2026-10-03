@@ -53,14 +53,18 @@ export const DEFAULT_SEO = {
   facebookPixelId: '',
 };
 
+/**
+ * Online methods only appear at checkout once their gateway keys are configured
+ * (config/payments.js), so they can safely default to enabled.
+ */
 export const DEFAULT_PAYMENT_METHODS = [
   {
-    id: 'stripe',
+    id: 'paymob_card',
     enabled: true,
-    labelAr: 'دفع أونلاين (Stripe)',
-    labelEn: 'Online Payment (Stripe)',
-    descriptionAr: 'فيزا / Mastercard / Meeza',
-    descriptionEn: 'Visa / Mastercard / Meeza',
+    labelAr: 'بطاقة بنكية / Apple Pay',
+    labelEn: 'Card / Apple Pay',
+    descriptionAr: 'فيزا / ماستركارد / ميزة — و Apple Pay على أجهزة آبل',
+    descriptionEn: 'Visa / Mastercard / Meeza — and Apple Pay on Apple devices',
     sortOrder: 0,
     accountNumbers: [],
   },
@@ -75,13 +79,43 @@ export const DEFAULT_PAYMENT_METHODS = [
     accountNumbers: [],
   },
   {
+    id: 'paymob_wallet',
+    enabled: true,
+    labelAr: 'محفظة إلكترونية',
+    labelEn: 'Mobile wallet',
+    descriptionAr: 'فودافون كاش، أورانج كاش، اتصالات كاش، WE Pay وغيرها',
+    descriptionEn: 'Vodafone Cash, Orange Cash, Etisalat Cash, WE Pay and more',
+    sortOrder: 2,
+    accountNumbers: [],
+  },
+  {
+    id: 'fawry',
+    enabled: true,
+    labelAr: 'فوري',
+    labelEn: 'Fawry',
+    descriptionAr: 'احصل على رقم مرجعي وادفع في أي منفذ فوري أو تطبيق myFawry',
+    descriptionEn: 'Get a reference number and pay at any Fawry outlet or the myFawry app',
+    sortOrder: 3,
+    accountNumbers: [],
+  },
+  {
+    id: 'paymob_valu',
+    enabled: true,
+    labelAr: 'valU تقسيط',
+    labelEn: 'valU instalments',
+    descriptionAr: 'قسّط مشترياتك مع valU',
+    descriptionEn: 'Split your purchase into instalments with valU',
+    sortOrder: 4,
+    accountNumbers: [],
+  },
+  {
     id: 'instapay',
     enabled: false,
     labelAr: 'Instapay',
     labelEn: 'Instapay',
     descriptionAr: 'حوّل المبلغ ثم ارفع صورة التأكيد',
     descriptionEn: 'Transfer the amount then upload your confirmation screenshot',
-    sortOrder: 2,
+    sortOrder: 5,
     accountNumbers: [],
   },
   {
@@ -91,7 +125,17 @@ export const DEFAULT_PAYMENT_METHODS = [
     labelEn: 'Vodafone Cash',
     descriptionAr: 'حوّل المبلغ ثم ارفع صورة التأكيد',
     descriptionEn: 'Transfer the amount then upload your confirmation screenshot',
-    sortOrder: 3,
+    sortOrder: 6,
+    accountNumbers: [],
+  },
+  {
+    id: 'stripe',
+    enabled: false,
+    labelAr: 'دفع أونلاين (Stripe)',
+    labelEn: 'Online Payment (Stripe)',
+    descriptionAr: 'غير متاح لحسابات التجار في مصر — محفوظ للطلبات القديمة',
+    descriptionEn: 'Not available to Egypt-based merchants — kept for historic orders',
+    sortOrder: 9,
     accountNumbers: [],
   },
 ];

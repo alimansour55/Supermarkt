@@ -1,6 +1,45 @@
 import mongoose from 'mongoose';
+import { PAYMENT_METHOD_IDS } from '../constants/paymentMethods.js';
 import { ORDER_STATUS_VALUES } from '../constants/orderStatuses.js';
 import geoFields from '../schemas/geoFields.js';
+
+const paymentRefundSchema = new mongoose.Schema(
+  {
+    refundId: { type: String, default: null },
+    amount: { type: Number, min: 0, required: true },
+    /** succeeded = gateway refunded; manual_required = gateway can't refund this method. */
+    status: { type: String, enum: ['succeeded', 'manual_required'], required: true },
+    note: { type: String, trim: true, default: '' },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
+const paymentRecordSchema = new mongoose.Schema(
+  {
+    provider: { type: String, enum: ['paymob', 'fawry', 'stripe'], required: true },
+    /** Merchant reference of the current attempt (Paymob special_reference / Fawry merchantRefNum). */
+    reference: { type: String, default: null },
+    /** Every attempt's reference — a late callback for an older attempt still finds the order. */
+    references: { type: [String], default: [] },
+    attempts: { type: Number, default: 0 },
+    intentionId: { type: String, default: null },
+    gatewayOrderId: { type: String, default: null },
+    transactionId: { type: String, default: null },
+    fawryReferenceNumber: { type: String, default: null },
+    expiresAt: { type: Date, default: null },
+    sourceType: { type: String, default: '' },
+    sourceSubType: { type: String, default: '' },
+    maskedPan: { type: String, default: '' },
+    paidAt: { type: Date, default: null },
+    failedAt: { type: Date, default: null },
+    failureReason: { type: String, default: '' },
+    /** Gateway reported a different amount than the order total — needs staff review. */
+    amountMismatch: { type: Boolean, default: false },
+    refunds: { type: [paymentRefundSchema], default: [] },
+  },
+  { _id: false },
+);
 
 const orderItemSchema = new mongoose.Schema(
   {
@@ -63,6 +102,7 @@ const orderReturnSchema = new mongoose.Schema(
     },
     refundAmount: { type: Number, min: 0, default: 0 },
     stripeRefundId: { type: String, default: null },
+    paymentRefundId: { type: String, default: null },
     requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     requestedByRole: { type: String, enum: ['customer', 'staff'], default: 'customer' },
     requestedAt: { type: Date, default: Date.now },
@@ -230,7 +270,7 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['stripe', 'cod', 'instapay', 'vodafone_cash'],
+      enum: PAYMENT_METHOD_IDS,
       default: 'cod',
     },
     manualPaymentAccount: {
@@ -266,6 +306,8 @@ const orderSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    /** Gateway record for online methods (Paymob / Fawry). */
+    payment: { type: paymentRecordSchema, default: undefined },
     deliveryMethod: {
       type: String,
       enum: ['scheduled', 'express', 'recurring'],
@@ -341,6 +383,7 @@ const orderSchema = new mongoose.Schema(
     refundReason: { type: String, trim: true, default: '' },
     refundedAt: { type: Date, default: null },
     stripeRefundId: { type: String, default: null },
+    paymentRefundId: { type: String, default: null },
     deliveredAt: { type: Date, default: null },
     reviewRequestSentAt: { type: Date, default: null },
     substitutions: { type: [substitutionSchema], default: [] },
@@ -388,6 +431,7 @@ const orderSchema = new mongoose.Schema(
 orderSchema.index({ assignedDriver: 1, orderStatus: 1 });
 
 orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index({ 'payment.references': 1 }, { sparse: true });
 orderSchema.index({ 'returns.status': 1 });
 orderSchema.index({ 'trash.stage': 1, createdAt: -1 });
 // TTL index: MongoDB's background task removes a document ~60s after

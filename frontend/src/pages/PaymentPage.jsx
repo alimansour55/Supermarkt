@@ -21,28 +21,42 @@ export default function PaymentPage() {
       return;
     }
 
-    paymentService.createCheckoutSession(orderId)
-      .then(({ data }) => {
-        if (data.alreadyPaid) {
-          clearCart();
-          navigate('/payment/success', {
-            state: { orderNumber: data.orderNumber, total: data.total },
+    // Paymob / Fawry orders restart through /payment/start; legacy Stripe orders keep their session flow.
+    paymentService.status(orderId)
+      .then(({ data: status }) => {
+        if (status.order?.paymentMethod !== 'stripe') {
+          return paymentService.start(orderId, language).then(({ data }) => {
+            if (data.action === 'redirect' && data.url) {
+              window.location.href = data.url;
+              return;
+            }
+            navigate(`/payment/result?order_id=${orderId}`, { replace: true });
           });
-          return;
         }
-
-        if (data.url) {
-          window.location.href = data.url;
-          return;
-        }
-
-        throw new Error('No checkout URL returned');
+        return paymentService.createCheckoutSession(orderId).then(({ data }) => handleStripe(data));
       })
       .catch((err) => {
         setError(err.response?.data?.message || err.message || 'Payment setup failed');
         setLoading(false);
       });
-  }, [orderId, navigate, clearCart]);
+
+    function handleStripe(data) {
+      if (data.alreadyPaid) {
+        clearCart();
+        navigate('/payment/success', {
+          state: { orderNumber: data.orderNumber, total: data.total },
+        });
+        return;
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+
+      throw new Error('No checkout URL returned');
+    }
+  }, [orderId, navigate, clearCart, language]);
 
   if (loading && !error) {
     return (

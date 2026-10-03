@@ -29,6 +29,10 @@ export const CUSTOMER_TYPES = [
 
 export const PAYMENT_METHOD_OPTIONS = [
   { value: 'cod', labelAr: 'الدفع عند الاستلام', labelEn: 'Cash on delivery' },
+  { value: 'paymob_card', labelAr: 'بطاقة / Apple Pay (Paymob)', labelEn: 'Card / Apple Pay (Paymob)' },
+  { value: 'paymob_wallet', labelAr: 'محفظة إلكترونية (Paymob)', labelEn: 'Mobile wallet (Paymob)' },
+  { value: 'paymob_valu', labelAr: 'valU (Paymob)', labelEn: 'valU (Paymob)' },
+  { value: 'fawry', labelAr: 'فوري', labelEn: 'Fawry' },
   { value: 'stripe', labelAr: 'بطاقة (Stripe)', labelEn: 'Card (Stripe)' },
   { value: 'instapay', labelAr: 'إنستاباي', labelEn: 'InstaPay' },
   { value: 'vodafone_cash', labelAr: 'فودافون كاش', labelEn: 'Vodafone Cash' },

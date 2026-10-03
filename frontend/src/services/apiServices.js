@@ -69,6 +69,9 @@ export const orderService = {
 };
 
 export const paymentService = {
+  /** Paymob → { action: 'redirect', url } · Fawry → { action: 'reference', referenceNumber, expiresAt } */
+  start: (orderId, lang = 'ar') => api.post('/payment/start', { orderId, channel: 'web', lang }),
+  status: (orderId) => api.get(`/payment/status/${orderId}`),
   createCheckoutSession: (orderId) => api.post('/payment/create-checkout-session', { orderId }),
   verifySession: (sessionId, orderId) => api.get('/payment/verify-session', {
     params: { session_id: sessionId, order_id: orderId },

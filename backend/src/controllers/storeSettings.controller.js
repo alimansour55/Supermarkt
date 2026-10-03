@@ -1,4 +1,6 @@
 import StoreSettings from '../models/StoreSettings.js';
+import { isPaymentMethodConfigured } from '../config/payments.js';
+import { isOnlinePaymentMethod, paymentProviderFor } from '../constants/paymentMethods.js';
 import {
   DEFAULT_NAVIGATION,
   DEFAULT_PAYMENT_METHODS,
@@ -96,6 +98,23 @@ const getOrCreateSettings = async () => {
     { new: true, upsert: true, setDefaultsOnInsert: true },
   );
 
+  // Append newly introduced default payment methods atomically, one $push per id, so
+  // concurrent first requests can't both append the same method (a read-modify-save
+  // of the whole array here used to duplicate them).
+  const missingMethods = settings.paymentMethods?.length
+    ? DEFAULT_PAYMENT_METHODS.filter((d) => !settings.paymentMethods.some((m) => m.id === d.id))
+    : [];
+  if (missingMethods.length) {
+    for (const method of missingMethods) {
+      // eslint-disable-next-line no-await-in-loop
+      await StoreSettings.updateOne(
+        { key: SETTINGS_KEY, 'paymentMethods.id': { $ne: method.id } },
+        { $push: { paymentMethods: { ...method } } },
+      );
+    }
+    settings = await StoreSettings.findOne({ key: SETTINGS_KEY });
+  }
+
   let changed = false;
   if (!settings.navigation?.headerLinks?.length) {
     settings.navigation = { ...DEFAULT_NAVIGATION, ...(settings.navigation?.toObject?.() || settings.navigation) };
@@ -115,11 +134,16 @@ const getOrCreateSettings = async () => {
       codMethod.descriptionEn = 'Pay in cash on delivery';
       changed = true;
     }
-    for (const defaultMethod of DEFAULT_PAYMENT_METHODS) {
-      if (!settings.paymentMethods.some((method) => method.id === defaultMethod.id)) {
-        settings.paymentMethods.push({ ...defaultMethod });
-        changed = true;
-      }
+    // Repair duplicates left behind by the old non-atomic merge (first entry wins).
+    const seenIds = new Set();
+    const uniqueMethods = settings.paymentMethods.filter((method) => {
+      if (seenIds.has(method.id)) return false;
+      seenIds.add(method.id);
+      return true;
+    });
+    if (uniqueMethods.length !== settings.paymentMethods.length) {
+      settings.paymentMethods = uniqueMethods;
+      changed = true;
     }
   }
   if (!settings.invoice?.titleAr || !settings.invoice?.labels?.itemAr || !settings.invoice?.accentColor) {
@@ -775,6 +799,15 @@ export const getPublicStoreSettings = asyncHandler(async (_req, res) => {
   const settings = await getOrCreateSettings();
   const data = serializeSettings(settings);
   ADMIN_ONLY_SETTINGS_KEYS.forEach((key) => { delete data[key]; });
+  if (Array.isArray(data.paymentMethods)) {
+    data.paymentMethods = data.paymentMethods
+      .filter((method) => isPaymentMethodConfigured(method.id))
+      .map((method) => ({
+        ...method,
+        online: isOnlinePaymentMethod(method.id),
+        provider: paymentProviderFor(method.id),
+      }));
+  }
   if (data.liveChat) {
     const available = isLiveChatAvailableNow(data.liveChat);
     data.liveChat = {
@@ -788,7 +821,15 @@ export const getPublicStoreSettings = asyncHandler(async (_req, res) => {
 
 export const getAdminStoreSettings = asyncHandler(async (_req, res) => {
   const settings = await getOrCreateSettings();
-  res.json({ success: true, data: serializeSettings(settings) });
+  const data = serializeSettings(settings);
+  if (Array.isArray(data.paymentMethods)) {
+    // Read-only hint for the editor: is this method's gateway set up on the server?
+    data.paymentMethods = data.paymentMethods.map((method) => ({
+      ...method,
+      gatewayConfigured: isPaymentMethodConfigured(method.id),
+    }));
+  }
+  res.json({ success: true, data });
 });
 
 export const updateAdminStoreSettings = asyncHandler(async (req, res) => {

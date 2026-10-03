@@ -12,6 +12,7 @@ import {
   getPdfFontBuffer,
   getPdfBoldFontBuffer,
 } from '../utils/arabicPdfText.js';
+import { paymentMethodLabel as methodLabel } from '../constants/paymentMethods.js';
 
 const require = createRequire(import.meta.url);
 const QRCode = require('qrcode');
@@ -92,14 +93,7 @@ function paymentStatusLabel(status, isAr) {
 }
 
 function paymentMethodLabel(method, isAr) {
-  const map = {
-    cod: ['الدفع عند الاستلام', 'Cash on delivery'],
-    stripe: ['بطاقة ائتمان', 'Credit card'],
-    instapay: ['إنستاباي', 'InstaPay'],
-    vodafone_cash: ['فودافون كاش', 'Vodafone Cash'],
-  };
-  const row = map[method];
-  return row ? (isAr ? row[0] : row[1]) : String(method || '');
+  return methodLabel(method, isAr ? 'ar' : 'en');
 }
 
 function resolveTrackUrl(order) {

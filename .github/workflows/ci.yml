@@ -83,6 +83,8 @@ jobs:
         run: npm run seed --prefix backend
       - name: Build search index
         run: npm run search:reindex --prefix backend
+      - name: Backend tests (incl. payment flows against fake gateways)
+        run: npm test --prefix backend
       - name: Build storefront
         run: npm run build --prefix frontend
       - name: Start API and storefront

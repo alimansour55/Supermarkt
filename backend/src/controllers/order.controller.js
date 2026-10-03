@@ -73,10 +73,12 @@ import {
 import { resolveDeliveryLeadMinutes } from '../utils/deliveryLeadTime.js';
 import StoreSettings from '../models/StoreSettings.js';
 import {
+  isOnlinePaymentMethod,
   isValidPaymentMethod,
   normalizePaymentMethodId,
   requiresPaymentProof,
 } from '../constants/paymentMethods.js';
+import { isPaymentMethodConfigured } from '../config/payments.js';
 import {
   CLOUDINARY_FOLDERS,
   uploadFileToCloudinary,
@@ -183,6 +185,10 @@ export const createOrder = asyncHandler(async (req, res) => {
     .map((method) => method.id);
 
   if (enabledPaymentMethods.length && !enabledPaymentMethods.includes(paymentMethod)) {
+    throw new AppError(lang === 'ar' ? 'طريقة الدفع غير متاحة حالياً' : 'Payment method is not available', 400);
+  }
+
+  if (!isPaymentMethodConfigured(paymentMethod)) {
     throw new AppError(lang === 'ar' ? 'طريقة الدفع غير متاحة حالياً' : 'Payment method is not available', 400);
   }
 
@@ -585,7 +591,9 @@ export const createOrder = asyncHandler(async (req, res) => {
         preferredWeekday: Number(recurringPreferredWeekday),
         preferredDayOfMonth: Number(recurringPreferredDayOfMonth),
         startDate: parsedScheduledDate,
-        paymentMethod,
+        // Later deliveries can't be charged online without the customer present, so a
+        // subscription started with a gateway method collects cash on each delivery.
+        paymentMethod: isOnlinePaymentMethod(paymentMethod) ? 'cod' : paymentMethod,
         notes,
       });
       order.recurringDelivery = {

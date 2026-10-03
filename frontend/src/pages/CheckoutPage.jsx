@@ -34,7 +34,7 @@ import { calculateEarnPoints, getCashbackPercent, pointsToCashValue } from '../u
 import { getCheckoutPromoReassurance } from '../utils/cartPromotion';
 import { resolveFreeDeliveryMethods } from '../utils/freeDelivery';
 import ManualTransferPaymentPanel from '../components/checkout/ManualTransferPaymentPanel';
-import { requiresPaymentProof } from '../constants/paymentMethods';
+import { isGatewayPaymentMethod, requiresPaymentProof } from '../constants/paymentMethods';
 
 function CheckoutSection({ title, children }) {
   return (
@@ -682,7 +682,22 @@ export default function CheckoutPage() {
         ? await orderService.createWithPaymentProof(orderPayload, paymentProofFile)
         : await orderService.create(orderPayload);
 
-      if (paymentMethod === 'stripe') {
+      if (isGatewayPaymentMethod(paymentMethod)) {
+        // The order exists now; payment happens on Paymob's hosted page, or in cash
+        // with a Fawry reference number shown on the result page.
+        clearCart();
+        await refreshUser?.();
+        try {
+          const { data: pay } = await paymentService.start(data.order.id, language);
+          if (pay.action === 'redirect' && pay.url) {
+            window.location.href = pay.url;
+            return;
+          }
+        } catch {
+          // The result page shows the error and lets the customer retry the payment.
+        }
+        navigate(`/payment/result?order_id=${data.order.id}`);
+      } else if (paymentMethod === 'stripe') {
         const { data: paymentData } = await paymentService.createCheckoutSession(data.order.id);
         if (paymentData.url) {
           clearCart();
@@ -886,7 +901,6 @@ export default function CheckoutPage() {
           <CheckoutSection>
             <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
               {(paymentOptions.length ? paymentOptions : [
-                { id: 'stripe', labelAr: 'دفع أونلاين (Stripe)', labelEn: 'Online Payment (Stripe)', descriptionAr: 'فيزا / Mastercard / Meeza', descriptionEn: 'Visa / Mastercard / Meeza' },
                 { id: 'cod', labelAr: 'الدفع عند الاستلام', labelEn: 'Cash on Delivery', descriptionAr: 'ادفع نقداً عند الاستلام', descriptionEn: 'Pay in cash on delivery' },
               ]).map((method) => {
                 const selected = paymentMethod === method.id;

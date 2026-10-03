@@ -43,8 +43,8 @@ export const DEFAULT_CONTENT_PAGES = {
       {
         headingAr: 'ما طرق الدفع المتاحة؟',
         headingEn: 'What payment methods are available?',
-        bodyAr: 'نقبل الدفع عند الاستلام (COD) والدفع الإلكتروني عبر Stripe.',
-        bodyEn: 'We accept cash on delivery (COD) and card payments via Stripe.',
+        bodyAr: 'نقبل الدفع عند الاستلام، والبطاقات البنكية (فيزا / ماستركارد / ميزة) و Apple Pay، والمحافظ الإلكترونية، وتقسيط valU، والدفع في أي منفذ فوري برقم مرجعي.',
+        bodyEn: 'We accept cash on delivery, cards (Visa / Mastercard / Meeza) and Apple Pay, mobile wallets, valU instalments, and payment at any Fawry outlet with a reference number.',
       },
       {
         headingAr: 'كم يستغرق التوصيل؟',

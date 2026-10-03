@@ -1,3 +1,4 @@
+import { PAYMENT_METHOD_IDS } from './paymentMethods.js';
 /** Default contribution weights for partner revenue distribution (weighted mode). */
 export const DEFAULT_PARTNER_REVENUE_WEIGHTS = {
   products: 10,
@@ -55,7 +56,7 @@ export const PARTNER_ATTRIBUTION_STREAMS = [
 
 export const PARTNER_STATUSES = ['active', 'paused', 'archived'];
 
-export const ORDER_PAYMENT_METHODS = ['stripe', 'cod', 'instapay', 'vodafone_cash'];
+export const ORDER_PAYMENT_METHODS = PAYMENT_METHOD_IDS;
 export const ORDER_DELIVERY_METHODS = ['scheduled', 'express', 'recurring'];
 
 export const RULE_SCOPE_META = [

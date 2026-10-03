@@ -7,9 +7,10 @@ import {
 } from '../constants/returnFlow.js';
 import {
   restoreOrderInventory,
-  processStripeRefund,
   pushStatusHistory,
 } from './orderManagement.service.js';
+import { processOnlineRefund } from './payments/payment.service.js';
+import { isOnlinePaymentMethod } from '../constants/paymentMethods.js';
 
 const RETURNABLE_ORDER_STATUSES = new Set(['delivered']);
 const ACTIVE_RETURN_STATUSES = new Set(['pending', 'approved']);
@@ -219,12 +220,13 @@ export async function applyApprovedReturn(order, returnDoc) {
     quantity: returnDoc.quantity,
   }]);
 
-  if (order.paymentMethod === 'stripe' && order.paymentStatus === 'paid') {
+  if (isOnlinePaymentMethod(order.paymentMethod) && order.paymentStatus === 'paid') {
     try {
-      const stripeRefundId = await processStripeRefund(order, refundAmount);
-      if (stripeRefundId) returnDoc.stripeRefundId = stripeRefundId;
+      const refund = await processOnlineRefund(order, refundAmount, 'Product return');
+      if (refund.refundId) returnDoc.paymentRefundId = refund.refundId;
+      if (order.paymentMethod === 'stripe' && refund.refundId) returnDoc.stripeRefundId = refund.refundId;
     } catch (err) {
-      console.error('Return stripe refund failed:', err.message);
+      console.error('Return refund failed:', err.message);
     }
   }
 

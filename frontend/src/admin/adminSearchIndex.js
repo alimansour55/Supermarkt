@@ -49,7 +49,7 @@ const NAV_KEYWORDS = {
   '/admin/partner-revenue': ['partner', 'شريك', 'شركاء', 'commission', 'عمولة', 'payout', 'تسوية', 'توزيع', 'revenue share', 'split', 'rule', 'قاعدة', 'قواعد', 'تخصيص إيراد', 'attribution', 'statement', 'كشف حساب', 'كشف الحساب', 'ledger', 'دفتر', 'bank batch', 'دفعة بنكية', 'simulate', 'محاكاة'],
   '/admin/search-analytics': ['search analytics', 'تحليلات البحث', 'كلمات البحث', 'search terms', 'zero results', 'بدون نتائج', 'query', 'استعلام'],
   '/admin/settings': ['settings', 'اعداد', 'إعداد', 'اعدادات', 'إعدادات', 'تهيئة', 'config', 'configuration', 'خيارات', 'options', 'preferences'],
-  '/admin/payments': ['payment', 'دفع', 'مدفوعات', 'طريقة دفع', 'بطاقة', 'card', 'stripe', 'سترايب', 'cod', 'الدفع عند الاستلام', 'تحويل بنكي', 'bank transfer', 'محفظة', 'wallet', 'vodafone cash', 'فودافون كاش', 'instapay', 'انستا باي'],
+  '/admin/payments': ['payment', 'دفع', 'مدفوعات', 'طريقة دفع', 'بطاقة', 'card', 'stripe', 'سترايب', 'paymob', 'باي موب', 'fawry', 'فوري', 'valu', 'فاليو', 'apple pay', 'cod', 'الدفع عند الاستلام', 'تحويل بنكي', 'bank transfer', 'محفظة', 'wallet', 'vodafone cash', 'فودافون كاش', 'instapay', 'انستا باي'],
   '/admin/notifications': ['notification', 'اشعار', 'إشعار', 'اشعارات', 'إشعارات', 'template', 'قالب', 'قوالب', 'sms', 'email', 'بريد', 'رسالة نصية', 'push', 'whatsapp', 'واتساب'],
   '/admin/audit-log': ['audit', 'تدقيق', 'سجل', 'logs', 'history', 'تاريخ', 'activity', 'نشاط', 'من غيّر', 'who changed', 'تتبع التغييرات'],
 };

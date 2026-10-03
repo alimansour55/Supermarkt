@@ -68,6 +68,7 @@ const storefrontRoutes = [
     layout('app/layouts/RequireAuth.jsx', [
       route('checkout', 'pages/CheckoutPage.jsx'),
       route('payment', 'pages/PaymentPage.jsx'),
+      route('payment/result', 'pages/PaymentResultPage.jsx'),
       route('orders/:id', 'pages/OrderDetailPage.jsx'),
     ]),
 

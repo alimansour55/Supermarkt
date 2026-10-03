@@ -4,7 +4,11 @@ import { STAFF_ROLES } from '../constants/roles.js';
  * Business-internal fields that must never reach customers or the public storefront
  * (cost prices, stock audit trail, Cloudinary asset ids). Staff still receive them.
  */
-const PRIVATE_FIELDS = new Set(['wholesalePrice', 'stockHistory', 'cloudinaryPublicIds']);
+const PRIVATE_FIELDS = new Set([
+  'wholesalePrice', 'stockHistory', 'cloudinaryPublicIds',
+  // Payment-gateway internals (order.payment) — support staff only.
+  'references', 'intentionId', 'gatewayOrderId',
+]);
 
 function stripPrivate(value) {
   if (value == null || typeof value !== 'object') return value;

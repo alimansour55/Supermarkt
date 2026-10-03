@@ -25,7 +25,7 @@ import { canTrackOrder } from '../utils/orderTracking';
 import { useStoreSettings } from '../context/StoreSettingsContext';
 import { canCustomerEditOrder, getOrderEditBlockReason } from '../utils/orderEditHelpers';
 import { useOrderChat } from '../hooks/useOrderChat';
-import { getPaymentMethodLabel, requiresPaymentProof } from '../constants/paymentMethods';
+import { getPaymentMethodLabel, isGatewayPaymentMethod, requiresPaymentProof } from '../constants/paymentMethods';
 import { scrollToTop, scrollToSection } from '../utils/scrollToTop';
 
 const fetchOrderMessages = async (orderId) => {
@@ -477,6 +477,27 @@ export default function OrderDetailPage() {
                 </span>
               )}
             </p>
+            {isGatewayPaymentMethod(order.paymentMethod)
+              && order.orderStatus !== 'cancelled'
+              && ['pending', 'failed'].includes(order.paymentStatus) && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                {order.payment?.fawryReferenceNumber && order.paymentStatus === 'pending' ? (
+                  <p>
+                    {isAr ? 'ادفع في أي منفذ فوري بالرقم المرجعي: ' : 'Pay at any Fawry outlet with reference: '}
+                    <strong dir="ltr" className="font-mono tabular-nums">{order.payment.fawryReferenceNumber}</strong>
+                  </p>
+                ) : (
+                  <p>
+                    {order.paymentStatus === 'failed'
+                      ? (isAr ? 'لم يكتمل الدفع لهذا الطلب.' : "This order's payment didn't go through.")
+                      : (isAr ? 'الطلب بانتظار الدفع.' : 'This order is awaiting payment.')}
+                  </p>
+                )}
+                <Link to={`/payment?orderId=${order._id}`} className="mt-2 inline-block">
+                  <Button size="sm">{isAr ? 'ادفع الآن' : 'Pay now'}</Button>
+                </Link>
+              </div>
+            )}
             {order.paymentProofUrl && (
               <a
                 href={order.paymentProofUrl}

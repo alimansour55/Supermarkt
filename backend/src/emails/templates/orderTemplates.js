@@ -1,3 +1,4 @@
+import { paymentMethodLabel } from '../../constants/paymentMethods.js';
 import { renderEmailLayout } from '../layout.js';
 import {
   renderButton,
@@ -22,7 +23,7 @@ const orderSummaryBlock = (order) => `
 
 export const orderConfirmationTemplate = (order, user) => {
   const ordersUrl = `${clientUrl()}/orders`;
-  const paymentLabel = order.paymentMethod === 'stripe' ? 'بطاقة ائتمان' : 'الدفع عند الاستلام';
+  const paymentLabel = paymentMethodLabel(order.paymentMethod, 'ar');
 
   const bodyHtml = `
     <p style="margin: 0 0 16px;">مرحباً <strong>${user.name}</strong>،</p>
@@ -147,7 +148,7 @@ export const adminNewOrderTemplate = (order, customer) => {
       <strong>العميل:</strong> ${customer.name} (${customer.email})<br/>
       <strong>الهاتف:</strong> ${order.phone || customer.phone || '—'}<br/>
       <strong>الإجمالي:</strong> ${formatEmailPrice(order.total)}<br/>
-      <strong>الدفع:</strong> ${order.paymentMethod === 'stripe' ? 'Stripe' : 'COD'}
+      <strong>الدفع:</strong> ${paymentMethodLabel(order.paymentMethod, 'ar')}
     `)}
     ${renderOrderItems(order.items)}
     ${renderButton(adminUrl, '⚙️ إدارة الطلب')}

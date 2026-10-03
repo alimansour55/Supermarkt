@@ -1,11 +1,23 @@
 import Order from '../models/Order.js';
 import { AppError } from '../utils/AppError.js';
 import { getStripe } from '../config/stripe.js';
-import { notifyPaymentSuccessAfterPaid } from '../utils/sendEmail.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
-import { awardPointsForOrder } from '../services/loyalty.service.js';
-
-const clientUrl = () => process.env.CLIENT_URL || 'http://localhost:5173';
+import { appReturnUrl, clientUrl } from '../config/payments.js';
+import {
+  applyFawryResult,
+  applyPaymobResult,
+  findOrderByPaymentReference,
+  markOrderFailed,
+  markOrderPaid,
+  reconcileOrderPayment,
+  startOnlinePayment,
+} from '../services/payments/payment.service.js';
+import {
+  interpretPaymobTransaction,
+  verifyPaymobCallback,
+  verifyPaymobRedirect,
+} from '../services/payments/paymob.service.js';
+import { interpretFawryStatus, verifyFawryNotification } from '../services/payments/fawry.service.js';
 
 const getStripeClient = () => {
   try {
@@ -13,31 +25,6 @@ const getStripeClient = () => {
   } catch {
     throw new AppError('Stripe is not configured', 503);
   }
-};
-
-export const markOrderPaid = async (orderId, stripeSessionId) => {
-  const order = await Order.findById(orderId);
-  if (!order) return null;
-  if (order.paymentStatus === 'paid') return order;
-
-  order.paymentStatus = 'paid';
-  // Stay on «order received» until admin advances fulfillment
-  if (stripeSessionId) {
-    order.stripeSessionId = stripeSessionId;
-  }
-  await order.save();
-  await awardPointsForOrder(order);
-  notifyPaymentSuccessAfterPaid(orderId);
-  return order;
-};
-
-export const markOrderFailed = async (orderId) => {
-  const order = await Order.findById(orderId);
-  if (!order || order.paymentStatus === 'paid') return null;
-
-  order.paymentStatus = 'failed';
-  await order.save();
-  return order;
 };
 
 const buildCheckoutLineItems = (order) => {
@@ -178,7 +165,7 @@ export const verifyCheckoutSession = asyncHandler(async (req, res) => {
   }
 
   if (session.payment_status === 'paid') {
-    const updated = await markOrderPaid(order._id, session.id);
+    const updated = await markOrderPaid(order._id, { stripeSessionId: session.id });
     return res.json({
       success: true,
       order: {
@@ -222,7 +209,7 @@ export const createPaymentIntent = asyncHandler(async (req, res) => {
   if (order.stripeSessionId?.startsWith('pi_')) {
     paymentIntent = await stripe.paymentIntents.retrieve(order.stripeSessionId);
     if (paymentIntent.status === 'succeeded') {
-      await markOrderPaid(order._id, paymentIntent.id);
+      await markOrderPaid(order._id, { stripeSessionId: paymentIntent.id });
       return res.json({ success: true, clientSecret: null, alreadyPaid: true, orderNumber: order.orderNumber, total: order.total });
     }
   } else {
@@ -272,7 +259,7 @@ export const confirmPayment = asyncHandler(async (req, res) => {
   if (order.stripeSessionId.startsWith('cs_')) {
     const session = await stripe.checkout.sessions.retrieve(order.stripeSessionId);
     if (session.payment_status === 'paid') {
-      const updated = await markOrderPaid(order._id, session.id);
+      const updated = await markOrderPaid(order._id, { stripeSessionId: session.id });
       return res.json({
         success: true,
         order: {
@@ -289,7 +276,7 @@ export const confirmPayment = asyncHandler(async (req, res) => {
   const paymentIntent = await stripe.paymentIntents.retrieve(order.stripeSessionId);
 
   if (paymentIntent.status === 'succeeded') {
-    const updated = await markOrderPaid(order._id, paymentIntent.id);
+    const updated = await markOrderPaid(order._id, { stripeSessionId: paymentIntent.id });
     return res.json({
       success: true,
       order: {
@@ -316,7 +303,7 @@ export const confirmPayment = asyncHandler(async (req, res) => {
 const handleCheckoutSessionCompleted = async (session) => {
   const orderId = session.metadata?.orderId;
   if (!orderId || session.payment_status !== 'paid') return;
-  await markOrderPaid(orderId, session.id);
+  await markOrderPaid(orderId, { stripeSessionId: session.id });
 };
 
 const handleCheckoutSessionFailed = async (session) => {
@@ -328,7 +315,7 @@ const handleCheckoutSessionFailed = async (session) => {
 const handlePaymentIntentSucceeded = async (paymentIntent) => {
   const orderId = paymentIntent.metadata?.orderId;
   if (!orderId) return;
-  await markOrderPaid(orderId, paymentIntent.id);
+  await markOrderPaid(orderId, { stripeSessionId: paymentIntent.id });
 };
 
 const handlePaymentIntentFailed = async (paymentIntent) => {
@@ -384,4 +371,135 @@ export const stripeWebhook = async (req, res) => {
   }
 
   res.json({ received: true });
+};
+
+// ── Paymob / Fawry ──────────────────────────────────────────────────────────
+
+const orderSummary = (order) => ({
+  id: order._id,
+  orderNumber: order.orderNumber,
+  total: order.total,
+  pointsEarned: order.pointsEarned || 0,
+  paymentMethod: order.paymentMethod,
+  paymentStatus: order.paymentStatus,
+  orderStatus: order.orderStatus,
+});
+
+/** What the customer may see about the gateway attempt (no secrets, no internal ids). */
+const paymentView = (order) => {
+  const p = order.payment;
+  if (!p) return null;
+  return {
+    provider: p.provider,
+    fawryReferenceNumber: p.fawryReferenceNumber || null,
+    expiresAt: p.provider === 'fawry' ? p.expiresAt : null,
+    sourceType: p.sourceType || null,
+    maskedPan: p.maskedPan || null,
+    paidAt: p.paidAt || null,
+  };
+};
+
+/** POST /payment/start { orderId, channel: 'web'|'app', lang } */
+export const startPayment = asyncHandler(async (req, res) => {
+  const { orderId } = req.body;
+  if (!orderId) throw new AppError('orderId is required', 400);
+  const order = await Order.findOne({ _id: orderId, user: req.user._id });
+  if (!order) throw new AppError('Order not found', 404);
+
+  const result = await startOnlinePayment(order, req.user, {
+    channel: req.body.channel === 'app' ? 'app' : 'web',
+    lang: req.body.lang === 'en' ? 'en' : 'ar',
+  });
+  const fresh = await Order.findById(order._id);
+  res.json({ success: true, ...result, order: orderSummary(fresh), payment: paymentView(fresh) });
+});
+
+/** GET /payment/status/:orderId — stored status, refreshed from the gateway while unpaid. */
+export const getPaymentStatus = asyncHandler(async (req, res) => {
+  let order = await Order.findOne({ _id: req.params.orderId, user: req.user._id });
+  if (!order) throw new AppError('Order not found', 404);
+  if (order.paymentStatus !== 'paid' && order.payment) {
+    order = (await reconcileOrderPayment(order)) || order;
+  }
+  res.json({ success: true, order: orderSummary(order), payment: paymentView(order) });
+});
+
+/** POST /payment/paymob/webhook?hmac=… — Paymob "transaction processed" callback. */
+export const paymobWebhook = async (req, res) => {
+  try {
+    const { obj, type } = req.body || {};
+    if (type !== 'TRANSACTION' || !obj) return res.json({ received: true });
+    if (!verifyPaymobCallback(obj, req.query.hmac)) {
+      console.warn('[payments] Paymob webhook rejected: bad HMAC');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+    const tx = interpretPaymobTransaction(obj);
+    const order = await findOrderByPaymentReference(tx.merchantOrderId);
+    if (!order) {
+      console.warn(`[payments] Paymob webhook for unknown reference ${tx.merchantOrderId}`);
+      return res.json({ received: true });
+    }
+    await applyPaymobResult(order, tx, { source: 'webhook' });
+    return res.json({ received: true });
+  } catch (err) {
+    console.error('[payments] Paymob webhook failed:', err.message);
+    return res.status(500).json({ error: 'Processing failed' }); // Paymob retries
+  }
+};
+
+/**
+ * GET /payment/paymob/return/:channel/:lang — where Paymob sends the customer back.
+ * Trusted only via a valid redirect HMAC or the inquiry API; then forwards the browser
+ * to the storefront result page, or back into the mobile app via its deep link.
+ */
+export const paymobReturn = async (req, res) => {
+  const channel = req.params.channel === 'app' ? 'app' : 'web';
+  const lang = req.params.lang === 'en' ? 'en' : 'ar';
+  let order = null;
+  try {
+    order = await findOrderByPaymentReference(req.query.merchant_order_id);
+    if (order && order.paymentStatus !== 'paid') {
+      order = verifyPaymobRedirect(req.query)
+        ? await applyPaymobResult(order, interpretPaymobTransaction(req.query), { source: 'redirect' })
+        : await reconcileOrderPayment(order, { transactionId: req.query.id });
+    }
+  } catch (err) {
+    console.error('[payments] Paymob return handling failed:', err.message);
+  }
+
+  const params = new URLSearchParams();
+  if (order) {
+    params.set('order_id', String(order._id));
+    params.set('status', order.paymentStatus);
+  }
+  const target = channel === 'app'
+    ? `${appReturnUrl()}?${params}`
+    : `${clientUrl()}/${lang}/payment/result?${params}`;
+  res.redirect(302, target);
+};
+
+/** POST /payment/fawry/webhook — FawryPay Server Notification V2. */
+export const fawryWebhook = async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!verifyFawryNotification(body)) {
+      console.warn('[payments] Fawry webhook rejected: bad signature');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+    const order = await findOrderByPaymentReference(body.merchantRefNumber);
+    if (!order) {
+      console.warn(`[payments] Fawry webhook for unknown reference ${body.merchantRefNumber}`);
+      return res.json({ received: true });
+    }
+    await applyFawryResult(order, {
+      state: interpretFawryStatus(body.orderStatus),
+      rawStatus: body.orderStatus,
+      fawryRefNumber: body.fawryRefNumber,
+      orderAmount: body.orderAmount,
+    });
+    return res.json({ received: true });
+  } catch (err) {
+    console.error('[payments] Fawry webhook failed:', err.message);
+    return res.status(500).json({ error: 'Processing failed' });
+  }
 };

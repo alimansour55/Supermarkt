@@ -1,3 +1,4 @@
+import { PAYMENT_METHOD_LABELS } from '../constants/paymentMethods.js';
 export const STORE_TIMEZONE = process.env.STORE_TIMEZONE || 'Africa/Cairo';
 
 export const REVENUE_EXCLUDED_STATUSES = ['cancelled', 'returned'];
@@ -202,7 +203,4 @@ export function pctChange(current, previous) {
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 
-export const PAYMENT_LABELS = {
-  cod: { ar: 'الدفع عند الاستلام', en: 'Cash on delivery' },
-  stripe: { ar: 'دفع أونلاين', en: 'Online payment' },
-};
+export const PAYMENT_LABELS = PAYMENT_METHOD_LABELS;
