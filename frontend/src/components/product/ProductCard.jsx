@@ -8,7 +8,7 @@ import { useStoreSettings } from '../../context/StoreSettingsContext';
 import { DELIVERY_METHODS } from '../../constants/deliveryOptions';
 import { getDiscountPercent, getProductBadges, getPromotionHighlight, getStockStatus, getProductAvailableStock, shouldShowLowStockAlert } from '../../utils/productHelpers';
 import { formatPrice } from '../../utils/formatters';
-import { pickProductImage } from '../../utils/imageHelpers';
+import { pickProductImage, pickProductEmoji } from '../../utils/imageHelpers';
 import { prefetchProduct } from '../../services/productApi';
 import ProductImage from '../ui/ProductImage';
 import { calculateSecondPiecePrice } from '../../utils/promotionDisplay';
@@ -246,7 +246,7 @@ export default function ProductCard({ product, compact = false }) {
   const bumped = bumpProductId != null && String(bumpProductId) === String(product._id);
   // Show ONLY the active language name (no second language line)
   const title = isAr ? (product.name || '') : (product.nameEn || product.name || '');
-  const imageSrc = pickProductImage(product);
+  const imageSrc = pickProductImage(product) || pickProductEmoji(product);
   const detailPrefetchHandlers = product.slug
     ? {
         onMouseEnter: () => prefetchProduct(product.slug),

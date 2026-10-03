@@ -145,10 +145,7 @@ function buildTypoVariants(term) {
 
 function buildCategoryProductConditions(categoryIds) {
   if (!categoryIds?.length) return [];
-  return [
-    { category: { $in: categoryIds } },
-    { subCategory: { $in: categoryIds } },
-  ];
+  return [{ category: { $in: categoryIds } }];
 }
 
 export async function findMatchingCategoryIds(q, CategoryModel = Category) {

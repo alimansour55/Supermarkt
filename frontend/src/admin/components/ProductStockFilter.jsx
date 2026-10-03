@@ -13,7 +13,9 @@ export default function ProductStockFilter({
   showBelowOption = false,
   thresholdLabel,
   thresholdHint,
+  showHint = false,
   savingThreshold = false,
+  hideThreshold = false,
 }) {
   const [thresholdInput, setThresholdInput] = useState(
     () => String(stockMax ?? DEFAULT_STOCK_THRESHOLD),
@@ -69,36 +71,36 @@ export default function ProductStockFilter({
   );
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
+    <div className="flex flex-wrap items-center gap-2">
       <ListFilterSelect
         label={isAr ? 'المخزون' : 'Stock'}
         value={stock}
         onChange={onStockChange}
         options={options}
-        showLabel
       />
-      <div className="flex min-w-[9rem] flex-col gap-1">
-        <span className="text-[10px] font-bold uppercase tracking-wide text-text-muted">
-          {label}
-        </span>
-        <Input
-          type="number"
-          min={0}
-          step={1}
-          value={thresholdInput}
-          onChange={(e) => setThresholdInput(e.target.value)}
-          onBlur={() => commitThreshold(thresholdInput)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commitThreshold(thresholdInput);
-          }}
-          className="w-28 py-2 text-sm"
-          aria-label={label}
-          disabled={savingThreshold}
-        />
-        {hint && (
-          <span className="max-w-[14rem] text-[10px] leading-snug text-text-muted">{hint}</span>
-        )}
-      </div>
+      {!hideThreshold && (
+        <div className="flex items-center gap-1.5" title={hint}>
+          <span className="text-xs text-text-muted">{label}</span>
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            value={thresholdInput}
+            onChange={(e) => setThresholdInput(e.target.value)}
+            onBlur={() => commitThreshold(thresholdInput)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitThreshold(thresholdInput);
+            }}
+            className="w-16"
+            inputClassName="px-2 py-1.5 text-sm"
+            aria-label={label}
+            disabled={savingThreshold}
+          />
+        </div>
+      )}
+      {showHint && hint && (
+        <span className="max-w-[14rem] text-[10px] leading-snug text-text-muted">{hint}</span>
+      )}
     </div>
   );
 }

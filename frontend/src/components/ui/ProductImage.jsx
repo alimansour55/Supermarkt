@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { isImageUrl } from '../../utils/imageHelpers';
+import { isImageUrl, isEmojiImage } from '../../utils/imageHelpers';
 
 function PlaceholderIcon({ className = 'h-10 w-10' }) {
   return (
@@ -27,9 +27,11 @@ export default function ProductImage({
   imgClassName = 'h-full w-full object-contain p-2',
   placeholderClassName = '',
   sizes,
+  onError,
 }) {
   const [failed, setFailed] = useState(false);
   const validSrc = src && isImageUrl(src) && !failed ? src : null;
+  const emoji = !validSrc && isEmojiImage(src) ? src.trim() : null;
   const hasBgOverride = /\bbg-/.test(className) || /\bfrom-/.test(className) || /\bto-/.test(className) || /\bbg-gradient/.test(className);
 
   return (
@@ -47,9 +49,15 @@ export default function ProductImage({
           loading="lazy"
           decoding="async"
           sizes={sizes}
-          onError={() => setFailed(true)}
+          onError={() => { setFailed(true); onError?.(); }}
           className={imgClassName}
         />
+      ) : emoji ? (
+        <div className={`flex h-full w-full items-center justify-center ${placeholderClassName}`}>
+          <span className="select-none text-5xl leading-none sm:text-6xl lg:text-8xl" role="img" aria-label={alt || undefined}>
+            {emoji}
+          </span>
+        </div>
       ) : (
         <div className={`flex h-full w-full items-center justify-center border border-dashed border-slate-200 text-slate-300 ${placeholderClassName}`}>
           <PlaceholderIcon className="h-14 w-14 sm:h-16 sm:w-16" />

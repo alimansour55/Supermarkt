@@ -2,8 +2,10 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import {
   ArrowDownAZ,
   ChevronDown,
+  FolderOpen,
   GripVertical,
   MoreHorizontal,
+  Package,
   Plus,
   Search,
   X,
@@ -262,20 +264,23 @@ function RootInsertZone({ isAr, onAdd, disabled }) {
   );
 }
 
-function FilterChip({ active, onClick, children }) {
+function TreeGuides({ ancestorLines, isLast, depth }) {
+  if (depth === 0) return null;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        'flex-1 rounded-md px-2 py-1.5 text-center text-[11px] font-medium transition-all',
-        active
-          ? 'bg-white text-slate-900 shadow-sm'
-          : 'text-slate-500 hover:text-slate-700',
-      ].join(' ')}
-    >
-      {children}
-    </button>
+    <span className="flex shrink-0 self-stretch" aria-hidden>
+      {ancestorLines.map((continues, i) => (
+        <span key={i} className="relative w-[22px] shrink-0">
+          {continues && (
+            <span className="absolute inset-y-0 start-[10px] w-px bg-slate-200" />
+          )}
+        </span>
+      ))}
+      <span className="relative w-[22px] shrink-0">
+        <span className="absolute top-0 start-[10px] h-1/2 w-px bg-slate-200" />
+        {!isLast && <span className="absolute bottom-0 start-[10px] h-1/2 w-px bg-slate-200" />}
+        <span className="absolute top-1/2 start-[10px] h-px w-[12px] -translate-y-px rounded-full bg-slate-200" />
+      </span>
+    </span>
   );
 }
 
@@ -284,6 +289,8 @@ function TreeNode({
   isAr,
   allCategories,
   depth,
+  isLast = true,
+  ancestorLines = [],
   expandedIds,
   onToggleExpand,
   selectedId,
@@ -427,19 +434,27 @@ function TreeNode({
           onDropNode?.(id, dropHint?.targetId === id ? dropHint.position : 'after');
         }}
         className={[
-          'group/node relative flex items-center rounded-md transition-colors duration-100',
+          'group/node relative flex items-center transition-colors duration-100',
           isDragging ? 'opacity-40' : '',
-          dropInside ? 'ring-2 ring-slate-900/20 ring-offset-1' : '',
+          dropInside ? 'ring-2 ring-primary-400/40 ring-offset-1' : '',
           selected
-            ? 'border-inline-start-2 border-slate-900 bg-white shadow-sm ring-1 ring-slate-200/90'
+            ? 'bg-primary-50'
             : focused
               ? 'bg-slate-50'
-              : 'hover:bg-slate-50/70',
-          inactive && !selected ? 'opacity-45' : '',
+              : 'hover:bg-slate-50',
+          inactive && !selected ? 'opacity-40' : '',
           reordering ? 'pointer-events-none' : '',
         ].join(' ')}
-        style={{ paddingInlineStart: `${depth * INDENT + 4}px` }}
       >
+        <span
+          className={[
+            'absolute inset-y-[3px] start-0 w-0.5 rounded-full transition-colors',
+            selected ? 'bg-primary-600' : 'bg-transparent',
+          ].join(' ')}
+          aria-hidden
+        />
+        <TreeGuides ancestorLines={ancestorLines} isLast={isLast} depth={depth} />
+
         {dragEnabled ? (
           <div
             draggable
@@ -449,13 +464,13 @@ function TreeNode({
               onDragStart?.(id);
             }}
             onDragEnd={onDragEnd}
-            className="flex h-9 w-5 shrink-0 cursor-grab items-center justify-center text-slate-300 active:cursor-grabbing hover:text-slate-500"
+            className="flex h-9 w-4 shrink-0 cursor-grab items-center justify-center text-slate-300 active:cursor-grabbing hover:text-slate-500"
             title={isAr ? 'اسحب لإعادة الترتيب' : 'Drag to reorder'}
           >
             <GripVertical className="h-3.5 w-3.5" strokeWidth={2} />
           </div>
         ) : (
-          <span className="w-5 shrink-0" aria-hidden />
+          <span className="w-4 shrink-0" aria-hidden />
         )}
         <button
           type="button"
@@ -468,7 +483,7 @@ function TreeNode({
             }
           }}
           className={[
-            'flex h-9 w-6 shrink-0 items-center justify-center text-slate-400 transition-colors',
+            'flex h-9 w-5 shrink-0 items-center justify-center text-slate-400 transition-colors',
             hasChildren ? 'hover:text-slate-700' : '',
           ].join(' ')}
           aria-expanded={hasChildren ? expanded : undefined}
@@ -488,17 +503,42 @@ function TreeNode({
           type="button"
           onClick={() => onSelect?.(node)}
           onDoubleClick={() => onEdit?.(node)}
-          className="flex min-w-0 flex-1 items-center gap-3 py-2 pe-2 text-start"
+          className="flex min-w-0 flex-1 items-center gap-2 py-2 pe-2 text-start"
           tabIndex={-1}
         >
           <span
+            className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded text-[12px] leading-none text-slate-400"
+            aria-hidden
+          >
+            {node.image ? (
+              <img src={node.image} alt="" className="h-4 w-4 rounded object-cover" />
+            ) : isLeaf ? (
+              <Package className="h-3.5 w-3.5" strokeWidth={2} />
+            ) : node.icon ? (
+              <span>{node.icon}</span>
+            ) : (
+              <FolderOpen className="h-3.5 w-3.5" strokeWidth={2} />
+            )}
+          </span>
+
+          <span
             className={[
               'min-w-0 flex-1 truncate text-[13px]',
-              selected ? 'font-semibold text-slate-900' : 'text-slate-700',
+              selected
+                ? 'font-semibold text-primary-900'
+                : depth === 0
+                  ? 'font-semibold text-slate-800'
+                  : 'text-slate-600',
             ].join(' ')}
           >
             {searchActive ? highlightQuery(label, searchQuery) : label}
           </span>
+
+          {inactive && (
+            <span className="shrink-0 text-[10px] font-medium text-slate-400">
+              {isAr ? 'معطل' : 'off'}
+            </span>
+          )}
 
           {displayCount > 0 && (
             <span
@@ -526,7 +566,7 @@ function TreeNode({
                 e.stopPropagation();
                 onAddChild(node);
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-slate-400 transition-colors hover:border-slate-200 hover:bg-white hover:text-slate-800"
+              className="flex h-6 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-200/70 hover:text-slate-800"
               tabIndex={-1}
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2} />
@@ -543,10 +583,8 @@ function TreeNode({
                   setMenuOpen((v) => !v);
                 }}
                 className={[
-                  'flex h-7 w-7 items-center justify-center rounded-md border text-slate-400 transition-colors hover:text-slate-800',
-                  menuOpen
-                    ? 'border-slate-200 bg-white text-slate-800'
-                    : 'border-transparent hover:border-slate-200 hover:bg-white',
+                  'flex h-6 w-6 items-center justify-center rounded text-slate-400 transition-colors hover:text-slate-800',
+                  menuOpen ? 'bg-slate-200/70 text-slate-800' : 'hover:bg-slate-200/70',
                 ].join(' ')}
                 tabIndex={-1}
               >
@@ -572,18 +610,16 @@ function TreeNode({
           ].join(' ')}
         >
           <div className="overflow-hidden">
-            <ul
-              role="group"
-              className="border-inline-start border-slate-100 ps-1"
-              style={{ marginInlineStart: `${depth * INDENT + 12}px` }}
-            >
-              {kids.map((child) => (
+            <ul role="group">
+              {kids.map((child, childIdx) => (
                 <TreeNode
                   key={child._id}
                   node={child}
                   isAr={isAr}
                   allCategories={allCategories}
                   depth={depth + 1}
+                  isLast={childIdx === kids.length - 1}
+                  ancestorLines={[...ancestorLines, !isLast]}
                   expandedIds={expandedIds}
                   onToggleExpand={onToggleExpand}
                   selectedId={selectedId}
@@ -992,41 +1028,38 @@ export default function AdminCategoryTree({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]">
-      <div className="shrink-0 border-b border-slate-100 bg-white">
-        <div className="flex items-center justify-between gap-3 px-4 py-3">
-          <div className="min-w-0">
-            <h2 className="text-[13px] font-semibold tracking-tight text-slate-900">
-              {isAr ? 'الأقسام' : 'Categories'}
-            </h2>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <div className="shrink-0 border-b border-slate-100">
+        <div className="flex items-baseline justify-between gap-3 px-3.5 pt-3.5">
+          <h2 className="flex items-baseline gap-1.5 text-[13px] font-semibold text-slate-800">
+            {isAr ? 'الأقسام' : 'Categories'}
             {!loading && stats.total > 0 && (
-              <p className="mt-0.5 text-[11px] text-slate-400">
-                {stats.total} {isAr ? 'قسم' : 'total'}
-              </p>
+              <span className="text-[11px] font-normal text-slate-400">{stats.total}</span>
             )}
-          </div>
+          </h2>
           {onAddRoot && (
             <button
               type="button"
               onClick={onAddRoot}
-              className="shrink-0 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 transition-colors hover:bg-slate-50"
+              className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-slate-500 transition-colors hover:text-primary-700"
             >
-              {isAr ? '+ إضافة' : '+ Add'}
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              {isAr ? 'إضافة' : 'Add'}
             </button>
           )}
         </div>
 
-        <div className="space-y-2.5 px-3 pb-3">
-          <div className="flex items-center gap-2">
+        <div className="space-y-2 px-3 py-3">
+          <div className="flex items-center gap-1.5">
             <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-300" />
               <input
                 ref={searchRef}
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={isAr ? 'بحث…' : 'Search…'}
-                className="w-full rounded-md border border-slate-200 bg-white py-1.5 pe-7 ps-8 text-[13px] text-slate-800 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-200"
+                className="w-full rounded-md bg-slate-100/70 py-1.5 pe-7 ps-8 text-[13px] text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-300"
               />
               {query && (
                 <button
@@ -1044,26 +1077,37 @@ export default function AdminCategoryTree({
               onClick={() => setSortByName((v) => !v)}
               title={isAr ? 'ترتيب أبجدي' : 'Sort A–Z'}
               className={[
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors',
+                'flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md transition-colors',
                 sortByName
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50',
+                  ? 'bg-slate-800 text-white'
+                  : 'bg-slate-100/70 text-slate-500 hover:bg-slate-200/70',
               ].join(' ')}
             >
               <ArrowDownAZ className="h-3.5 w-3.5" strokeWidth={2} />
             </button>
           </div>
 
-          <div className="flex rounded-lg bg-slate-100/80 p-0.5">
+          <div className="flex items-center gap-4 text-[12px]">
             {STATUS_FILTERS.map((f) => (
-              <FilterChip
+              <button
                 key={f}
-                active={statusFilter === f}
+                type="button"
                 onClick={() => setStatusFilter(f)}
+                className={[
+                  'relative pb-1 font-medium transition-colors',
+                  statusFilter === f ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600',
+                ].join(' ')}
               >
                 {filterLabels[f]}
-              </FilterChip>
+                {statusFilter === f && (
+                  <span className="absolute inset-x-0 -bottom-px h-[1.5px] rounded-full bg-slate-800" />
+                )}
+              </button>
             ))}
+            <span className="h-px flex-1 bg-slate-100" />
+            {searchActive && (
+              <span className="pb-1 text-slate-400">{matchCount}</span>
+            )}
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-400">
@@ -1071,16 +1115,12 @@ export default function AdminCategoryTree({
               <button type="button" onClick={expandAll} className="hover:text-slate-700">
                 {isAr ? 'توسيع الكل' : 'Expand all'}
               </button>
-              <span className="text-slate-200">|</span>
               <button type="button" onClick={collapseAll} className="hover:text-slate-700">
                 {isAr ? 'طي الكل' : 'Collapse all'}
               </button>
             </div>
             {dragEnabled && (
-              <span className="text-slate-400">{isAr ? 'اسحب ≡ للترتيب' : 'Drag ≡ to reorder'}</span>
-            )}
-            {searchActive && (
-              <span className="text-slate-500">{matchCount}</span>
+              <span className="text-slate-300">{isAr ? 'اسحب ≡ للترتيب' : 'Drag ≡ to reorder'}</span>
             )}
           </div>
         </div>
@@ -1139,13 +1179,15 @@ export default function AdminCategoryTree({
                 onAdd={() => onAddRootAt(null)}
               />
             )}
-            {filteredTree.map((node) => (
+            {filteredTree.map((node, rootIdx) => (
               <Fragment key={node._id}>
                 <TreeNode
                   node={node}
                   isAr={isAr}
                   allCategories={safeCategories}
                   depth={0}
+                  isLast={rootIdx === filteredTree.length - 1}
+                  ancestorLines={[]}
                   expandedIds={effectiveExpandedIds}
                   onToggleExpand={onToggleExpand}
                   selectedId={selectedId}

@@ -9,6 +9,7 @@ import {
   updateBrand,
   deleteBrand,
   bulkAdminBrands,
+  reorderAdminBrands,
   syncBrandsFromProducts,
   repairProductBrandLinks,
 } from '../controllers/brand.controller.js';
@@ -21,6 +22,7 @@ router.get('/admin', ...requirePermission('brands:write'), getAdminBrands);
 router.post('/admin/sync-from-products', ...requirePermission('brands:write'), syncBrandsFromProducts);
 router.post('/admin/repair-product-links', ...requirePermission('brands:write'), repairProductBrandLinks);
 router.post('/admin/bulk', ...requirePermission('brands:write'), bulkAdminBrands);
+router.put('/admin/reorder', ...requirePermission('brands:write'), reorderAdminBrands);
 router.post('/admin', ...requirePermission('brands:write'), uploadSingle('logo'), createBrand);
 router.put('/admin/:id', ...requirePermission('brands:write'), uploadSingle('logo'), updateBrand);
 router.delete('/admin/:id', ...requirePermission('brands:write'), deleteBrand);

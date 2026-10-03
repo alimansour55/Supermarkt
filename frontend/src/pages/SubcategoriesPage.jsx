@@ -67,13 +67,6 @@ export default function SubcategoriesPage() {
     setMainFilter('');
   };
 
-  const scrollToMain = (slug) => {
-    setMainFilter('');
-    requestAnimationFrame(() => {
-      document.getElementById(`sub-main-${slug}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  };
-
   return (
     <div className="pb-12">
       {/* Hero */}
@@ -167,10 +160,10 @@ export default function SubcategoriesPage() {
             <button
               type="button"
               onClick={() => setMainFilter('')}
-              className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+              className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all ${
                 !mainFilter
-                  ? 'bg-primary-600 text-white shadow-sm'
-                  : 'border border-border bg-surface text-text hover:border-primary-200'
+                  ? 'bg-primary-600 text-white shadow-sm ring-2 ring-primary-100'
+                  : 'border border-border bg-surface text-text hover:border-primary-300 hover:bg-primary-50/50'
               }`}
             >
               {isAr ? 'الكل' : 'All'}
@@ -182,13 +175,13 @@ export default function SubcategoriesPage() {
                   key={main.slug}
                   type="button"
                   onClick={() => setMainFilter(active ? '' : main.slug)}
-                  className={`inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                  className={`inline-flex shrink-0 items-center gap-2 rounded-full py-1.5 pe-4 ps-1.5 text-sm font-semibold transition-all ${
                     active
-                      ? 'bg-primary-600 text-white shadow-sm'
-                      : 'border border-border bg-surface text-text hover:border-primary-200'
+                      ? 'bg-primary-600 text-white shadow-sm ring-2 ring-primary-100'
+                      : 'border border-border bg-surface text-text hover:border-primary-300 hover:bg-primary-50/50'
                   }`}
                 >
-                  <CategoryImage category={main} size="xs" className="!h-7 !w-7" />
+                  <CategoryImage category={main} size="xs" className="!h-7 !w-7 ring-1 ring-black/5" />
                   {categoryLabel(main, isAr)}
                 </button>
               );
@@ -226,26 +219,6 @@ export default function SubcategoriesPage() {
             )}
           </div>
         </div>
-
-        {/* Quick jump — only when showing all groups */}
-        {!loading && !mainFilter && !query && rootCategories.length > 1 && (
-          <div className="mb-6 flex flex-wrap gap-2">
-            <span className="w-full text-xs font-semibold text-text-muted sm:w-auto sm:py-2">
-              {isAr ? 'انتقل إلى:' : 'Jump to:'}
-            </span>
-            {rootCategories.map((main) => (
-              <button
-                key={main.slug}
-                type="button"
-                onClick={() => scrollToMain(main.slug)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-text shadow-sm hover:border-primary-200 hover:bg-primary-50"
-              >
-                <CategoryImage category={main} size="xs" className="!h-6 !w-6" />
-                {categoryLabel(main, isAr)}
-              </button>
-            ))}
-          </div>
-        )}
 
         {loading ? (
           <CategoryGridSkeleton count={12} />

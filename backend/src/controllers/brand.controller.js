@@ -4,6 +4,7 @@ import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { parsePagination, parseSort, paginationMeta } from '../utils/listQuery.js';
 import { slugify } from '../utils/slugify.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 import {
   uploadFileToCloudinary,
   deleteFromCloudinary,
@@ -51,6 +52,17 @@ export function formatBrand(brand, productCount = null) {
 
 async function countProductsForBrand(brand) {
   return countActiveProductsForBrand(Product, Brand, brand);
+}
+
+async function generateUniqueSlug(base) {
+  const root = slugify(base) || 'brand';
+  let candidate = root;
+  let attempt = 1;
+  while (await Brand.findOne({ slug: candidate })) {
+    attempt += 1;
+    candidate = `${root}-${attempt}`;
+  }
+  return candidate;
 }
 
 async function attachProductCounts(brands) {
@@ -167,11 +179,12 @@ export const createBrand = asyncHandler(async (req, res) => {
     throw new AppError('nameAr and nameEn are required', 400);
   }
 
-  const brandSlug = (slug || slugify(nameEn)).toLowerCase().trim();
-  const existingSlug = await Brand.findOne({ slug: brandSlug });
-  if (existingSlug) throw new AppError('Brand slug already exists', 400);
+  const brandSlug = await generateUniqueSlug(slug || nameEn);
 
   const filterValue = (queryValue || nameEn).trim();
+  const existingFilter = await Brand.findOne({ queryValue: new RegExp(`^${escapeRegex(filterValue)}$`, 'i') });
+  if (existingFilter) throw new AppError('This product filter value is already used by another brand', 400);
+
   let logoUrl = logo || null;
   let cloudinaryPublicId = null;
 
@@ -213,6 +226,14 @@ export const updateBrand = asyncHandler(async (req, res) => {
   if (req.body.slug && req.body.slug !== brand.slug) {
     const exists = await Brand.findOne({ slug: req.body.slug, _id: { $ne: brand._id } });
     if (exists) throw new AppError('Brand slug already exists', 400);
+  }
+
+  if (req.body.queryValue && req.body.queryValue.trim().toLowerCase() !== brand.queryValue.toLowerCase()) {
+    const conflict = await Brand.findOne({
+      _id: { $ne: brand._id },
+      queryValue: new RegExp(`^${escapeRegex(req.body.queryValue.trim())}$`, 'i'),
+    });
+    if (conflict) throw new AppError('This product filter value is already used by another brand', 400);
   }
 
   if (req.file) {
@@ -280,6 +301,24 @@ export const bulkAdminBrands = asyncHandler(async (req, res) => {
   res.json({ success: true, affected: ids.length });
 });
 
+export const reorderAdminBrands = asyncHandler(async (req, res) => {
+  const { order } = req.body;
+  if (!Array.isArray(order) || !order.length) {
+    throw new AppError('order array is required', 400);
+  }
+
+  const brands = await Brand.find({ _id: { $in: order } }).select('_id');
+  if (brands.length !== order.length) {
+    throw new AppError('One or more brands were not found', 400);
+  }
+
+  await Promise.all(
+    order.map((id, index) => Brand.updateOne({ _id: id }, { sortOrder: (index + 1) * 10 })),
+  );
+
+  res.json({ success: true });
+});
+
 export const syncBrandsFromProducts = asyncHandler(async (_req, res) => {
   const distinct = await Product.distinct('brand', { isActive: true, brand: { $nin: [null, ''] } });
   const existing = await Brand.find({ queryValue: { $in: distinct } }).select('queryValue');
@@ -288,17 +327,11 @@ export const syncBrandsFromProducts = asyncHandler(async (_req, res) => {
 
   let created = 0;
   for (const name of missing) {
-    let slug = slugify(name);
-    let attempt = slug;
-    let i = 1;
-    while (await Brand.findOne({ slug: attempt })) {
-      attempt = `${slug}-${i}`;
-      i += 1;
-    }
+    const slug = await generateUniqueSlug(name);
     await Brand.create({
       nameAr: name,
       nameEn: name,
-      slug: attempt,
+      slug,
       queryValue: name,
       emoji: '🏷️',
       isActive: true,

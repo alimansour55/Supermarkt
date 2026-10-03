@@ -52,6 +52,30 @@ function StatusBadge({ status, label }) {
   );
 }
 
+function StarPicker({ value, onChange }) {
+  const n = Math.max(0, Math.min(5, Math.round(Number(value) || 0)));
+  return (
+    <div className="inline-flex items-center gap-1 rounded-xl border border-border px-2 py-2">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange(String(star))}
+          aria-label={`${star} / 5`}
+          className="rounded p-0.5 transition-transform hover:scale-110"
+        >
+          <Star
+            className={[
+              'h-4 w-4',
+              star <= n ? 'fill-amber-400 text-amber-400' : 'fill-slate-100 text-slate-200',
+            ].join(' ')}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function Section({ title, icon: Icon, children, defaultOpen = true, collapsible = false }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -370,19 +394,16 @@ export default function ReviewDetailPanel({
           collapsible
           defaultOpen={false}
         >
-          <div className="grid gap-2 sm:grid-cols-[88px_1fr]">
-            <select
+          <div className="flex flex-wrap items-center gap-2">
+            <StarPicker
               value={editDraft.rating}
-              onChange={(e) => onEditChange({ ...editDraft, rating: e.target.value })}
-              className="rounded-xl border border-border px-2 py-2 text-sm focus:border-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-100"
-            >
-              {[5, 4, 3, 2, 1].map((v) => <option key={v} value={v}>{v} ★</option>)}
-            </select>
+              onChange={(rating) => onEditChange({ ...editDraft, rating })}
+            />
             <input
               value={editDraft.title}
               onChange={(e) => onEditChange({ ...editDraft, title: e.target.value })}
               placeholder={isAr ? 'العنوان (اختياري)' : 'Title (optional)'}
-              className="rounded-xl border border-border px-3 py-2 text-sm focus:border-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              className="min-w-[10rem] flex-1 rounded-xl border border-border px-3 py-2 text-sm focus:border-primary-300 focus:outline-none focus:ring-2 focus:ring-primary-100"
             />
           </div>
           <textarea

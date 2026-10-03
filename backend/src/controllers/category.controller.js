@@ -522,8 +522,7 @@ export const reassignCategoryProducts = asyncHandler(async (req, res) => {
 
   const targetFields = await resolveProductCategoryFields({
     mainCategory: req.body.mainCategory,
-    subCategory: req.body.subCategory,
-    category: req.body.category,
+    category: req.body.category ?? req.body.subCategory,
   });
 
   const affected = await reassignActiveProductsFromCategory(source._id, targetFields);

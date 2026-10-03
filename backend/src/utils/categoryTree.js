@@ -244,7 +244,7 @@ export async function refreshProductCategoryPaths(categoryIds = []) {
     const pathIds = await getCategoryPathIds(catId);
     if (!pathIds.length) continue;
     const res = await Product.updateMany(
-      { $or: [{ category: catId }, { subCategory: catId }] },
+      { category: catId },
       { $set: { categoryAncestors: pathIds, mainCategory: pathIds[0] } },
     );
     updated += res.modifiedCount || 0;
@@ -344,10 +344,7 @@ export async function applyProductCategoryQueryToFilter(filter, query) {
   if (subCategory) {
     const categoryFilter = await resolveCategoryProductFilter(subCategory);
     if (categoryFilter) {
-      filter.$and = [
-        ...(filter.$and || []),
-        { $or: [{ subCategory: categoryFilter }, { category: categoryFilter }] },
-      ];
+      filter.$and = [...(filter.$and || []), { category: categoryFilter }];
     }
   } else if (mainCategory) {
     const mainId = await resolveActiveCategoryRef(mainCategory);
@@ -355,17 +352,14 @@ export async function applyProductCategoryQueryToFilter(filter, query) {
     if (mainId) {
       const orClause = [{ mainCategory: mainId }];
       if (childFilter) {
-        orClause.push({ subCategory: childFilter }, { category: childFilter });
+        orClause.push({ category: childFilter });
       }
       filter.$and = [...(filter.$and || []), { $or: orClause }];
     }
   } else if (category) {
     const categoryFilter = await resolveCategoryProductFilter(category);
     if (categoryFilter) {
-      filter.$and = [
-        ...(filter.$and || []),
-        { $or: [{ category: categoryFilter }, { subCategory: categoryFilter }] },
-      ];
+      filter.$and = [...(filter.$and || []), { category: categoryFilter }];
     }
   }
 
@@ -395,8 +389,7 @@ export async function buildProductCategoryPathMeta(leafCategoryId, product = {})
   const rootId = chain[0]._id;
   const leafId = chain[chain.length - 1]._id;
   const productMain = product.mainCategory?._id || product.mainCategory;
-  const productSub = product.subCategory?._id || product.subCategory
-    || product.category?._id || product.category;
+  const productSub = product.category?._id || product.category;
 
   return {
     categoryPathAr: chain.map((c) => c.nameAr).join(' › '),
@@ -426,19 +419,11 @@ export async function assertProductCategoryAssignment(categoryId, mainCategoryId
   return target;
 }
 
-/** @deprecated use assertProductCategoryAssignment */
-export async function assertSubBelongsToMain(subCategoryId, mainCategoryId) {
-  return assertProductCategoryAssignment(subCategoryId, mainCategoryId);
-}
-
 async function countProductsForCategory(categoryId) {
   const { default: Product } = await import('../models/Product.js');
   const filter = await resolveCategoryProductFilter(categoryId);
   if (!filter) return 0;
-  const categoryClause = typeof filter === 'object' && filter.$in
-    ? { $or: [{ category: filter }, { subCategory: filter }] }
-    : { $or: [{ category: filter }, { subCategory: filter }] };
-  return Product.countDocuments({ isActive: true, ...categoryClause });
+  return Product.countDocuments({ isActive: true, category: filter });
 }
 
 export async function attachProductCounts(categories) {
@@ -475,7 +460,6 @@ export async function countLinkedProducts(categoryId, childCount = null, { activ
       ...statusFilter,
       $or: [
         { category: categoryId },
-        { subCategory: categoryId },
         { mainCategory: categoryId },
       ],
     });
@@ -484,10 +468,7 @@ export async function countLinkedProducts(categoryId, childCount = null, { activ
   const leafIds = await getAdminLeafDescendantIds(categoryId);
   return Product.countDocuments({
     ...statusFilter,
-    $or: [
-      { category: { $in: leafIds } },
-      { subCategory: { $in: leafIds } },
-    ],
+    category: { $in: leafIds },
   });
 }
 
@@ -500,13 +481,49 @@ export async function reassignActiveProductsFromCategory(sourceCategoryId, targe
   const leafIds = await getAdminLeafDescendantIds(sourceCategoryId);
   const filter = {
     isActive: true,
-    $or: [
-      { category: { $in: leafIds } },
-      { subCategory: { $in: leafIds } },
-    ],
+    category: { $in: leafIds },
   };
   const result = await Product.updateMany(filter, { $set: targetFields });
   return result.modifiedCount;
+}
+
+/**
+ * Batched product counts for every id in `ids`, keyed by category id (as a string).
+ * A product counts toward a category if it's assigned there directly or to any
+ * descendant — `Product.categoryAncestors` already stores the full root→self path
+ * (including the assigned category itself), so one aggregation covers every
+ * category in a single pass instead of a recursive per-category walk.
+ */
+export async function getProductCountsByCategory(ids) {
+  const map = new Map();
+  if (!ids.length) return map;
+
+  const { default: Product } = await import('../models/Product.js');
+  const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
+
+  const rows = await Product.aggregate([
+    { $match: { $or: [{ category: { $in: objectIds } }, { categoryAncestors: { $in: objectIds } }] } },
+    {
+      $project: {
+        isActive: 1,
+        matchIds: { $setUnion: [{ $ifNull: ['$categoryAncestors', []] }, ['$category']] },
+      },
+    },
+    { $unwind: '$matchIds' },
+    { $match: { matchIds: { $in: objectIds } } },
+    {
+      $group: {
+        _id: '$matchIds',
+        total: { $sum: 1 },
+        active: { $sum: { $cond: ['$isActive', 1, 0] } },
+      },
+    },
+  ]);
+
+  for (const row of rows) {
+    map.set(String(row._id), { total: row.total, active: row.active });
+  }
+  return map;
 }
 
 export async function attachAdminCategoryMeta(categories) {
@@ -518,21 +535,19 @@ export async function attachAdminCategoryMeta(categories) {
     { $group: { _id: '$parentCategory', count: { $sum: 1 } } },
   ]);
   const childCountByParent = new Map(childAgg.map((row) => [String(row._id), row.count]));
+  const countsById = await getProductCountsByCategory(ids);
 
-  return Promise.all(
-    categories.map(async (cat) => {
-      const childCount = childCountByParent.get(String(cat._id)) || 0;
-      const productCount = await countLinkedProducts(cat._id, childCount);
-      const activeProductCount = await countActiveLinkedProducts(cat._id, childCount);
-      return {
-        cat,
-        childCount,
-        isLeaf: childCount === 0,
-        productCount,
-        activeProductCount,
-      };
-    }),
-  );
+  return categories.map((cat) => {
+    const childCount = childCountByParent.get(String(cat._id)) || 0;
+    const counts = countsById.get(String(cat._id)) || { total: 0, active: 0 };
+    return {
+      cat,
+      childCount,
+      isLeaf: childCount === 0,
+      productCount: counts.total,
+      activeProductCount: counts.active,
+    };
+  });
 }
 
 export function buildNestedCategoryTree(categories, parentId = null) {

@@ -179,12 +179,6 @@ const productSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    subCategory: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Category',
-      required: true,
-      index: true,
-    },
     /**
      * Ordered category path (root → assigned category) maintained from `category`.
      * A category's product listing matches `{ categoryAncestors: <categoryId> }`,
@@ -259,6 +253,17 @@ const productSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
     }],
+    /**
+     * How the storefront "Similar products" strip is populated:
+     *  - 'auto'   : admin picks shown first, then auto-filled with relevant in-stock products
+     *  - 'manual' : only the admin picks are shown (no auto-fill)
+     *  - 'off'    : the strip is hidden for this product
+     */
+    similarMode: {
+      type: String,
+      enum: ['auto', 'manual', 'off'],
+      default: 'auto',
+    },
     stockUpdatedAt: {
       type: Date,
       default: null,
@@ -382,11 +387,9 @@ const productSchema = new mongoose.Schema(
 async function syncProductCategoryFields(doc) {
   const fields = await resolveProductCategoryFields({
     mainCategory: doc.mainCategory,
-    subCategory: doc.subCategory || doc.category,
     category: doc.category,
   });
   doc.mainCategory = fields.mainCategory;
-  doc.subCategory = fields.subCategory;
   doc.category = fields.category;
   doc.categoryAncestors = fields.categoryAncestors;
 }
@@ -394,7 +397,6 @@ async function syncProductCategoryFields(doc) {
 productSchema.pre('validate', async function enforceCategoryIntegrity() {
   const categoryTouched = this.isNew
     || this.isModified('category')
-    || this.isModified('subCategory')
     || this.isModified('mainCategory');
   if (!categoryTouched) return;
   await syncProductCategoryFields(this);
@@ -439,22 +441,20 @@ async function syncCategoryFieldsOnQueryUpdate(next) {
   if (!update) return next();
 
   const $set = update.$set || update;
-  const categoryTouched = ['mainCategory', 'subCategory', 'category'].some(
+  const categoryTouched = ['mainCategory', 'category'].some(
     (key) => $set[key] !== undefined || update[key] !== undefined,
   );
   if (!categoryTouched) return next();
 
   try {
-    const existing = await this.model.findOne(this.getQuery()).select('mainCategory subCategory category').lean();
+    const existing = await this.model.findOne(this.getQuery()).select('mainCategory category').lean();
     const incoming = {
       mainCategory: $set.mainCategory ?? update.mainCategory,
-      subCategory: $set.subCategory ?? update.subCategory,
       category: $set.category ?? update.category,
     };
     const fields = await resolveProductCategoryFields({
       mainCategory: incoming.mainCategory ?? existing?.mainCategory,
-      subCategory: incoming.subCategory ?? incoming.category ?? existing?.subCategory ?? existing?.category,
-      category: incoming.category ?? incoming.subCategory ?? existing?.category ?? existing?.subCategory,
+      category: incoming.category ?? existing?.category,
     });
 
     if (update.$set) {

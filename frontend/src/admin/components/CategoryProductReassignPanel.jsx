@@ -40,7 +40,6 @@ export default function CategoryProductReassignPanel({
     }
     await onReassignAndContinue({
       mainCategory: selection.mainCategory,
-      subCategory: selection.subCategory,
       category: selection.subCategory,
     });
   };

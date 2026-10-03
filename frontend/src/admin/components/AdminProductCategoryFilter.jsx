@@ -117,6 +117,7 @@ export default function AdminProductCategoryFilter({
               isAr={isAr}
               includeInactive={false}
               leafOnly={false}
+              showIcons={false}
             />
             {selectedCategory && (
               <p className="mt-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] text-text-muted">

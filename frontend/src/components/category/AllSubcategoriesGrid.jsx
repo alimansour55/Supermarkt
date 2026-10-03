@@ -14,15 +14,16 @@ export function SubcategoryCard({ sub, isAr, compact = false }) {
   return (
     <Link
       to={to}
-      className={`group flex flex-col items-center rounded-2xl border border-border bg-white text-center shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-200 hover:shadow-md ${
-        compact ? 'gap-2 p-3 sm:p-4' : 'gap-2 p-4 sm:gap-3 sm:p-5'
+      className={`group relative flex flex-col items-center overflow-hidden rounded-2xl border border-border bg-white text-center shadow-sm transition-all hover:-translate-y-1 hover:border-primary-200 hover:shadow-lg ${
+        compact ? 'gap-2 p-3 sm:p-4' : 'gap-2.5 p-4 sm:gap-3 sm:p-5'
       }`}
     >
+      <span className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-primary-50/80 to-transparent opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
       <CategoryImage
         category={sub}
         size={compact ? 'sm' : 'md'}
         alt={categoryLabel(sub, isAr)}
-        className="transition-transform group-hover:scale-105"
+        className="relative shadow-sm ring-1 ring-black/5 transition-transform group-hover:scale-105"
       />
       <span className="line-clamp-2 text-sm font-semibold text-text">
         {filterSubcategoryLabel(sub, isAr)}
@@ -38,9 +39,9 @@ export function SubcategoryCard({ sub, isAr, compact = false }) {
           {sub.productCount} {isAr ? 'منتج' : 'products'}
         </span>
       )}
-      <span className="mt-auto flex items-center gap-1 pt-1 text-xs font-semibold text-primary-600 sm:opacity-80 sm:group-hover:opacity-100">
+      <span className="mt-auto flex items-center gap-1 pt-1 text-xs font-semibold text-primary-600 opacity-80 transition-opacity group-hover:opacity-100">
         {isAr ? 'عرض المنتجات' : 'Shop now'}
-        <ChevronLeft className={`h-3.5 w-3.5 ${isAr ? '' : 'rotate-180'}`} aria-hidden />
+        <ChevronLeft className={`h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 ${isAr ? '' : 'rotate-180 group-hover:-translate-x-0.5'}`} aria-hidden />
       </span>
     </Link>
   );
@@ -126,16 +127,21 @@ export default function AllSubcategoriesGrid({
           <section
             key={main.slug || main._id}
             id={`sub-main-${main.slug}`}
-            className="scroll-mt-28 rounded-2xl border border-border bg-white p-4 shadow-sm md:p-6"
+            className="scroll-mt-28 rounded-2xl border border-border bg-white p-4 shadow-sm transition-shadow hover:shadow-md md:p-6"
           >
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
               <Link
                 to={`/category/${main.slug}`}
-                className="flex min-w-0 items-center gap-3 hover:text-primary-700"
+                className="group flex min-w-0 items-center gap-3"
               >
-                <CategoryImage category={main} size="sm" alt={categoryLabel(main, isAr)} />
+                <CategoryImage
+                  category={main}
+                  size="sm"
+                  alt={categoryLabel(main, isAr)}
+                  className="ring-1 ring-black/5"
+                />
                 <div className="min-w-0 text-start">
-                  <h2 className="text-lg font-bold text-text md:text-xl">
+                  <h2 className="text-lg font-bold text-text group-hover:text-primary-700 md:text-xl">
                     {categoryLabel(main, isAr)}
                   </h2>
                   <p className="text-xs text-text-muted md:text-sm">
@@ -145,7 +151,7 @@ export default function AllSubcategoriesGrid({
               </Link>
               <Link
                 to={`/category/${main.slug}`}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-4 py-2 text-xs font-bold text-primary-700 hover:bg-primary-100"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary-50 px-4 py-2 text-xs font-bold text-primary-700 transition-colors hover:bg-primary-100"
               >
                 {isAr ? 'صفحة القسم' : 'Department page'}
                 <ChevronLeft className={`h-3.5 w-3.5 ${isAr ? '' : 'rotate-180'}`} aria-hidden />

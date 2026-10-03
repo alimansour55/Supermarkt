@@ -4,9 +4,7 @@ import { Heart, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useFavorites } from '../context/FavoritesContext';
-import { fetchProductsByCategory } from '../services/productApi';
 import { useProduct } from '../hooks/useProduct';
-import { useAsyncData } from '../hooks/useAsyncData';
 import { getDiscountPercent, getPromotionHighlight, getProductAvailableStock } from '../utils/productHelpers';
 import { formatPrice } from '../utils/formatters';
 import ProductGrid from '../components/product/ProductGrid';
@@ -15,8 +13,9 @@ import Button from '../components/ui/Button';
 import ProductImage from '../components/ui/ProductImage';
 import { Skeleton } from '../components/ui/Skeleton';
 import { scrollToSection } from '../utils/scrollToTop';
-import { isVideoUrl } from '../utils/imageHelpers';
+import { isVideoUrl, pickProductEmoji } from '../utils/imageHelpers';
 import SecondItemPriceHighlight from '../components/promo/SecondItemPriceHighlight';
+import { getUnitLabel } from '../constants/productUnits';
 
 const ProductReviewsSection = lazy(() => import('../components/product/ProductReviewsSection'));
 
@@ -37,8 +36,8 @@ function getGalleryMedia(product) {
 
 function ProductDetailSkeleton() {
   return (
-    <div className="container-app py-6 pb-36 lg:py-8 lg:pb-8">
-      <div className="grid gap-8 lg:grid-cols-2">
+    <div className="container-app mx-auto max-w-5xl py-6 pb-36 lg:py-8 lg:pb-8">
+      <div className="grid gap-6 md:gap-8 lg:grid-cols-[minmax(0,420px)_1fr]">
         <Skeleton className="aspect-square rounded-3xl" />
         <div className="space-y-4">
           <Skeleton className="h-8 w-3/4" />
@@ -57,15 +56,6 @@ export default function ProductDetailsPage() {
   const { addItem } = useCart();
   const { isFavorite, toggleFavorite } = useFavorites();
   const { product, loading, refetch } = useProduct(slug);
-  const needsCategoryFallback = Boolean(
-    product && !product.relatedProducts?.length && (product.category || product.categorySlug),
-  );
-  const { data: relatedData } = useAsyncData(
-    () => (needsCategoryFallback
-      ? fetchProductsByCategory(product.category || product.categorySlug, { limit: 8 })
-      : Promise.resolve({ products: [] })),
-    [needsCategoryFallback, product?.category, product?.categorySlug],
-  );
   const [quantity, setQuantity] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [added, setAdded] = useState(false);
@@ -103,9 +93,11 @@ export default function ProductDetailsPage() {
 
   const similar = useMemo(() => {
     if (!product) return [];
-    if (product.relatedProducts?.length) return product.relatedProducts.slice(0, 6);
-    return (relatedData?.products || []).filter((p) => p._id !== product._id).slice(0, 6);
-  }, [product, relatedData]);
+    const fbtIds = new Set((product.frequentlyBoughtTogetherProducts || []).map((p) => p._id));
+    return (product.relatedProducts || [])
+      .filter((p) => p._id !== product._id && !fbtIds.has(p._id))
+      .slice(0, 8);
+  }, [product]);
 
   if (loading && !product) return <ProductDetailSkeleton />;
 
@@ -125,7 +117,9 @@ export default function ProductDetailsPage() {
   const compareAtPrice = product.compareAtPrice ?? product.oldPrice;
   const fbt = (product.frequentlyBoughtTogetherProducts || []).slice(0, 4);
   const mainMedia = galleryMedia[activeImage] || galleryMedia[0];
-  const mainImage = mainMedia?.type === 'image' ? mainMedia.url : null;
+  const mainImage = mainMedia?.type === 'image'
+    ? mainMedia.url
+    : (galleryMedia.length === 0 ? pickProductEmoji(product) : null);
   const favorited = isFavorite(product._id);
 
   const handleAdd = (openDrawer = true) => {
@@ -161,9 +155,9 @@ export default function ProductDetailsPage() {
   );
 
   return (
-    <div className="container-app py-6 pb-36 lg:py-8 lg:pb-8">
-      <div className="grid gap-8 lg:grid-cols-2">
-        <div>
+    <div className="container-app mx-auto max-w-5xl py-6 pb-36 lg:py-8 lg:pb-8">
+      <div className="grid gap-6 md:gap-8 lg:grid-cols-[minmax(0,420px)_1fr] lg:items-start">
+        <div className="lg:sticky lg:top-24">
           <div className="relative aspect-square overflow-hidden rounded-3xl bg-slate-50">
             {mainMedia?.type === 'video' ? (
               <video
@@ -243,7 +237,7 @@ export default function ProductDetailsPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold md:text-3xl">{name}</h1>
-          <p className="mt-1 text-sm text-text-muted">{product.unit}</p>
+          <p className="mt-1 text-sm text-text-muted">{getUnitLabel(product, isAr)}</p>
           {product.reviewCount > 0 && product.rating > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
               <div className="flex items-center gap-1 text-amber-500">
@@ -286,9 +280,9 @@ export default function ProductDetailsPage() {
               </dl>
             </div>
           )}
-          <div className="mt-6 w-full text-right">
+          <div className="mt-6 w-full text-start">
             {promotion?.type === 'second_percent_off' ? (
-              <div className={`mb-3 ${isAr ? 'flex justify-end' : 'flex justify-start'}`}>
+              <div className="mb-3 flex justify-start">
                 <SecondItemPriceHighlight item={{ ...product, price: displayPrice }} isAr={isAr} />
               </div>
             ) : promotion?.sublabel && (
@@ -359,7 +353,7 @@ export default function ProductDetailsPage() {
             {added ? (isAr ? 'تمت الإضافة' : 'Added') : (isAr ? 'أضف للسلة' : 'Add to Cart')}
           </button>
         </div>
-        <p className="mt-1 w-full text-right text-sm font-semibold text-primary-700 tabular-nums">
+        <p className="mt-1 w-full text-start text-sm font-semibold text-primary-700 tabular-nums">
           {formatPrice(displayPrice * quantity)}
         </p>
       </div>

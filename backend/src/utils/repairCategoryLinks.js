@@ -6,7 +6,6 @@ import { resolveProductCategoryFields } from './productCategorySync.js';
 export const PRODUCT_CATEGORY_ISSUES = {
   MISSING_LEAF: 'missing_leaf',
   ORPHANED_REF: 'orphaned_ref',
-  FIELDS_OUT_OF_SYNC: 'fields_out_of_sync',
   WRONG_MAIN: 'wrong_main',
   NON_LEAF: 'non_leaf',
   INACTIVE_CATEGORY: 'inactive_category',
@@ -72,45 +71,22 @@ export async function resolveRepairLeafId(categoryId, categoryCache = new Map())
 export async function diagnoseProductCategory(product, categoryCache = new Map()) {
   const issues = [];
   const mainId = normalizeId(product.mainCategory);
-  const subId = normalizeId(product.subCategory);
   const categoryId = normalizeId(product.category);
 
-  if (!subId && !categoryId) {
+  if (!categoryId) {
     issues.push({
       code: PRODUCT_CATEGORY_ISSUES.MISSING_LEAF,
-      message: 'Product has no category or subCategory',
+      message: 'Product has no category',
     });
     return { issues, healthy: false, repairable: false };
   }
 
-  if (subId && categoryId && subId !== categoryId) {
-    issues.push({
-      code: PRODUCT_CATEGORY_ISSUES.FIELDS_OUT_OF_SYNC,
-      message: 'category and subCategory point to different categories',
-      details: { subCategory: subId, category: categoryId },
-    });
-  }
-
-  const primaryLeafRef = subId || categoryId;
-  const alternateRef = subId && categoryId && subId !== categoryId
-    ? (primaryLeafRef === subId ? categoryId : subId)
-    : null;
-
-  let leafCat = await getCachedCategory(primaryLeafRef, categoryCache);
-  if (!leafCat && alternateRef) {
-    leafCat = await getCachedCategory(alternateRef, categoryCache);
-    if (leafCat) {
-      issues.push({
-        code: PRODUCT_CATEGORY_ISSUES.ORPHANED_REF,
-        message: 'Primary category reference is missing — alternate reference exists',
-        details: { orphaned: primaryLeafRef, alternate: alternateRef },
-      });
-    }
-  } else if (!leafCat) {
+  const leafCat = await getCachedCategory(categoryId, categoryCache);
+  if (!leafCat) {
     issues.push({
       code: PRODUCT_CATEGORY_ISSUES.ORPHANED_REF,
       message: 'Category reference does not exist',
-      details: { orphaned: primaryLeafRef },
+      details: { orphaned: categoryId },
     });
     return { issues, healthy: false, repairable: false };
   }
@@ -147,18 +123,8 @@ export async function diagnoseProductCategory(product, categoryCache = new Map()
     return { issues, healthy: true, repairable: false };
   }
 
-  const repairable = await (async () => {
-    if (issues.some((issue) => issue.code === PRODUCT_CATEGORY_ISSUES.MISSING_LEAF)) {
-      return false;
-    }
-    if (issues.some((issue) => issue.code === PRODUCT_CATEGORY_ISSUES.ORPHANED_REF) && !alternateRef) {
-      return false;
-    }
-    let candidate = subId || categoryId;
-    if (!leafCat && alternateRef) candidate = alternateRef;
-    const resolved = await resolveRepairLeafId(candidate, categoryCache);
-    return Boolean(resolved.leafId);
-  })();
+  const resolved = await resolveRepairLeafId(categoryId, categoryCache);
+  const repairable = Boolean(resolved.leafId);
 
   return {
     issues,
@@ -168,7 +134,7 @@ export async function diagnoseProductCategory(product, categoryCache = new Map()
 }
 
 async function buildProductIssueRow(product, diagnosis, categoryCache) {
-  const leafRef = normalizeId(product.subCategory) || normalizeId(product.category);
+  const leafRef = normalizeId(product.category);
   let categoryPathEn = '';
   let categoryPathAr = '';
   if (leafRef) {
@@ -186,7 +152,6 @@ async function buildProductIssueRow(product, diagnosis, categoryCache) {
     nameAr: product.nameAr,
     isActive: product.isActive,
     mainCategory: normalizeId(product.mainCategory),
-    subCategory: normalizeId(product.subCategory),
     category: normalizeId(product.category),
     categoryPathEn,
     categoryPathAr,
@@ -197,7 +162,7 @@ async function buildProductIssueRow(product, diagnosis, categoryCache) {
 
 export async function scanProductCategoryIntegrity({ sampleLimit = 50 } = {}) {
   const products = await Product.find({})
-    .select('slug nameEn nameAr isActive mainCategory subCategory category')
+    .select('slug nameEn nameAr isActive mainCategory category')
     .lean();
 
   const categoryCache = new Map();
@@ -259,16 +224,9 @@ export async function repairSingleProductCategory(product, { dryRun = false, cat
     };
   }
 
-  const subId = normalizeId(product.subCategory);
   const categoryId = normalizeId(product.category);
-  let candidateRef = subId || categoryId;
 
-  const primaryCat = await getCachedCategory(candidateRef, categoryCache);
-  if (!primaryCat && subId && categoryId && subId !== categoryId) {
-    candidateRef = subId === candidateRef ? categoryId : subId;
-  }
-
-  const { leafId, reason, repairedFrom } = await resolveRepairLeafId(candidateRef, categoryCache);
+  const { leafId, reason, repairedFrom } = await resolveRepairLeafId(categoryId, categoryCache);
   if (!leafId) {
     return {
       productId: product._id,
@@ -292,7 +250,6 @@ export async function repairSingleProductCategory(product, { dryRun = false, cat
 
   const fields = {
     mainCategory: rootId,
-    subCategory: leafId,
     category: leafId,
   };
 
@@ -309,7 +266,6 @@ export async function repairSingleProductCategory(product, { dryRun = false, cat
     reason: reason || undefined,
     fields: {
       mainCategory: String(fields.mainCategory),
-      subCategory: String(fields.subCategory),
       category: String(fields.category),
     },
   };
@@ -321,7 +277,7 @@ export async function repairProductCategories({
   limit = null,
 } = {}) {
   const query = productIds?.length ? { _id: { $in: productIds } } : {};
-  let cursor = Product.find(query).select('slug mainCategory subCategory category');
+  let cursor = Product.find(query).select('slug mainCategory category');
   if (limit) cursor = cursor.limit(Number(limit));
 
   const products = await cursor.lean();
@@ -396,7 +352,7 @@ export async function repairCategoryLinks({ dryRun = false } = {}) {
     }
   }
 
-  const products = await Product.find({}).select('slug mainCategory subCategory category categoryAncestors');
+  const products = await Product.find({}).select('slug mainCategory category categoryAncestors');
   let productsFixed = 0;
   let productsWouldFix = 0;
   let productsUnrepairable = 0;
@@ -406,10 +362,9 @@ export async function repairCategoryLinks({ dryRun = false } = {}) {
     try {
       const fields = await resolveProductCategoryFields({
         mainCategory: product.mainCategory,
-        subCategory: product.subCategory || product.category,
         category: product.category,
       });
-      const changed = ['mainCategory', 'subCategory', 'category'].some(
+      const changed = ['mainCategory', 'category'].some(
         (key) => String(product[key] || '') !== String(fields[key] || ''),
       ) || String((product.categoryAncestors || []).map(String))
         !== String((fields.categoryAncestors || []).map(String));

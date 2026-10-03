@@ -34,14 +34,29 @@ function reviewRowKey(review) {
   return `${review.product._id}:${review._id}`;
 }
 
+function StarRow({ value, size = 'sm' }) {
+  const n = Math.max(0, Math.min(5, Math.round(Number(value) || 0)));
+  const boxClass = size === 'lg' ? 'h-5 w-5' : 'h-3.5 w-3.5';
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-label={`${n} / 5`}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          className={[boxClass, i <= n ? 'fill-amber-400 text-amber-400' : 'fill-slate-100 text-slate-200'].join(' ')}
+        />
+      ))}
+    </span>
+  );
+}
+
 function StatCard({ label, value, icon: Icon, tone = 'default', onClick, active }) {
   const tones = {
-    default: { card: 'border-border bg-white', icon: 'bg-slate-50 text-slate-600' },
-    sky: { card: 'border-sky-200 bg-sky-50/40', icon: 'bg-sky-100 text-sky-700' },
-    amber: { card: 'border-amber-200 bg-amber-50/40', icon: 'bg-amber-100 text-amber-700' },
-    green: { card: 'border-emerald-200 bg-emerald-50/40', icon: 'bg-emerald-100 text-emerald-700' },
-    red: { card: 'border-red-200 bg-red-50/40', icon: 'bg-red-100 text-red-700' },
-    violet: { card: 'border-violet-200 bg-violet-50/40', icon: 'bg-violet-100 text-violet-700' },
+    default: { accent: 'bg-slate-300', icon: 'bg-slate-100 text-slate-600' },
+    sky: { accent: 'bg-sky-400', icon: 'bg-sky-100 text-sky-700' },
+    amber: { accent: 'bg-amber-400', icon: 'bg-amber-100 text-amber-700' },
+    green: { accent: 'bg-emerald-400', icon: 'bg-emerald-100 text-emerald-700' },
+    red: { accent: 'bg-red-400', icon: 'bg-red-100 text-red-700' },
+    violet: { accent: 'bg-violet-400', icon: 'bg-violet-100 text-violet-700' },
   };
   const t = tones[tone] || tones.default;
   const Tag = onClick ? 'button' : 'div';
@@ -51,19 +66,19 @@ function StatCard({ label, value, icon: Icon, tone = 'default', onClick, active 
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={[
-        'rounded-2xl border p-4 text-start shadow-sm transition',
-        t.card,
-        onClick && 'cursor-pointer hover:shadow-md',
+        'group relative overflow-hidden rounded-2xl border border-border bg-white p-4 text-start shadow-sm transition',
+        onClick && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md',
         active && 'ring-2 ring-primary-400 ring-offset-1',
       ].filter(Boolean).join(' ')}
     >
+      <span className={`absolute inset-x-0 top-0 h-0.5 ${t.accent} ${active ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-60'}`} />
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-xs font-medium text-text-muted">{label}</p>
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium text-text-muted">{label}</p>
           <p className="mt-1 text-2xl font-extrabold tabular-nums">{value}</p>
         </div>
         {Icon && (
-          <span className={`rounded-xl p-2 ${t.icon}`}>
+          <span className={`shrink-0 rounded-xl p-2 ${t.icon}`}>
             <Icon className="h-4 w-4" strokeWidth={2} />
           </span>
         )}
@@ -72,44 +87,49 @@ function StatCard({ label, value, icon: Icon, tone = 'default', onClick, active 
   );
 }
 
-function StarDistribution({ distribution, isAr }) {
-  const total = [5, 4, 3, 2, 1].reduce((sum, star) => sum + (distribution[star] || 0), 0);
+function RatingOverview({ distribution, average, total, isAr }) {
+  const publishedTotal = [5, 4, 3, 2, 1].reduce((sum, star) => sum + (distribution[star] || 0), 0);
 
   return (
     <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-bold">{isAr ? 'توزيع النجوم' : 'Star distribution'}</p>
-          <p className="text-xs text-text-muted">{isAr ? 'التقييمات المنشورة فقط' : 'Published reviews only'}</p>
+      <div className="grid gap-6 sm:grid-cols-[auto_1fr]">
+        <div className="flex shrink-0 flex-col items-center justify-center gap-1.5 border-b border-border pb-4 text-center sm:border-b-0 sm:border-e sm:pb-0 sm:pe-6">
+          <p className="text-4xl font-extrabold tabular-nums text-text">{Number(average || 0).toFixed(1)}</p>
+          <StarRow value={average} size="lg" />
+          <p className="text-xs font-medium text-text-muted">
+            {total ?? publishedTotal} {isAr ? 'تقييم إجمالاً' : 'total reviews'}
+          </p>
         </div>
-        {total > 0 && (
-          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
-            {total} {isAr ? 'تقييم' : 'reviews'}
-          </span>
-        )}
-      </div>
-      <div className="space-y-2.5">
-        {[5, 4, 3, 2, 1].map((star) => {
-          const count = distribution[star] || 0;
-          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-          return (
-            <div key={star} className="flex items-center gap-3">
-              <span className="w-10 shrink-0 text-end text-xs font-bold text-amber-600">
-                {star}
-                <Star className="ms-0.5 inline h-3 w-3 fill-amber-400 text-amber-400" />
-              </span>
-              <div className="relative h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="absolute inset-y-0 start-0 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 transition-all duration-500"
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <span className="w-8 shrink-0 text-end text-xs font-bold tabular-nums text-text-muted">
-                {count}
-              </span>
-            </div>
-          );
-        })}
+
+        <div>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-sm font-bold text-text">{isAr ? 'توزيع النجوم' : 'Star distribution'}</p>
+            <p className="text-[11px] text-text-muted">{isAr ? 'التقييمات المنشورة فقط' : 'Published reviews only'}</p>
+          </div>
+          <div className="space-y-2">
+            {[5, 4, 3, 2, 1].map((star) => {
+              const count = distribution[star] || 0;
+              const pct = publishedTotal > 0 ? Math.round((count / publishedTotal) * 100) : 0;
+              return (
+                <div key={star} className="flex items-center gap-3">
+                  <span className="flex w-6 shrink-0 items-center justify-end gap-0.5 text-xs font-bold text-text-muted">
+                    {star}
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                  </span>
+                  <div className="relative h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="absolute inset-y-0 start-0 rounded-full bg-amber-400 transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <span className="w-8 shrink-0 text-end text-xs font-bold tabular-nums text-text-muted">
+                    {count}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -250,9 +270,7 @@ export default function ReviewsPage() {
       key: 'rating',
       header: isAr ? 'النجوم' : 'Stars',
       sortKey: 'rating',
-      render: (row) => (
-        <span className="text-amber-500">{'★'.repeat(Math.round(row.rating || 0))}</span>
-      ),
+      render: (row) => <StarRow value={row.rating} />,
     },
     {
       key: 'comment',
@@ -266,7 +284,17 @@ export default function ReviewsPage() {
       header: isAr ? 'الحالة' : 'Status',
       render: (row) => {
         const labels = { pending: isAr ? 'معلق' : 'Pending', approved: isAr ? 'منشور' : 'Published', hidden: isAr ? 'مخفي' : 'Hidden', rejected: isAr ? 'مرفوض' : 'Rejected' };
-        return labels[row.status] || row.status;
+        const styles = {
+          pending: 'bg-amber-50 text-amber-800 ring-amber-200',
+          approved: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+          hidden: 'bg-slate-100 text-slate-700 ring-slate-200',
+          rejected: 'bg-red-50 text-red-800 ring-red-200',
+        };
+        return (
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ring-1 ring-inset ${styles[row.status] || styles.hidden}`}>
+            {labels[row.status] || row.status}
+          </span>
+        );
       },
     },
     {
@@ -308,7 +336,7 @@ export default function ReviewsPage() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <StatCard
           label={isAr ? 'إجمالي التقييمات' : 'Total reviews'}
           value={statsLoading ? '…' : (stats?.total ?? 0)}
@@ -347,12 +375,6 @@ export default function ReviewsPage() {
           active={list.filters.status === 'rejected'}
         />
         <StatCard
-          label={isAr ? 'متوسط التقييم' : 'Avg rating'}
-          value={statsLoading ? '…' : (stats?.averageRating?.toFixed?.(1) ?? '0.0')}
-          icon={Star}
-          tone="violet"
-        />
-        <StatCard
           label={isAr ? 'بدون رد' : 'No reply'}
           value={statsLoading ? '…' : (stats?.withoutReply ?? 0)}
           icon={MessageSquareOff}
@@ -370,7 +392,12 @@ export default function ReviewsPage() {
       </div>
 
       {stats?.starDistribution && (
-        <StarDistribution distribution={stats.starDistribution} isAr={isAr} />
+        <RatingOverview
+          distribution={stats.starDistribution}
+          average={stats.averageRating}
+          total={stats.total}
+          isAr={isAr}
+        />
       )}
 
       <div dir="ltr" className="grid gap-6 lg:grid-cols-[minmax(260px,280px)_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_400px]">
@@ -405,7 +432,7 @@ export default function ReviewsPage() {
                 onChange={(v) => list.setFilter('rating', v)}
                 options={[
                   { value: '', label: isAr ? 'كل النجوم' : 'All stars' },
-                  ...[5, 4, 3, 2, 1].map((r) => ({ value: String(r), label: `${r}★` })),
+                  ...[5, 4, 3, 2, 1].map((r) => ({ value: String(r), label: isAr ? `${r} نجوم` : `${r} stars` })),
                 ]}
                 isAr={isAr}
               />

@@ -80,7 +80,6 @@ const seed = async () => {
   await Product.create({
     ...SEED_DEEP_CATEGORY_DEMO.product,
     mainCategory: demoMain._id,
-    subCategory: demoL4._id,
     category: demoL4._id,
     isActive: true,
   });
@@ -100,7 +99,6 @@ const seed = async () => {
       price: p.price,
       oldPrice: p.oldPrice || undefined,
       mainCategory: mainId,
-      subCategory: subId,
       category: subId,
       emoji: p.emoji,
       unit: p.unit,

@@ -1,29 +1,38 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, FolderOpen, Layers, Package, PackagePlus, Tag } from 'lucide-react';
+import {
+  CheckCircle2,
+  FolderOpen,
+  FolderTree,
+  ImagePlus,
+  Info,
+  ListTree,
+  Package,
+  PackagePlus,
+  Plus,
+  Search,
+  Sparkles,
+  Tag,
+} from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import { localizeAdminApiError } from '../constants/productCategoryErrors';
 import { adminNewProductUrl } from '../utils/adminProductRoutes';
-import { useAdminListPage } from '../hooks/useAdminListPage';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import { AdminListPage, BulkActionsBar, ListFilterSelect } from '../components/list';
+import { BulkActionsBar } from '../components/list';
+import EmptyState from '../components/EmptyState';
 import { useConfirm, useToast } from '../components';
-import AdminCategoryTree from '../components/AdminCategoryTree';
 import CategoryProductReassignPanel from '../components/CategoryProductReassignPanel';
 import CategoryBulkImpactPanel from '../components/CategoryBulkImpactPanel';
+import CategoryTreeCard, { CategoryInsertSlot } from '../components/CategoryTreeCard';
 import {
   CATEGORY_LEVEL_LABELS,
   buildBulkCategoryImpact,
   buildCategoryActionWarning,
+  buildCategoryTree,
   categoryHasActiveProducts,
-  categoryLabel,
-  categoryLevelLabel,
-  categoryRoleLabel,
   categoryRoleMeta,
-  getCategoryAncestorPath,
-  getRootCategories,
   parentSelectLabel,
 } from '../../utils/categoryHelpers';
 
@@ -38,41 +47,52 @@ const EMPTY_FORM = {
   isActive: true,
 };
 
-const TAB_HINTS = {
+const LEVEL_HINTS = {
   1: {
-    en: 'Top-level departments shown in navigation. Group sub-categories — products attach to deeper levels.',
-    ar: 'أقسام المستوى الأعلى في القائمة. تجمع أقساماً فرعية — المنتجات تُربط بالمستويات الأعمق.',
+    en: 'Top-level department shown in navigation.',
+    ar: 'قسم من المستوى الأعلى يظهر في القائمة.',
   },
   2: {
-    en: 'Mid-level groups under a main category. Products attach to leaf nodes below.',
-    ar: 'مجموعات تحت القسم الرئيسي. المنتجات تُربط بأقسام الطرف (بدون أبناء).',
+    en: 'A group under a main category.',
+    ar: 'مجموعة تحت القسم الرئيسي.',
   },
   3: {
-    en: 'Sub-groups. Can hold products only when they have no children.',
-    ar: 'مجموعات فرعية. يمكن ربط المنتجات فقط إذا لم يكن للقسم أقسام فرعية.',
+    en: 'A sub-group. Can hold products only when it has no children.',
+    ar: 'مجموعة فرعية. تحمل منتجات فقط إذا لم يكن لها أقسام فرعية.',
   },
   4: {
-    en: 'Deepest level — always a product category (no further nesting).',
-    ar: 'أعمق مستوى — دائماً قسم منتجات (لا يمكن إضافة مستوى أعمق).',
+    en: 'Deepest level — always a product category.',
+    ar: 'أعمق مستوى — دائمًا قسم منتجات.',
   },
 };
 
 function CategoryLevelPath({ level, isAr }) {
   return (
-    <div className="flex flex-wrap items-center gap-1 text-xs sm:text-sm">
+    <div className="flex flex-wrap items-center gap-0 text-xs sm:text-sm">
       {[1, 2, 3, 4].map((lvl) => {
         const active = lvl === level;
+        const done = lvl < level;
         const labels = CATEGORY_LEVEL_LABELS[lvl];
         return (
-          <span key={lvl} className="flex items-center gap-1">
-            {lvl > 1 && <ChevronRight className="h-3.5 w-3.5 text-text-muted" />}
+          <span key={lvl} className="flex items-center">
+            {lvl > 1 && (
+              <span className={`mx-1 h-px w-4 sm:w-6 ${done || active ? 'bg-primary-300' : 'bg-slate-200'}`} />
+            )}
             <span
-              className={`rounded-lg px-2.5 py-1 font-medium ${
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 font-semibold transition-colors ${
                 active
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-slate-100 text-text-muted'
+                  ? 'bg-primary-600 text-white shadow-sm shadow-primary-600/30'
+                  : done
+                    ? 'bg-primary-50 text-primary-700 ring-1 ring-primary-200'
+                    : 'bg-slate-100 text-text-muted'
               }`}
             >
+              <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+                active ? 'bg-white/20' : 'bg-white/60'
+              }`}
+              >
+                {lvl}
+              </span>
               {isAr ? labels.ar : labels.en}
             </span>
           </span>
@@ -94,161 +114,162 @@ function CategoryForm({
   onSubmit,
   onCancel,
   onAddProduct,
-  level,
-  parentCategories,
-  parentsLoading = false,
+  levelNum,
+  parentOptions,
   editingCategory = null,
 }) {
-  const levelNum = Number(level) || 1;
-  const isRoot = levelNum === 1;
-  const levelLabel = CATEGORY_LEVEL_LABELS[levelNum] || CATEGORY_LEVEL_LABELS[1];
-  const parentLabel = CATEGORY_LEVEL_LABELS[levelNum - 1] || CATEGORY_LEVEL_LABELS[1];
   const editMeta = editingCategory ? categoryRoleMeta(editingCategory) : null;
   const isMaxDepth = levelNum === 4;
   const willBeLeaf = isMaxDepth || (editMeta?.isLeaf ?? true);
+  const hint = LEVEL_HINTS[levelNum] || LEVEL_HINTS[1];
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-4 rounded-2xl border border-border bg-white p-6 sm:grid-cols-2">
-      <div className="space-y-3 sm:col-span-2">
-        <CategoryLevelPath level={levelNum} isAr={isAr} />
-        <p className="text-sm text-text-muted">
-          {isAr ? TAB_HINTS[levelNum].ar : TAB_HINTS[levelNum].en}
-        </p>
+    <form
+      onSubmit={onSubmit}
+      className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-16px_rgba(15,23,42,0.18)]"
+    >
+      <div className="relative overflow-hidden bg-gradient-to-br from-primary-700 via-primary-600 to-primary-800 px-6 py-5">
+        <div className="pointer-events-none absolute -end-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" aria-hidden />
+        <div className="pointer-events-none absolute -start-6 -bottom-10 h-32 w-32 rounded-full bg-white/10 blur-2xl" aria-hidden />
+        <div className="relative flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/25">
+              {editingCategory ? <Tag className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
+            </span>
+            <div>
+              <h3 className="text-base font-semibold text-white">
+                {editingCategory
+                  ? (isAr ? 'تعديل القسم' : 'Edit category')
+                  : (isAr ? 'قسم جديد' : 'New category')}
+              </h3>
+              <p className="text-xs text-white/70">{isAr ? hint.ar : hint.en}</p>
+            </div>
+          </div>
+          <CategoryLevelPath level={levelNum} isAr={isAr} />
+        </div>
       </div>
 
-      <div className="sm:col-span-2 rounded-xl border border-border bg-slate-50 px-4 py-3 text-sm">
-        <p className="font-semibold text-text">
-          {isAr ? `المستوى ${levelNum}: ${levelLabel.ar}` : `Level ${levelNum}: ${levelLabel.en}`}
-        </p>
-        <p className="mt-1 text-text-muted">
-          {isRoot
-            ? (isAr
-              ? 'لا يحتاج قسمًا أبًا — يظهر في قائمة الأقسام الرئيسية.'
-              : 'No parent needed — appears as a top-level shop category.')
-            : (isAr
-              ? `يجب اختيار ${parentLabel.ar} كقسم أب.`
-              : `Must be placed under a ${parentLabel.en.toLowerCase()}.`)}
-        </p>
-        <p className={`mt-2 rounded-lg px-3 py-2 text-xs font-medium ${
-          willBeLeaf
-            ? 'bg-emerald-50 text-emerald-900'
-            : 'bg-amber-50 text-amber-900'
-        }`}>
-          {editMeta?.isGroup
-            ? (isAr
-              ? `مجموعة فقط — ${editMeta.childCount} قسم فرعي. المنتجات تُربط بالمستويات الأعمق.`
-              : `Group only — ${editMeta.childCount} sub-categorie(s). Products attach to deeper levels.`)
-            : willBeLeaf
-              ? (isAr
-                ? 'قسم منتجات — يمكن ربط المنتجات هنا (آخر مستوى بدون أبناء).'
-                : 'Product category — products can be assigned here (leaf node).')
-              : (isAr
-                ? 'بعد الحفظ يمكن إضافة أقسام فرعية — المنتجات تُربط عند آخر مستوى.'
-                : 'After saving you can add sub-categories — products attach at the deepest level.')}
-        </p>
-        {editingCategory?.productCount > 0 && (
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-primary-800">
-            <Package className="h-3.5 w-3.5 shrink-0" />
-            {isAr
-              ? `${editingCategory.productCount} منتج مرتبط بهذا القسم.`
-              : `${editingCategory.productCount} product(s) linked to this category.`}
-          </p>
-        )}
-      </div>
+      <div className="grid gap-5 p-6 sm:grid-cols-2">
+        <div className={`sm:col-span-2 rounded-xl border px-4 py-3 text-sm ${
+          willBeLeaf ? 'border-emerald-200 bg-emerald-50/60' : 'border-amber-200 bg-amber-50/60'
+        }`}
+        >
+          <div className="flex items-start gap-2.5">
+            <Info className={`mt-0.5 h-4 w-4 shrink-0 ${willBeLeaf ? 'text-emerald-600' : 'text-amber-600'}`} />
+            <div className="space-y-1.5">
+              <p className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                willBeLeaf ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'
+              }`}
+              >
+                {editMeta?.isGroup
+                  ? (isAr
+                    ? `مجموعة فقط — ${editMeta.childCount} قسم فرعي`
+                    : `Group only — ${editMeta.childCount} sub-categorie(s)`)
+                  : willBeLeaf
+                    ? (isAr
+                      ? 'قسم منتجات — يمكن ربط المنتجات هنا'
+                      : 'Product category — products can be assigned here')
+                    : (isAr
+                      ? 'بعد الحفظ يمكن إضافة أقسام فرعية'
+                      : 'After saving you can add sub-categories')}
+              </p>
+              {editingCategory?.productCount > 0 && (
+                <p className="flex items-center gap-1.5 text-xs font-medium text-primary-800">
+                  <Package className="h-3.5 w-3.5 shrink-0" />
+                  {isAr
+                    ? `${editingCategory.productCount} منتج مرتبط بهذا القسم.`
+                    : `${editingCategory.productCount} product(s) linked to this category.`}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
 
-      <Input label={isAr ? 'الاسم (عربي)' : 'Name AR'} value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} required />
-      <Input label={isAr ? 'الاسم (EN)' : 'Name EN'} value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} required />
-      <Input label="Slug" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="diapers / pampers" />
-      <Input label="Icon" value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} />
+        <Input label={isAr ? 'الاسم (عربي)' : 'Name AR'} value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} required />
+        <Input label={isAr ? 'الاسم (EN)' : 'Name EN'} value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} required />
+        <Input label="Slug" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="diapers / pampers" />
+        <Input label={isAr ? 'أيقونة (تُعرض للعملاء)' : 'Icon (shown to customers)'} value={form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} />
 
-      {!isRoot && (
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium">
-            {isAr ? `${parentLabel.ar} (القسم الأب) *` : `${parentLabel.en} (parent) *`}
+            {isAr ? 'القسم الأب' : 'Parent category'}
           </label>
           <select
-            className="w-full rounded-xl border border-border px-4 py-2.5"
+            className="w-full rounded-field border border-border bg-white px-4 py-2.5 text-text transition-colors duration-200 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
             value={form.parentCategory}
             onChange={(e) => setForm({ ...form, parentCategory: e.target.value })}
-            required
-            disabled={parentsLoading}
           >
-            <option value="">
-              {parentsLoading
-                ? (isAr ? 'جاري التحميل...' : 'Loading...')
-                : (isAr ? `اختر ${parentLabel.ar}` : `Select ${parentLabel.en.toLowerCase()}`)}
-            </option>
-            {parentCategories.map((c) => (
+            <option value="">{isAr ? '— بدون (قسم رئيسي) —' : '— None (main category) —'}</option>
+            {parentOptions.map((c) => (
               <option key={c._id} value={c._id}>
                 {parentSelectLabel(c, isAr)}
               </option>
             ))}
           </select>
-          {!parentsLoading && parentCategories.length === 0 && (
-            <p className="mt-2 text-sm text-amber-700">
-              {Number(level) === 2
-                ? (isAr
-                  ? 'لا يوجد قسم رئيسي بعد. أضف قسمًا رئيسيًا من تبويب «قسم رئيسي» أولاً.'
-                  : 'No main categories yet. Add one under the Main category tab first.')
-                : (isAr
-                  ? `لا توجد ${parentLabel.ar} متاحة. أضف المستوى الأعلى أولاً.`
-                  : `No ${parentLabel.en.toLowerCase()} available. Add the parent level first.`)}
-            </p>
-          )}
           <p className="mt-1.5 text-xs text-text-muted">
             {isAr
-              ? 'المسار الكامل يظهر بجانب كل خيار (رئيسي › قسم › …).'
-              : 'Full path is shown for each option (Main › Category › …).'}
+              ? 'المسار الكامل يظهر بجانب كل خيار (رئيسي › قسم › …). اترك بدون اختيار لجعله قسمًا رئيسيًا.'
+              : 'Full path is shown for each option (Main › Category › …). Leave empty to make it a main category.'}
           </p>
         </div>
-      )}
 
-      <Input label={isAr ? 'الترتيب' : 'Sort order'} type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })} />
+        <Input label={isAr ? 'الترتيب' : 'Sort order'} type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })} />
 
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        <span className="flex items-center gap-2">
-          <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-          {isAr ? 'نشط (يظهر في المتجر)' : 'Active (visible on storefront)'}
-        </span>
-        {!form.isActive && editingCategory && categoryHasActiveProducts(editingCategory) && (
-          <span className="text-xs text-amber-700">
-            {isAr
-              ? `لا يمكن التعطيل — ${editingCategory.activeProductCount} منتج نشط. استخدم «نقل المنتجات» أولاً.`
-              : `Cannot deactivate — ${editingCategory.activeProductCount} active product(s). Use “Move products” first.`}
+        <label className="flex flex-col gap-1.5 self-end rounded-xl border border-border bg-slate-50/70 px-4 py-2.5 text-sm">
+          <span className="flex items-center gap-2 font-medium text-text">
+            <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="h-4 w-4 rounded accent-primary-600" />
+            {isAr ? 'نشط (يظهر في المتجر)' : 'Active (visible on storefront)'}
           </span>
-        )}
-      </label>
+          {!form.isActive && editingCategory && categoryHasActiveProducts(editingCategory) && (
+            <span className="text-xs text-amber-700">
+              {isAr
+                ? `لا يمكن التعطيل — ${editingCategory.activeProductCount} منتج نشط. استخدم «نقل المنتجات» أولاً.`
+                : `Cannot deactivate — ${editingCategory.activeProductCount} active product(s). Use “Move products” first.`}
+            </span>
+          )}
+        </label>
 
-      <div className="sm:col-span-2 space-y-3 rounded-xl border border-border bg-slate-50 p-4">
-        <p className="text-sm font-semibold text-text">
-          {isAr ? 'صورة القسم (تظهر في الموقع)' : 'Category photo (shown on storefront)'}
-        </p>
-        <Input
-          label={isAr ? 'رابط الصورة (اختياري)' : 'Image URL (optional)'}
-          value={imageUrl}
-          onChange={onImageUrlChange}
-          placeholder="https://..."
-        />
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">{isAr ? 'أو رفع صورة' : 'Or upload image'}</label>
-          <input type="file" accept="image/*" onChange={onImageChange} className="block w-full text-sm" />
+        <div className="sm:col-span-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <ImagePlus className="h-3.5 w-3.5" />
+          {isAr ? 'صورة القسم' : 'Category image'}
+          <span className="h-px flex-1 bg-slate-100" />
         </div>
-        {imagePreview && (
-          <div className="flex flex-wrap items-end gap-4">
-            <img src={imagePreview} alt="" className="h-24 w-24 rounded-2xl border border-border object-cover shadow-sm" />
-            <Button type="button" variant="secondary" size="sm" onClick={onRemoveImage}>
-              {isAr ? 'إزالة الصورة' : 'Remove image'}
-            </Button>
+
+        <div className="sm:col-span-2 space-y-3 rounded-xl border border-border bg-slate-50/70 p-4">
+          <p className="text-xs text-text-muted">
+            {isAr
+              ? 'تظهر في الصفحة الرئيسية وقوائم الأقسام. بدون صورة يُستخدم الأيقونة أعلاه.'
+              : 'Shown on homepage and category lists. The icon above is used if no photo is set.'}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
+            <Input
+              label={isAr ? 'رابط الصورة (اختياري)' : 'Image URL (optional)'}
+              value={imageUrl}
+              onChange={onImageUrlChange}
+              placeholder="https://..."
+            />
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">{isAr ? 'أو رفع صورة' : 'Or upload image'}</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={onImageChange}
+                className="block w-full cursor-pointer text-sm text-text-muted file:me-3 file:cursor-pointer file:rounded-full file:border-0 file:bg-primary-600 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-primary-700"
+              />
+            </div>
           </div>
-        )}
-        <p className="text-xs text-text-muted">
-          {isAr
-            ? 'يُعرض في الصفحة الرئيسية، قائمة الأقسام، والأقسام الفرعية. بدون صورة يُستخدم الأيقونة.'
-            : 'Shown on homepage, category lists, and subcategory pages. Icon is used if no photo.'}
-        </p>
+          {imagePreview && (
+            <div className="flex flex-wrap items-end gap-4">
+              <img src={imagePreview} alt="" className="h-24 w-24 rounded-2xl border border-border object-cover shadow-sm" />
+              <Button type="button" variant="secondary" size="sm" onClick={onRemoveImage}>
+                {isAr ? 'إزالة الصورة' : 'Remove image'}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 sm:col-span-2">
+      <div className="flex flex-wrap gap-3 border-t border-slate-100 bg-slate-50/60 px-6 py-4">
         <Button type="submit">{isAr ? 'حفظ' : 'Save'}</Button>
         {onAddProduct && (
           <Button type="button" variant="secondary" onClick={onAddProduct}>
@@ -256,10 +277,44 @@ function CategoryForm({
             {isAr ? 'إضافة منتج لهذا القسم' : 'Add product to this category'}
           </Button>
         )}
-        <Button type="button" variant="secondary" onClick={onCancel}>{isAr ? 'إلغاء' : 'Cancel'}</Button>
+        <Button type="button" variant="ghost" onClick={onCancel}>{isAr ? 'إلغاء' : 'Cancel'}</Button>
       </div>
     </form>
   );
+}
+
+function matchesQuery(cat, query) {
+  if (!query) return true;
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return (cat.nameAr || '').toLowerCase().includes(needle)
+    || (cat.nameEn || '').toLowerCase().includes(needle)
+    || (cat.slug || '').toLowerCase().includes(needle);
+}
+
+function matchesStatus(cat, statusFilter) {
+  if (statusFilter === 'true') return cat.isActive !== false;
+  if (statusFilter === 'false') return cat.isActive === false;
+  return true;
+}
+
+function pruneCategoryTree(nodes, predicate) {
+  const out = [];
+  (nodes || []).forEach((node) => {
+    const children = pruneCategoryTree(node.children, predicate);
+    if (predicate(node) || children.length) {
+      out.push({ ...node, children });
+    }
+  });
+  return out;
+}
+
+function collectTreeIds(nodes, acc = []) {
+  (nodes || []).forEach((node) => {
+    acc.push(node._id);
+    collectTreeIds(node.children, acc);
+  });
+  return acc;
 }
 
 export default function CategoriesPage() {
@@ -269,9 +324,13 @@ export default function CategoriesPage() {
   const confirm = useConfirm();
   const toast = useToast();
 
-  const [tab, setTab] = useState('1');
-  const [parentCategories, setParentCategories] = useState([]);
-  const [parentsLoading, setParentsLoading] = useState(false);
+  const [allCategories, setAllCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [collapsedIds, setCollapsedIds] = useState(() => new Set());
+  const [selectedIds, setSelectedIds] = useState([]);
+
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -279,10 +338,7 @@ export default function CategoriesPage() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [clearImage, setClearImage] = useState(false);
-  const [allCategories, setAllCategories] = useState([]);
-  const [treeLoading, setTreeLoading] = useState(true);
-  const [selectedTreeId, setSelectedTreeId] = useState('');
-  const [showTreeMobile, setShowTreeMobile] = useState(false);
+
   const [reassignState, setReassignState] = useState({
     open: false,
     category: null,
@@ -292,18 +348,9 @@ export default function CategoriesPage() {
   const [reassignApplying, setReassignApplying] = useState(false);
   const [bulkImpact, setBulkImpact] = useState({ open: false, action: 'delete', impact: null });
   const [bulkApplying, setBulkApplying] = useState(false);
-  const [treeActionIntent, setTreeActionIntent] = useState(null);
-
-  const list = useAdminListPage({
-    fetchFn: (params) => adminApi.getCategories({
-      ...params,
-      level: tab,
-    }),
-    initialFilters: { isActive: '', parentCategory: '' },
-  });
 
   const loadAllCategories = useCallback(async () => {
-    setTreeLoading(true);
+    setLoading(true);
     try {
       const { data: res } = await adminApi.getCategories({
         limit: 500,
@@ -317,7 +364,7 @@ export default function CategoriesPage() {
       setAllCategories([]);
       return [];
     } finally {
-      setTreeLoading(false);
+      setLoading(false);
     }
   }, []);
 
@@ -325,76 +372,67 @@ export default function CategoriesPage() {
     loadAllCategories();
   }, [loadAllCategories]);
 
-  const loadParentCategories = useCallback(async () => {
-    if (tab === '1') {
-      setParentCategories([]);
-      return;
-    }
-    setParentsLoading(true);
-    try {
-      const parentLevel = Number(tab) - 1;
-      const params = parentLevel === 1
-        ? { limit: 500, rootsOnly: 'true', sort: 'sortOrder', order: 'asc' }
-        : { limit: 500, level: String(parentLevel), sort: 'sortOrder', order: 'asc' };
-      const { data: res } = await adminApi.getCategories(params);
-      setParentCategories(Array.isArray(res?.data) ? res.data : []);
-    } catch {
-      setParentCategories([]);
-    } finally {
-      setParentsLoading(false);
-    }
-  }, [tab]);
-
-  const getDirectChildCount = useCallback((categoryId) => (
-    allCategories.filter((c) => {
-      const pid = c.parentCategory?._id || c.parentCategory;
-      return pid && String(pid) === String(categoryId);
-    }).length
+  const findCategory = useCallback((id) => (
+    allCategories.find((c) => String(c._id) === String(id)) || null
   ), [allCategories]);
 
-  const listParentCategory = useMemo(() => {
-    const parentId = list.filters.parentCategory;
-    if (!parentId) return null;
-    return allCategories.find((c) => String(c._id) === String(parentId)) || null;
-  }, [list.filters.parentCategory, allCategories]);
+  const tree = useMemo(() => buildCategoryTree(allCategories), [allCategories]);
 
-  const handleTabChange = useCallback((nextTab) => {
-    list.setFilter('parentCategory', '');
-    list.setQ('');
-    setTab(nextTab);
-  }, [list]);
+  const isFiltering = Boolean(search.trim()) || Boolean(statusFilter);
+  const visibleTree = useMemo(() => {
+    if (!isFiltering) return tree;
+    return pruneCategoryTree(tree, (cat) => matchesQuery(cat, search) && matchesStatus(cat, statusFilter));
+  }, [tree, isFiltering, search, statusFilter]);
 
-  const clearListParentFilter = useCallback(() => {
-    list.setFilter('parentCategory', '');
-    list.setQ('');
-  }, [list]);
+  const visibleFlatIds = useMemo(() => collectTreeIds(visibleTree), [visibleTree]);
 
-  const refreshAll = useCallback(() => {
-    list.reload();
-    loadAllCategories();
-    loadParentCategories();
-  }, [list, loadAllCategories, loadParentCategories]);
+  const pageStats = useMemo(() => {
+    const total = allCategories.length;
+    const active = allCategories.filter((c) => c.isActive !== false).length;
+    const leaf = allCategories.filter((c) => categoryRoleMeta(c).isLeaf).length;
+    return { total, active, leaf, groups: total - leaf };
+  }, [allCategories]);
 
-  useEffect(() => {
-    loadParentCategories();
-  }, [tab, loadParentCategories]);
+  const refreshAll = useCallback(() => loadAllCategories(), [loadAllCategories]);
 
-  useEffect(() => {
-    if (showForm) loadParentCategories();
-  }, [showForm, loadParentCategories]);
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+  const clearSelection = () => setSelectedIds([]);
+  const allSelected = visibleFlatIds.length > 0 && visibleFlatIds.every((id) => selectedIds.includes(id));
+  const toggleSelectAll = () => setSelectedIds(allSelected ? [] : visibleFlatIds);
 
-  useEffect(() => {
-    list.setPage(1);
-    list.reload();
-    if (treeActionIntent) return;
-    setShowForm(false);
+  const toggleCollapse = (id) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      const key = String(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setImageFile(null);
+    setImagePreview('');
+    setClearImage(false);
     setEditId(null);
     setEditingCategory(null);
-    setForm(EMPTY_FORM);
-  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+    setShowForm(false);
+  };
 
-  const applyEditForm = useCallback((cat) => {
-    setSelectedTreeId(String(cat._id));
+  const openAddForm = (parentCategory = null) => {
+    setEditId(null);
+    setEditingCategory(null);
+    setForm({ ...EMPTY_FORM, parentCategory: parentCategory ? String(parentCategory._id) : '' });
+    setImageFile(null);
+    setImagePreview('');
+    setClearImage(false);
+    setShowForm(true);
+  };
+
+  const openEditForm = (cat) => {
     setEditId(cat._id);
     setEditingCategory(cat);
     setForm({
@@ -411,72 +449,26 @@ export default function CategoriesPage() {
     setClearImage(false);
     setImagePreview(cat.image || '');
     setShowForm(true);
-  }, []);
-
-  useEffect(() => {
-    if (!treeActionIntent) return;
-
-    if (treeActionIntent.type === 'addRoot') {
-      if (tab !== '1') {
-        setTab('1');
-        return;
-      }
-      setSelectedTreeId('');
-      setEditId(null);
-      setEditingCategory(null);
-      setForm({
-        ...EMPTY_FORM,
-        sortOrder: treeActionIntent.sortOrder ?? 0,
-      });
-      setImageFile(null);
-      setImagePreview('');
-      setClearImage(false);
-      setShowForm(true);
-      setShowTreeMobile(false);
-      setTreeActionIntent(null);
-      return;
-    }
-
-    const cat = treeActionIntent.category;
-    const targetLevel = treeActionIntent.type === 'addChild'
-      ? String(Math.min(Number(cat.level || 1) + 1, 4))
-      : String(cat.level || 1);
-
-    if (tab !== targetLevel) {
-      setTab(targetLevel);
-      return;
-    }
-
-    if (treeActionIntent.type === 'edit') {
-      applyEditForm(cat);
-    } else if (treeActionIntent.type === 'addChild') {
-      const parentLevel = Number(cat.level || 1);
-      if (parentLevel >= 4) {
-        toast.error(isAr ? 'أقصى عمق 4 مستويات' : 'Maximum depth is 4 levels');
-      } else {
-        setSelectedTreeId(String(cat._id));
-        setEditId(null);
-        setEditingCategory(null);
-        setForm({ ...EMPTY_FORM, parentCategory: cat._id });
-        setImageFile(null);
-        setImagePreview('');
-        setClearImage(false);
-        setShowForm(true);
-        setShowTreeMobile(false);
-      }
-    }
-    setTreeActionIntent(null);
-  }, [treeActionIntent, tab, applyEditForm, isAr, toast]);
-
-  const resetForm = () => {
-    setForm(EMPTY_FORM);
-    setImageFile(null);
-    setImagePreview('');
-    setClearImage(false);
-    setEditId(null);
-    setEditingCategory(null);
-    setShowForm(false);
   };
+
+  const levelNum = useMemo(() => {
+    if (!form.parentCategory) return 1;
+    const parent = findCategory(form.parentCategory);
+    return Math.min((parent?.level || 1) + 1, 4);
+  }, [form.parentCategory, findCategory]);
+
+  const parentOptions = useMemo(() => {
+    const isDescendantOfEditing = (candidate) => {
+      if (!editingCategory) return false;
+      if (String(candidate._id) === String(editingCategory._id)) return true;
+      return (candidate.ancestors || []).some(
+        (a) => String(a?._id || a) === String(editingCategory._id),
+      );
+    };
+    return allCategories
+      .filter((c) => (c.level || 1) <= 3 && !isDescendantOfEditing(c))
+      .sort((a, b) => (isAr ? a.nameAr.localeCompare(b.nameAr) : a.nameEn.localeCompare(b.nameEn)));
+  }, [allCategories, editingCategory, isAr]);
 
   const buildFormData = () => {
     const fd = new FormData();
@@ -484,10 +476,7 @@ export default function CategoriesPage() {
       if (value === '' || value == null) return;
       fd.append(key, key === 'isActive' ? String(value) : value);
     });
-    fd.append('level', tab);
-    if (tab === '1') {
-      fd.delete('parentCategory');
-    }
+    if (!form.parentCategory) fd.delete('parentCategory');
     if (imageFile) {
       fd.append('image', imageFile);
     } else if (clearImage) {
@@ -498,15 +487,28 @@ export default function CategoriesPage() {
     return fd;
   };
 
-  const resolveSelectedCategories = useCallback((ids) => {
-    const byId = new Map();
-    allCategories.forEach((c) => byId.set(String(c._id), c));
-    list.data.forEach((c) => {
-      const key = String(c._id);
-      if (!byId.has(key)) byId.set(key, c);
-    });
-    return ids.map((id) => byId.get(String(id))).filter(Boolean);
-  }, [allCategories, list.data]);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (
+      editingCategory
+      && categoryHasActiveProducts(editingCategory)
+      && form.isActive === false
+      && editingCategory.isActive !== false
+    ) {
+      openReassignPanel(editingCategory, 'deactivate');
+      return;
+    }
+    try {
+      const payload = buildFormData();
+      if (editId) await adminApi.updateCategory(editId, payload);
+      else await adminApi.createCategory(payload);
+      resetForm();
+      refreshAll();
+      toast.success(isAr ? 'تم حفظ القسم' : 'Category saved');
+    } catch (err) {
+      toast.error(err.response?.data?.message || (isAr ? 'فشل الحفظ' : 'Save failed'));
+    }
+  };
 
   const openReassignPanel = (category, action, { fromBulk = false } = {}) => {
     setBulkImpact({ open: false, action: 'delete', impact: null });
@@ -514,22 +516,13 @@ export default function CategoriesPage() {
   };
 
   const reopenBulkImpact = useCallback(async (action) => {
-    if (!list.selectedIds.length) return;
+    if (!selectedIds.length) return;
     const fresh = await loadAllCategories();
     const byId = new Map(fresh.map((c) => [String(c._id), c]));
-    list.data.forEach((c) => {
-      const key = String(c._id);
-      if (!byId.has(key)) byId.set(key, c);
-    });
-    const selected = list.selectedIds.map((id) => byId.get(String(id))).filter(Boolean);
+    const selected = selectedIds.map((id) => byId.get(String(id))).filter(Boolean);
     if (!selected.length) return;
-    list.reload();
-    setBulkImpact({
-      open: true,
-      action,
-      impact: buildBulkCategoryImpact(selected, action, isAr),
-    });
-  }, [list, loadAllCategories, isAr]);
+    setBulkImpact({ open: true, action, impact: buildBulkCategoryImpact(selected, action, isAr) });
+  }, [selectedIds, loadAllCategories, isAr]);
 
   const handleReassignAndContinue = async (categoryPayload) => {
     const { category, action, fromBulk } = reassignState;
@@ -537,14 +530,9 @@ export default function CategoriesPage() {
     setReassignApplying(true);
     try {
       const { data: moveRes } = await adminApi.reassignCategoryProducts(category._id, categoryPayload);
-      toast.success(
-        isAr
-          ? `تم نقل ${moveRes.affected} منتج`
-          : `Moved ${moveRes.affected} product(s)`,
-      );
+      toast.success(isAr ? `تم نقل ${moveRes.affected} منتج` : `Moved ${moveRes.affected} product(s)`);
       if (fromBulk) {
         setReassignState({ open: false, category: null, action: 'delete', fromBulk: false });
-        list.reload();
         await reopenBulkImpact(action);
         return;
       }
@@ -595,7 +583,7 @@ export default function CategoriesPage() {
       confirmLabel: action === 'delete' ? (isAr ? 'حذف' : 'Delete') : (isAr ? 'تعطيل' : 'Deactivate'),
       variant: action === 'delete' ? 'danger' : 'primary',
     });
-    if (!ok) return false;
+    if (!ok) return;
     try {
       if (action === 'delete') {
         await adminApi.deleteCategory(category._id);
@@ -607,127 +595,9 @@ export default function CategoriesPage() {
         toast.success(isAr ? 'تم التعطيل' : 'Deactivated');
       }
       refreshAll();
-      return true;
     } catch (err) {
       toast.error(err.response?.data?.message);
-      return false;
     }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (tab !== '1' && !form.parentCategory) {
-      toast.error(isAr ? 'اختر القسم الأب' : 'Select a parent category');
-      return;
-    }
-    if (
-      editingCategory
-      && categoryHasActiveProducts(editingCategory)
-      && form.isActive === false
-      && editingCategory.isActive !== false
-    ) {
-      openReassignPanel(editingCategory, 'deactivate');
-      return;
-    }
-    try {
-      const payload = buildFormData();
-      if (editId) await adminApi.updateCategory(editId, payload);
-      else await adminApi.createCategory(payload);
-      resetForm();
-      refreshAll();
-      toast.success(isAr ? 'تم حفظ القسم' : 'Category saved');
-    } catch (err) {
-      toast.error(err.response?.data?.message || (isAr ? 'فشل الحفظ' : 'Save failed'));
-    }
-  };
-
-  const handleEdit = (cat) => {
-    const level = String(cat.level || 1);
-    if (level !== tab) {
-      setTreeActionIntent({ type: 'edit', category: cat });
-      return;
-    }
-    applyEditForm(cat);
-  };
-
-  const handleTreeAddRoot = () => {
-    if (tab !== '1') {
-      setTreeActionIntent({ type: 'addRoot' });
-      return;
-    }
-    setSelectedTreeId('');
-    setEditId(null);
-    setEditingCategory(null);
-    setForm(EMPTY_FORM);
-    setImageFile(null);
-    setImagePreview('');
-    setClearImage(false);
-    setShowForm(true);
-    setShowTreeMobile(false);
-  };
-
-  const computeRootSortOrder = useCallback((afterCategoryId) => {
-    const roots = getRootCategories(allCategories)
-      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-    if (!afterCategoryId) {
-      return roots.length ? Math.max(0, (roots[0].sortOrder ?? 10) - 10) : 10;
-    }
-    const idx = roots.findIndex((r) => String(r._id) === String(afterCategoryId));
-    const current = roots[idx];
-    const next = roots[idx + 1];
-    if (!current) return (roots.length + 1) * 10;
-    if (!next) return (current.sortOrder ?? 0) + 10;
-    return Math.floor(((current.sortOrder ?? 0) + (next.sortOrder ?? 0)) / 2) || (current.sortOrder ?? 0) + 5;
-  }, [allCategories]);
-
-  const handleTreeAddRootAt = useCallback((afterCategoryId = null) => {
-    const sortOrder = computeRootSortOrder(afterCategoryId);
-    if (tab !== '1') {
-      setTreeActionIntent({ type: 'addRoot', sortOrder });
-      return;
-    }
-    setSelectedTreeId('');
-    setEditId(null);
-    setEditingCategory(null);
-    setForm({ ...EMPTY_FORM, sortOrder });
-    setImageFile(null);
-    setImagePreview('');
-    setClearImage(false);
-    setShowForm(true);
-    setShowTreeMobile(false);
-  }, [tab, computeRootSortOrder]);
-
-  const handleTreeReorder = useCallback(async (payload) => {
-    try {
-      await adminApi.reorderCategories(payload);
-      await loadAllCategories();
-      list.reload();
-    } catch (err) {
-      toast.error(err.response?.data?.message || (isAr ? 'فشل إعادة الترتيب' : 'Reorder failed'));
-      loadAllCategories();
-    }
-  }, [loadAllCategories, list, isAr, toast]);
-
-  const handleTreeAddChild = (parentCat) => {
-    const parentLevel = Number(parentCat.level || 1);
-    if (parentLevel >= 4) {
-      toast.error(isAr ? 'أقصى عمق 4 مستويات' : 'Maximum depth is 4 levels');
-      return;
-    }
-    const childLevel = String(parentLevel + 1);
-    if (childLevel !== tab) {
-      setTreeActionIntent({ type: 'addChild', category: parentCat });
-      return;
-    }
-    setSelectedTreeId(String(parentCat._id));
-    setEditId(null);
-    setEditingCategory(null);
-    setForm({ ...EMPTY_FORM, parentCategory: parentCat._id });
-    setImageFile(null);
-    setImagePreview('');
-    setClearImage(false);
-    setShowForm(true);
-    setShowTreeMobile(false);
   };
 
   const handleToggleActive = async (category) => {
@@ -746,40 +616,41 @@ export default function CategoriesPage() {
     await tryCategoryAction(category, 'deactivate');
   };
 
-  const handleTreeSelect = (cat) => {
-    const id = String(cat._id);
-    setSelectedTreeId(id);
-    list.setQ('');
-    setShowTreeMobile(false);
+  const siblingsOf = useCallback((cat) => {
+    const pid = cat.parentCategory?._id || cat.parentCategory || null;
+    return allCategories
+      .filter((c) => String(c.parentCategory?._id || c.parentCategory || '') === String(pid || ''))
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  }, [allCategories]);
 
-    const level = Number(cat.level || 1);
-    const childCount = getDirectChildCount(id);
-
-    if (childCount > 0) {
-      const childTab = String(Math.min(level + 1, 4));
-      list.setFilter('parentCategory', id);
-      if (childTab !== tab) {
-        setTab(childTab);
-      }
-      return;
-    }
-
-    const parentId = cat.parentCategory?._id || cat.parentCategory || '';
-    list.setFilter('parentCategory', parentId ? String(parentId) : '');
-    const levelTab = String(level);
-    if (levelTab !== tab) {
-      setTab(levelTab);
+  const moveCategory = async (cat, direction) => {
+    const sibs = siblingsOf(cat);
+    const idx = sibs.findIndex((s) => String(s._id) === String(cat._id));
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (idx === -1 || targetIdx < 0 || targetIdx >= sibs.length) return;
+    const target = sibs[targetIdx];
+    const pid = cat.parentCategory?._id || cat.parentCategory || null;
+    try {
+      await adminApi.reorderCategories({
+        move: {
+          id: cat._id,
+          parentCategory: pid,
+          ...(direction === 'up' ? { beforeId: target._id } : { afterId: target._id }),
+        },
+      });
+      loadAllCategories();
+    } catch (err) {
+      toast.error(err.response?.data?.message || (isAr ? 'فشل إعادة الترتيب' : 'Reorder failed'));
     }
   };
 
   const openBulkImpact = (action) => {
-    const selected = resolveSelectedCategories(list.selectedIds);
+    const selected = selectedIds.map((id) => findCategory(id)).filter(Boolean);
     if (!selected.length) {
       toast.error(isAr ? 'لم يُعثر على الأقسام المحددة' : 'Could not resolve selected categories');
       return;
     }
-    const impact = buildBulkCategoryImpact(selected, action, isAr);
-    setBulkImpact({ open: true, action, impact });
+    setBulkImpact({ open: true, action, impact: buildBulkCategoryImpact(selected, action, isAr) });
   };
 
   const executeBulkAction = async (eligibleIds) => {
@@ -788,14 +659,12 @@ export default function CategoriesPage() {
     try {
       await adminApi.bulkCategories(eligibleIds, bulkImpact.action);
       const skipped = bulkImpact.impact.total - eligibleIds.length;
-      list.clearSelection();
+      clearSelection();
       setBulkImpact({ open: false, action: 'delete', impact: null });
       refreshAll();
       toast.success(
         skipped > 0
-          ? (isAr
-            ? `تم التطبيق على ${eligibleIds.length} — تُخطي ${skipped}`
-            : `Applied to ${eligibleIds.length} — ${skipped} skipped`)
+          ? (isAr ? `تم التطبيق على ${eligibleIds.length} — تُخطي ${skipped}` : `Applied to ${eligibleIds.length} — ${skipped} skipped`)
           : (isAr ? `تم التطبيق على ${eligibleIds.length} قسم` : `Applied to ${eligibleIds.length} categories`),
       );
     } catch (err) {
@@ -805,221 +674,49 @@ export default function CategoriesPage() {
     }
   };
 
-  const runBulk = (action) => {
-    openBulkImpact(action);
-  };
-
-  const columns = useMemo(() => {
-    const base = [
-      {
-        key: 'name',
-        header: isAr ? 'الاسم' : 'Name',
-        sortKey: 'nameEn',
-        render: (c) => {
-          const ancestorPath = getCategoryAncestorPath(c, allCategories, isAr);
-          const { isLeaf } = categoryRoleMeta(c);
-          return (
-            <div className="min-w-0">
-              {ancestorPath && (
-                <p className="mb-0.5 truncate text-[11px] text-text-muted" title={ancestorPath}>
-                  {ancestorPath}
-                  <ChevronRight className="mx-0.5 inline h-3 w-3 opacity-50 rtl:rotate-180" />
-                </p>
-              )}
-              <div className="flex items-center gap-2">
-                <span
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm ${
-                    isLeaf
-                      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-                      : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
-                  }`}
-                >
-                  {c.image ? (
-                    <img src={c.image} alt="" className="h-7 w-7 rounded-md object-cover" />
-                  ) : isLeaf ? (
-                    <Package className="h-3.5 w-3.5" />
-                  ) : (
-                    <span>{c.icon}</span>
-                  )}
-                </span>
-                <span className="truncate font-medium">{isAr ? c.nameAr : c.nameEn}</span>
-              </div>
-            </div>
-          );
-        },
-      },
-      { key: 'slug', header: 'Slug', cellClassName: 'text-text-muted' },
-    ];
-
-    if (tab !== '1') {
-      base.push({
-        key: 'parent',
-        header: isAr ? 'القسم الأب' : 'Parent',
-        render: (c) => (c.parentCategory
-          ? parentSelectLabel(c.parentCategory, isAr)
-          : '—'),
-      });
-    }
-
-    base.push({
-      key: 'level',
-      header: isAr ? 'المستوى' : 'Level',
-      render: (c) => (
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-          {categoryLevelLabel(c.level || Number(tab), isAr)}
-        </span>
-      ),
-    });
-
-    base.push({
-      key: 'role',
-      header: isAr ? 'الدور' : 'Role',
-      render: (c) => {
-        const { isLeaf, childCount } = categoryRoleMeta(c);
-        return (
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-              isLeaf ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-            }`}
-            title={isLeaf
-              ? (isAr ? 'يمكن ربط المنتجات' : 'Can hold products')
-              : (isAr ? `مجموعة — ${childCount} فرعي` : `Group — ${childCount} child(ren)`)}
-          >
-            {categoryRoleLabel(c, isAr)}
-            {!isLeaf && (
-              <span className="ms-1 opacity-75">({childCount})</span>
-            )}
-          </span>
-        );
-      },
-    });
-
-    base.push({
-      key: 'products',
-      header: isAr ? 'المنتجات' : 'Products',
-      render: (c) => {
-        const active = c.activeProductCount ?? 0;
-        const total = c.productCount ?? 0;
-        return (
-          <span title={total !== active
-            ? (isAr ? `${total} إجمالي` : `${total} total`)
-            : undefined}
-          >
-            <span className={active > 0 ? 'font-medium text-text' : 'text-text-muted'}>{active}</span>
-            {total > active && (
-              <span className="text-[10px] text-text-muted">
-                {' '}
-                /
-                {total}
-              </span>
-            )}
-          </span>
-        );
-      },
-    });
-
-    base.push({
-      key: 'isActive',
-      header: isAr ? 'الحالة' : 'Status',
-      render: (c) => (
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${c.isActive !== false ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}`}>
-          {c.isActive !== false ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
-        </span>
-      ),
-    });
-
-    return base;
-  }, [tab, isAr, allCategories]);
-
-  const rowClassName = useCallback((c) => {
-    const selected = selectedTreeId === String(c._id);
-    const { isLeaf } = categoryRoleMeta(c);
-    const roleBorder = isLeaf ? 'border-s-4 border-s-emerald-400' : 'border-s-4 border-s-amber-400';
-    const selectedBg = selected ? 'bg-primary-50/80' : '';
-    return `${roleBorder} ${selectedBg}`.trim();
-  }, [selectedTreeId]);
-
-  const tabs = [
-    { id: '1', labelAr: CATEGORY_LEVEL_LABELS[1].ar, labelEn: CATEGORY_LEVEL_LABELS[1].en, icon: Layers },
-    { id: '2', labelAr: CATEGORY_LEVEL_LABELS[2].ar, labelEn: CATEGORY_LEVEL_LABELS[2].en, icon: FolderOpen },
-    { id: '3', labelAr: CATEGORY_LEVEL_LABELS[3].ar, labelEn: CATEGORY_LEVEL_LABELS[3].en, icon: Tag },
-    { id: '4', labelAr: CATEGORY_LEVEL_LABELS[4].ar, labelEn: CATEGORY_LEVEL_LABELS[4].en, icon: Tag },
-  ];
-
-  const activeTabHint = TAB_HINTS[Number(tab)] || TAB_HINTS[1];
-
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">
-            {isAr ? 'إدارة الأقسام' : 'Manage categories'}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {isAr
-              ? 'اختر قسماً من الشجرة أو أضف قسماً جديداً'
-              : 'Select a category from the tree or create a new one'}
-          </p>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="lg:hidden"
-          onClick={() => setShowTreeMobile((v) => !v)}
-        >
-          <FolderOpen className="h-4 w-4" />
-          {showTreeMobile
-            ? (isAr ? 'إخفاء الشجرة' : 'Hide tree')
-            : (isAr ? 'عرض الشجرة' : 'Show tree')}
-        </Button>
-      </div>
-
-      <div className="lg:grid lg:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] lg:gap-5 lg:items-start">
-        <div className={`${showTreeMobile ? 'block' : 'hidden'} lg:block`}>
-          <div className="sticky top-4 flex h-[calc(100vh-7rem)] max-h-[calc(100vh-7rem)] min-h-0 flex-col lg:h-[calc(100vh-5.5rem)] lg:max-h-[calc(100vh-5.5rem)]">
-            <AdminCategoryTree
-              categories={allCategories}
-              isAr={isAr}
-              selectedId={selectedTreeId}
-              onSelect={handleTreeSelect}
-              onEdit={handleEdit}
-              onDelete={(cat) => tryCategoryAction(cat, 'delete')}
-              onAddRoot={handleTreeAddRoot}
-              onAddRootAt={handleTreeAddRootAt}
-              onAddChild={handleTreeAddChild}
-              onAddProduct={goAddProduct}
-              onToggleActive={handleToggleActive}
-              onMoveProducts={(cat) => openReassignPanel(cat, 'delete')}
-              onReorder={handleTreeReorder}
-              categoryHasProducts={categoryHasActiveProducts}
-              loading={treeLoading}
-            />
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-primary-900 to-primary-800 px-6 py-6 shadow-lg shadow-primary-900/10 sm:px-8">
+        <div className="pointer-events-none absolute -end-16 -top-20 h-56 w-56 rounded-full bg-primary-500/20 blur-3xl" aria-hidden />
+        <div className="pointer-events-none absolute -start-10 bottom-0 h-40 w-40 rounded-full bg-white/5 blur-2xl" aria-hidden />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/20 backdrop-blur">
+              <FolderTree className="h-6 w-6" />
+            </span>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                {isAr ? 'إدارة الأقسام' : 'Manage categories'}
+              </h1>
+              <p className="mt-1 text-sm text-white/60">
+                {isAr ? 'ابحث، رتّب، وعدّل أقسام المتجر من هنا' : 'Search, reorder, and edit your store categories'}
+              </p>
+            </div>
           </div>
+          <Button type="button" size="sm" onClick={() => openAddForm(null)} className="!bg-white/10 !text-white !border-white/20 hover:!bg-white/20">
+            <Plus className="h-4 w-4" />
+            {isAr ? 'قسم رئيسي جديد' : 'New main category'}
+          </Button>
         </div>
 
-        <div className="min-w-0 space-y-5">
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5">
-        <div className="flex gap-0 overflow-x-auto border-b border-slate-200">
-        {tabs.map(({ id, labelAr, labelEn, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => handleTabChange(id)}
-            className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-              tab === id
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700'
-            }`}
-          >
-            <Icon className="h-4 w-4 opacity-70" />
-            {isAr ? labelAr : labelEn}
-          </button>
-        ))}
+        <div className="relative mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          {[
+            { label: isAr ? 'إجمالي الأقسام' : 'Total categories', value: pageStats.total, icon: ListTree },
+            { label: isAr ? 'نشطة' : 'Active', value: pageStats.active, icon: CheckCircle2 },
+            { label: isAr ? 'مجموعات' : 'Groups', value: pageStats.groups, icon: FolderOpen },
+            { label: isAr ? 'أقسام منتجات' : 'Product categories', value: pageStats.leaf, icon: Package },
+          ].map(({ label, value, icon: Icon }) => (
+            <div key={label} className="flex items-center gap-2.5 rounded-xl bg-white/[0.07] px-3.5 py-2.5 ring-1 ring-white/10 backdrop-blur">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/80">
+                <Icon className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 leading-tight">
+                <p className="text-base font-semibold tabular-nums text-white">{value}</p>
+                <p className="truncate text-[11px] text-white/55">{label}</p>
+              </div>
+            </div>
+          ))}
         </div>
-        <p className="border-b border-slate-100 bg-slate-50/50 px-4 py-2.5 text-xs text-slate-500">
-          {isAr ? activeTabHint.ar : activeTabHint.en}
-        </p>
       </div>
 
       {showForm && (
@@ -1054,9 +751,8 @@ export default function CategoriesPage() {
           }}
           onSubmit={handleSubmit}
           onCancel={resetForm}
-          level={tab}
-          parentCategories={parentCategories}
-          parentsLoading={parentsLoading}
+          levelNum={levelNum}
+          parentOptions={parentOptions}
           editingCategory={editingCategory}
           onAddProduct={
             editingCategory && categoryRoleMeta(editingCategory).isLeaf
@@ -1066,98 +762,115 @@ export default function CategoriesPage() {
         />
       )}
 
-      {listParentCategory && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-4 py-2.5 ring-1 ring-slate-200/80">
-          <p className="text-sm text-slate-600">
-            {isAr ? 'عرض أقسام تحت: ' : 'Showing under: '}
-            <span className="font-semibold text-slate-900">
-              {categoryLabel(listParentCategory, isAr)}
-            </span>
-          </p>
-          <button
-            type="button"
-            onClick={clearListParentFilter}
-            className="text-xs font-semibold text-primary-600 hover:text-primary-700"
-          >
-            {isAr ? 'عرض الكل في هذا المستوى' : 'Show all at this level'}
-          </button>
-        </div>
-      )}
-
-      <AdminListPage
-        isAr={isAr}
-        q={list.q}
-        onSearchChange={list.setQ}
-        searchPlaceholder={isAr ? 'بحث...' : 'Search...'}
-        sort={list.sort}
-        onSort={list.toggleSort}
-        actions={(
-          <Button size="sm" onClick={() => { resetForm(); setShowForm(true); if (tab !== '1') loadParentCategories(); }}>
-            {(() => {
-              const label = CATEGORY_LEVEL_LABELS[Number(tab)] || CATEGORY_LEVEL_LABELS[1];
-              return isAr ? `+ ${label.ar}` : `+ ${label.en}`;
-            })()}
-          </Button>
-        )}
-        filters={(
-          <ListFilterSelect
-            label={isAr ? 'الحالة' : 'Status'}
-            value={list.filters.isActive}
-            onChange={(v) => list.setFilter('isActive', v)}
-            options={[
+      <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative min-w-[12rem] flex-1">
+            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+            <Input
+              placeholder={isAr ? 'بحث عن قسم...' : 'Search categories...'}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="ps-9"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 p-1">
+            {[
               { value: '', label: isAr ? 'الكل' : 'All' },
               { value: 'true', label: isAr ? 'نشط' : 'Active' },
               { value: 'false', label: isAr ? 'معطل' : 'Inactive' },
-            ]}
-          />
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setStatusFilter(opt.value)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  statusFilter === opt.value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <BulkActionsBar
+          count={selectedIds.length}
+          isAr={isAr}
+          onActivate={() => openBulkImpact('activate')}
+          onDeactivate={() => openBulkImpact('deactivate')}
+          onDelete={() => openBulkImpact('delete')}
+          onClear={clearSelection}
+        />
+
+        {!loading && visibleTree.length > 0 && (
+          <label className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2 text-xs font-medium text-slate-500">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              className="h-4 w-4 rounded accent-primary-600"
+              aria-label={isAr ? 'تحديد الكل' : 'Select all'}
+            />
+            {isAr ? `تحديد كل الأقسام الظاهرة (${visibleFlatIds.length})` : `Select all visible (${visibleFlatIds.length})`}
+          </label>
         )}
-        bulkBar={(
-          <BulkActionsBar
-            count={list.selectedIds.length}
-            isAr={isAr}
-            onActivate={() => runBulk('activate')}
-            onDeactivate={() => runBulk('deactivate')}
-            onDelete={() => runBulk('delete')}
-            onClear={list.clearSelection}
+
+        {loading ? (
+          <div className="space-y-2 p-3 sm:p-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-14 animate-pulse rounded-xl bg-slate-100" />
+            ))}
+          </div>
+        ) : !visibleTree.length ? (
+          <EmptyState
+            icon={FolderOpen}
+            title={isAr ? 'لا توجد أقسام' : 'No categories found'}
+            description={isFiltering
+              ? (isAr ? 'جرّب تعديل البحث أو الفلتر' : 'Try adjusting your search or filter')
+              : undefined}
+            action={!isFiltering ? (
+              <Button size="sm" onClick={() => openAddForm(null)}>
+                {isAr ? '+ قسم رئيسي جديد' : '+ New main category'}
+              </Button>
+            ) : undefined}
           />
+        ) : (
+          <div className="space-y-1.5 p-3 sm:p-4">
+            <CategoryInsertSlot
+              isAr={isAr}
+              label={isAr ? 'إضافة قسم رئيسي هنا' : 'Add main category here'}
+              onInsert={() => openAddForm(null)}
+            />
+            {visibleTree.map((root) => (
+              <div key={root._id}>
+                <CategoryTreeCard
+                  node={root}
+                  depth={0}
+                  isAr={isAr}
+                  selectedIds={selectedIds}
+                  onToggleSelect={toggleSelect}
+                  collapsedIds={collapsedIds}
+                  onToggleCollapse={toggleCollapse}
+                  forceExpandAll={isFiltering}
+                  siblingsOf={siblingsOf}
+                  onEdit={openEditForm}
+                  onAddChild={openAddForm}
+                  onAddProduct={goAddProduct}
+                  onMoveProducts={(cat) => openReassignPanel(cat, 'delete')}
+                  onToggleActive={handleToggleActive}
+                  onDelete={(cat) => tryCategoryAction(cat, 'delete')}
+                  onMove={moveCategory}
+                />
+                <CategoryInsertSlot
+                  isAr={isAr}
+                  label={isAr ? 'إضافة قسم رئيسي هنا' : 'Add main category here'}
+                  onInsert={() => openAddForm(null)}
+                />
+              </div>
+            ))}
+          </div>
         )}
-        columns={columns}
-        data={list.data}
-        loading={list.loading}
-        rowClassName={rowClassName}
-        selectable
-        selectedIds={list.selectedIds}
-        onToggleSelect={list.toggleSelect}
-        onToggleSelectAll={list.toggleSelectAll}
-        allSelected={list.allSelected}
-        rowActions={(c) => [
-          { label: isAr ? 'تعديل' : 'Edit', onClick: () => handleEdit(c) },
-          ...(categoryRoleMeta(c).isLeaf
-            ? [{
-              label: isAr ? 'إضافة منتج' : 'Add product',
-              onClick: () => goAddProduct(c),
-            }]
-            : []),
-          ...(categoryHasActiveProducts(c)
-            ? [{
-              label: isAr ? 'نقل المنتجات' : 'Move products',
-              onClick: () => openReassignPanel(c, 'delete'),
-            }]
-            : []),
-          {
-            label: isAr ? 'حذف' : 'Delete',
-            danger: true,
-            onClick: () => tryCategoryAction(c, 'delete'),
-          },
-        ]}
-        pagination={list.pagination}
-        onPageChange={list.setPage}
-        emptyIcon={FolderOpen}
-        emptyTitle={(() => {
-          const label = CATEGORY_LEVEL_LABELS[Number(tab)] || CATEGORY_LEVEL_LABELS[1];
-          return isAr ? `لا توجد ${label.ar}` : `No ${label.en.toLowerCase()} categories`;
-        })()}
-      />
+      </div>
 
       <CategoryProductReassignPanel
         open={reassignState.open}
@@ -1180,8 +893,6 @@ export default function CategoriesPage() {
         onConfirm={executeBulkAction}
         onReassign={(category) => openReassignPanel(category, bulkImpact.action, { fromBulk: true })}
       />
-        </div>
-      </div>
     </div>
   );
 }

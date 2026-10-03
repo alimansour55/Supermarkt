@@ -10,6 +10,7 @@ export const CLOUDINARY_FOLDERS = {
   homepage: 'marketplus/homepage',
   paymentProofs: 'marketplus/payment-proofs',
   walletTopUps: 'marketplus/wallet-topups',
+  deliveryProofs: 'marketplus/delivery-proofs',
 };
 
 let cloudinaryReady = false;

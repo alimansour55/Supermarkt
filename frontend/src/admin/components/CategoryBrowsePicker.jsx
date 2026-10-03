@@ -28,6 +28,7 @@ export default function CategoryBrowsePicker({
   includeInactive = false,
   leafOnly = false,
   showSelectionBanner = true,
+  showIcons = true,
 }) {
   const [query, setQuery] = useState('');
   const [drillId, setDrillId] = useState('');
@@ -161,7 +162,7 @@ export default function CategoryBrowsePicker({
 
       <div className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
         {query.trim() ? (
-          <div className="max-h-64 overflow-y-auto overscroll-y-contain">
+          <div className="max-h-64 overflow-y-auto">
             {searchResults.length ? (
               <ul className="divide-y divide-border">
                 {searchResults.map((row) => {
@@ -176,9 +177,11 @@ export default function CategoryBrowsePicker({
                           active ? 'bg-orange-50 ring-1 ring-inset ring-orange-200' : ''
                         }`}
                       >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-lg">
-                          {categoryIcon(row.cat) || (isParent ? '📂' : '📁')}
-                        </span>
+                        {showIcons && (
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-lg">
+                            {categoryIcon(row.cat) || (isParent ? '📂' : '📁')}
+                          </span>
+                        )}
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-semibold text-text">
                             {row.label}
@@ -279,7 +282,7 @@ export default function CategoryBrowsePicker({
               </div>
             )}
 
-            <div className="max-h-64 overflow-y-auto overscroll-y-contain p-2">
+            <div className="max-h-64 overflow-y-auto p-2">
               {drillChildren.length ? (
                 <div className="grid gap-1.5 sm:grid-cols-2">
                   {drillChildren.map((cat) => {
@@ -300,12 +303,14 @@ export default function CategoryBrowsePicker({
                           onClick={() => handleCategoryClick(id, hasKids)}
                           className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2.5 text-start"
                         >
-                          <span
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg"
-                            style={cat.color ? { backgroundColor: `${cat.color}18` } : { backgroundColor: 'rgb(241 245 249)' }}
-                          >
-                            {icon || (hasKids ? '📂' : '📁')}
-                          </span>
+                          {showIcons && (
+                            <span
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg"
+                              style={cat.color ? { backgroundColor: `${cat.color}18` } : { backgroundColor: 'rgb(241 245 249)' }}
+                            >
+                              {icon || (hasKids ? '📂' : '📁')}
+                            </span>
+                          )}
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs font-bold text-text">
                               {categoryLabel(cat, isAr)}

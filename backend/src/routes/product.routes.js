@@ -11,6 +11,7 @@ import {
   getOffers,
   getProductFilters,
   getAdminProducts,
+  getAdminProductsStats,
   getAdminStockSummary,
   bulkAdminProducts,
   exportAdminProducts,
@@ -49,6 +50,7 @@ router.get('/admin/category-integrity', ...adminOnly, getProductCategoryIntegrit
 router.post('/admin/category-integrity/repair', ...adminOnly, repairProductCategoryIntegrity);
 router.post('/admin/bulk', ...adminOnly, bulkAdminProducts);
 router.get('/admin/stock-summary', ...adminOnly, getAdminStockSummary);
+router.get('/admin/stats-summary', ...adminOnly, getAdminProductsStats);
 router.get('/admin', ...adminOnly, getAdminProducts);
 router.get('/admin/:id', ...adminOnly, getAdminProductById);
 router.post('/admin/:id/duplicate', ...adminOnly, duplicateAdminProduct);

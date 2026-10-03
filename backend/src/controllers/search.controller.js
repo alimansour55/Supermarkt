@@ -182,10 +182,7 @@ async function buildActiveProductFilter(query) {
   if (query.category) {
     const categoryFilter = await resolveCategoryProductFilter(query.category);
     if (categoryFilter) {
-      filter.$and = [
-        ...(filter.$and || []),
-        { $or: [{ category: categoryFilter }, { subCategory: categoryFilter }] },
-      ];
+      filter.$and = [...(filter.$and || []), { category: categoryFilter }];
     }
   }
   return filter;

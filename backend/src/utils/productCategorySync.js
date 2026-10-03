@@ -27,12 +27,11 @@ export async function resolveCategoryRef(categoryRef) {
  * Resolve and validate a product's category link.
  *
  * The product's editable link is a single category at any depth (`category`).
- * `subCategory` mirrors it and `mainCategory` is the root of its chain — both are
- * kept written for backward compatibility. `categoryAncestors` is the ordered
+ * `mainCategory` is the root of its chain. `categoryAncestors` is the ordered
  * root → self path used for fast category product listings.
  */
-export async function resolveProductCategoryFields({ mainCategory, subCategory, category }) {
-  const targetId = await resolveCategoryRef(subCategory || category);
+export async function resolveProductCategoryFields({ mainCategory, category }) {
+  const targetId = await resolveCategoryRef(category);
   if (!targetId) {
     throw new AppError(productCategoryError('required'), 400);
   }
@@ -49,7 +48,6 @@ export async function resolveProductCategoryFields({ mainCategory, subCategory, 
   await assertProductCategoryAssignment(targetId, mainId);
   return {
     mainCategory: mainId,
-    subCategory: targetId,
     category: targetId,
     categoryAncestors: pathIds.length ? pathIds : [targetId],
   };
@@ -75,7 +73,7 @@ async function resolveLeafCategoryBySlug(slug) {
   }
   if (trimmed.includes('/')) {
     const fields = await resolveProductCategoryFieldsFromImport({ categoryPathSlugs: trimmed });
-    return Category.findById(fields.subCategory);
+    return Category.findById(fields.category);
   }
   const category = await Category.findOne({ slug: trimmed });
   await assertImportTargetCategory(category, trimmed);
@@ -104,7 +102,6 @@ export async function resolveProductCategoryFieldsFromImport(row = {}) {
     await assertImportTargetCategory(leaf, slugs[slugs.length - 1]);
     return resolveProductCategoryFields({
       mainCategory: chain[0]._id,
-      subCategory: leaf._id,
       category: leaf._id,
     });
   }
@@ -126,7 +123,6 @@ export async function resolveProductCategoryFieldsFromImport(row = {}) {
   try {
     return await resolveProductCategoryFields({
       mainCategory: mainSlug,
-      subCategory: leaf._id,
       category: leaf._id,
     });
   } catch (err) {
@@ -143,8 +139,7 @@ export async function resolveProductCategoryFieldsFromImport(row = {}) {
 }
 
 export async function buildExportCategoryMetaForProduct(product) {
-  const leafId = product.subCategory?._id || product.subCategory
-    || product.category?._id || product.category;
+  const leafId = product.category?._id || product.category;
   if (!leafId) {
     return {
       categorySlug: '',
@@ -160,10 +155,12 @@ export async function buildExportCategoryMetaForProduct(product) {
   const leaf = chain[chain.length - 1];
   const root = chain[0];
 
+  const categorySlug = leaf?.slug || product.category?.slug || '';
   return {
-    categorySlug: leaf?.slug || product.subCategory?.slug || product.category?.slug || '',
+    categorySlug,
     mainCategorySlug: root?.slug || product.mainCategory?.slug || '',
-    subCategorySlug: leaf?.slug || product.subCategory?.slug || product.category?.slug || '',
+    // kept as an alias of categorySlug for backward compat with existing CSV templates
+    subCategorySlug: categorySlug,
     categoryPathSlugs: getCanonicalSlugPath(chain),
     categoryPathEn: chain.map((c) => c.nameEn).join(' › '),
     categoryPathAr: chain.map((c) => c.nameAr).join(' › '),
@@ -175,8 +172,7 @@ export async function buildExportCategoryMetaMap(products = []) {
   const byProductId = new Map();
 
   for (const product of products) {
-    const leafId = product.subCategory?._id || product.subCategory
-      || product.category?._id || product.category;
+    const leafId = product.category?._id || product.category;
     const key = String(leafId || '');
     if (!key) {
       byProductId.set(String(product._id), await buildExportCategoryMetaForProduct(product));

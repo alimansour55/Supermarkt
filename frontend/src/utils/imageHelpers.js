@@ -23,6 +23,28 @@ export function pickProductImage(product) {
   return null;
 }
 
+// Seed/catalog data often stores a single emoji as the "image" placeholder.
+// Detect those so we can render them instead of a generic broken-image icon.
+export function isEmojiImage(src) {
+  return typeof src === 'string'
+    && src.trim().length > 0
+    && src.trim().length <= 8
+    && !isImageUrl(src)
+    && !isVideoUrl(src)
+    && /\p{Extended_Pictographic}/u.test(src);
+}
+
+export function pickProductEmoji(product) {
+  if (!product) return null;
+  if (isEmojiImage(product.image)) return product.image.trim();
+  const images = product.images || [];
+  for (let i = 0; i < images.length; i += 1) {
+    const src = images[i]?.url || images[i];
+    if (isEmojiImage(src)) return src.trim();
+  }
+  return null;
+}
+
 export function pickCategoryImage(category) {
   if (!category?.image) return null;
   return isImageUrl(category.image) ? category.image : null;

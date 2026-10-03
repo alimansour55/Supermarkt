@@ -8,7 +8,6 @@ import { useConfirm, useToast } from './index';
 const ISSUE_LABELS = {
   missing_leaf: { en: 'Missing category', ar: 'قسم مفقود' },
   orphaned_ref: { en: 'Orphaned category ref', ar: 'مرجع قسم غير موجود' },
-  fields_out_of_sync: { en: 'category ≠ subCategory', ar: 'تعارض category و subCategory' },
   wrong_main: { en: 'Wrong main category', ar: 'قسم رئيسي خاطئ' },
   non_leaf: { en: 'Not a leaf category', ar: 'ليس قسمًا فرعيًا نهائيًا' },
   inactive_category: { en: 'Inactive category', ar: 'قسم غير نشط' },

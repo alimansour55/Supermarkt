@@ -30,9 +30,7 @@ export async function buildReviewProductScopeMatch(options = {}) {
   if (subCategory) {
     const catFilter = await resolveCategoryProductFilter(subCategory);
     if (catFilter) {
-      and.push({
-        $or: [{ subCategory: catFilter }, { category: catFilter }],
-      });
+      and.push({ category: catFilter });
     }
   } else if (mainCategory) {
     const mainId = await resolveCategoryIdByRef(mainCategory);
@@ -40,7 +38,7 @@ export async function buildReviewProductScopeMatch(options = {}) {
     if (mainId) {
       const orClause = [{ mainCategory: mainId }];
       if (childFilter) {
-        orClause.push({ subCategory: childFilter }, { category: childFilter });
+        orClause.push({ category: childFilter });
       }
       and.push({ $or: orClause });
     }
@@ -336,7 +334,7 @@ export async function getReviewProductFilterOptions(ProductModel, options = {}) 
       { $unwind: '$reviews' },
       {
         $group: {
-          _id: { $ifNull: ['$subCategory', '$category'] },
+          _id: '$category',
           count: { $sum: 1 },
         },
       },

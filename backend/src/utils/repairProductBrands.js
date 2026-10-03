@@ -130,13 +130,13 @@ async function ensureBrandsFromProducts() {
   return created;
 }
 
-function resolveTargetBrand(product, subCategory, lookup) {
+function resolveTargetBrand(product, category, lookup) {
   const directCandidates = [
     product.brand,
     product.brandEn,
     product.brandAr,
-    subCategory?.nameEn,
-    subCategory?.nameAr,
+    category?.nameEn,
+    category?.nameAr,
   ];
 
   for (const candidate of directCandidates) {
@@ -260,17 +260,17 @@ export async function repairProductBrands({ dryRun = false } = {}) {
   const brands = await Brand.find({ isActive: { $ne: false } }).lean();
   const lookup = buildBrandLookup(brands);
 
-  const subCategoryIds = [...new Set(
-    (await Product.find({ subCategory: { $ne: null } }).distinct('subCategory'))
+  const categoryIds = [...new Set(
+    (await Product.find({ category: { $ne: null } }).distinct('category'))
       .map(String),
   )];
-  const subCategories = subCategoryIds.length
-    ? await Category.find({ _id: { $in: subCategoryIds } }).select('nameAr nameEn slug level').lean()
+  const categories = categoryIds.length
+    ? await Category.find({ _id: { $in: categoryIds } }).select('nameAr nameEn slug level').lean()
     : [];
-  const subCategoryMap = new Map(subCategories.map((c) => [String(c._id), c]));
+  const categoryMap = new Map(categories.map((c) => [String(c._id), c]));
 
   const products = await Product.find().select(
-    'slug nameAr nameEn brand brandAr brandEn subCategory',
+    'slug nameAr nameEn brand brandAr brandEn category',
   ).lean();
 
   let fixed = 0;
@@ -279,8 +279,8 @@ export async function repairProductBrands({ dryRun = false } = {}) {
   const samples = [];
 
   for (const product of products) {
-    const subCategory = subCategoryMap.get(String(product.subCategory)) || null;
-    const resolved = resolveTargetBrand(product, subCategory, lookup);
+    const category = categoryMap.get(String(product.category)) || null;
+    const resolved = resolveTargetBrand(product, category, lookup);
 
     if (!resolved) {
       if (!product.brand || GENERIC_BRANDS.has(normalizeKey(product.brand))) {

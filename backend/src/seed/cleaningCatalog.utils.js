@@ -249,7 +249,6 @@ export function buildProductDoc({
     price,
     oldPrice,
     mainCategory: mainId,
-    subCategory: subId,
     category: subId,
     brand: brand.nameEn,
     brandAr: brand.nameAr,

@@ -1,32 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Award, ExternalLink, RefreshCw, Sparkles, Star, Tag,
+  ArrowDown, ArrowUp, Award, ExternalLink, RefreshCw, Sparkles, Star, Tag, Wrench,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import { useAdminListPage } from '../hooks/useAdminListPage';
 import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
-import Textarea from '../../components/ui/Textarea';
 import { AdminListPage, BulkActionsBar, ListFilterSelect } from '../components/list';
 import { PageHeader, useConfirm, useToast } from '../components';
+import BrandFormModal from '../components/BrandFormModal';
 import { brandProductHref, getBrandLabel } from '../../utils/shopBrandHelpers';
-
-const EMPTY_FORM = {
-  nameAr: '',
-  nameEn: '',
-  slug: '',
-  queryValue: '',
-  emoji: '🏷️',
-  logo: '',
-  descriptionAr: '',
-  descriptionEn: '',
-  website: '',
-  sortOrder: 0,
-  isActive: true,
-  isFeatured: false,
-};
 
 function StatCard({ label, value, icon: Icon, tone = 'primary' }) {
   const tones = {
@@ -84,18 +68,16 @@ export default function BrandsPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const [stats, setStats] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [logoFile, setLogoFile] = useState(null);
-  const [logoPreview, setLogoPreview] = useState('');
-  const [clearLogo, setClearLogo] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingBrand, setEditingBrand] = useState(null);
   const [viewMode, setViewMode] = useState('table');
   const [syncing, setSyncing] = useState(false);
+  const [repairing, setRepairing] = useState(false);
 
   const list = useAdminListPage({
     fetchFn: (params) => adminApi.getBrands(params),
     initialFilters: { isActive: '', isFeatured: '' },
+    initialSort: { field: 'sortOrder', order: 'asc' },
   });
 
   const loadStats = useCallback(async () => {
@@ -114,71 +96,21 @@ export default function BrandsPage() {
     [list.data],
   );
 
-  const buildPayload = () => {
-    if (logoFile || clearLogo) {
-      const fd = new FormData();
-      Object.entries(form).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) fd.append(key, String(value));
-      });
-      if (logoFile) fd.append('logo', logoFile);
-      if (clearLogo) fd.append('clearLogo', 'true');
-      return fd;
-    }
-    return { ...form, sortOrder: Number(form.sortOrder) || 0 };
+  const openCreateForm = () => {
+    setEditingBrand(null);
+    setFormOpen(true);
   };
 
-  const resetForm = () => {
-    setForm(EMPTY_FORM);
-    setEditId(null);
-    setShowForm(false);
-    setLogoFile(null);
-    setLogoPreview('');
-    setClearLogo(false);
+  const openEditForm = (brand) => {
+    setEditingBrand(brand);
+    setFormOpen(true);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const payload = buildPayload();
-      if (editId) await adminApi.updateBrand(editId, payload);
-      else await adminApi.createBrand(payload);
-      toast.success(isAr ? 'تم حفظ العلامة' : 'Brand saved');
-      resetForm();
-      list.reload();
-      loadStats();
-    } catch (error) {
-      toast.error(error.message || error.response?.data?.message || (isAr ? 'تعذر الحفظ' : 'Could not save'));
-    }
-  };
-
-  const handleEdit = (brand) => {
-    setEditId(brand._id);
-    setForm({
-      nameAr: brand.nameAr || '',
-      nameEn: brand.nameEn || '',
-      slug: brand.slug || '',
-      queryValue: brand.queryValue || '',
-      emoji: brand.emoji || '🏷️',
-      logo: brand.logo || '',
-      descriptionAr: brand.descriptionAr || '',
-      descriptionEn: brand.descriptionEn || '',
-      website: brand.website || '',
-      sortOrder: brand.sortOrder ?? 0,
-      isActive: brand.isActive !== false,
-      isFeatured: !!brand.isFeatured,
-    });
-    setLogoPreview(brand.logo || '');
-    setLogoFile(null);
-    setClearLogo(false);
-    setShowForm(true);
-  };
-
-  const handleLogoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLogoFile(file);
-    setClearLogo(false);
-    setLogoPreview(URL.createObjectURL(file));
+  const handleFormSaved = () => {
+    setFormOpen(false);
+    setEditingBrand(null);
+    list.reload();
+    loadStats();
   };
 
   const runBulk = async (action, title) => {
@@ -202,6 +134,43 @@ export default function BrandsPage() {
       toast.error(error.message || (isAr ? 'تعذر الاستيراد' : 'Import failed'));
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleRepairLinks = async () => {
+    const ok = await confirm({
+      title: isAr ? 'إصلاح روابط المنتجات؟' : 'Repair product links?',
+      message: isAr
+        ? 'يدمج العلامات المكررة ويحدّث حقل brand في المنتجات ليطابق الأسماء الصحيحة.'
+        : 'Merges duplicate brands and updates each product’s brand field to match the canonical name.',
+      confirmLabel: isAr ? 'إصلاح' : 'Repair',
+    });
+    if (!ok) return;
+    setRepairing(true);
+    try {
+      const { data } = await adminApi.repairProductBrandLinks({ dryRun: false });
+      toast.success(data.message || (isAr ? 'تم الإصلاح' : 'Repaired'));
+      list.reload();
+      loadStats();
+    } catch (error) {
+      toast.error(error.message || (isAr ? 'تعذر الإصلاح' : 'Repair failed'));
+    } finally {
+      setRepairing(false);
+    }
+  };
+
+  const canReorder = list.sort.field === 'sortOrder' && list.sort.order === 'asc' && list.pagination.pages <= 1;
+
+  const moveBrand = async (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= list.data.length) return;
+    const reordered = [...list.data];
+    [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
+    try {
+      await adminApi.reorderBrands(reordered.map((b) => b._id));
+      list.reload();
+    } catch (error) {
+      toast.error(error.message || (isAr ? 'تعذر تغيير الترتيب' : 'Could not reorder'));
     }
   };
 
@@ -254,7 +223,41 @@ export default function BrandsPage() {
         </div>
       ),
     },
-    { key: 'sortOrder', header: isAr ? 'الترتيب' : 'Order', sortKey: 'sortOrder' },
+    {
+      key: 'sortOrder',
+      header: isAr ? 'الترتيب' : 'Order',
+      sortKey: 'sortOrder',
+      render: (b) => {
+        const index = list.data.findIndex((row) => row._id === b._id);
+        return (
+          <div className="flex items-center gap-2">
+            <span>{b.sortOrder}</span>
+            {canReorder && (
+              <div className="flex flex-col">
+                <button
+                  type="button"
+                  onClick={() => moveBrand(index, -1)}
+                  disabled={index <= 0}
+                  className="text-text-muted hover:text-text disabled:opacity-30"
+                  aria-label={isAr ? 'تحريك لأعلى' : 'Move up'}
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveBrand(index, 1)}
+                  disabled={index === -1 || index === list.data.length - 1}
+                  className="text-text-muted hover:text-text disabled:opacity-30"
+                  aria-label={isAr ? 'تحريك لأسفل' : 'Move down'}
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
   ];
 
   return (
@@ -281,7 +284,11 @@ export default function BrandsPage() {
               <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} aria-hidden />
               {isAr ? 'استيراد من المنتجات' : 'Import from products'}
             </Button>
-            <Button type="button" size="sm" onClick={() => { resetForm(); setShowForm(true); }}>
+            <Button type="button" variant="secondary" size="sm" onClick={handleRepairLinks} disabled={repairing}>
+              <Wrench className={`h-4 w-4 ${repairing ? 'animate-pulse' : ''}`} aria-hidden />
+              {isAr ? 'إصلاح روابط المنتجات' : 'Repair product links'}
+            </Button>
+            <Button type="button" size="sm" onClick={openCreateForm}>
               {isAr ? '+ علامة جديدة' : '+ New brand'}
             </Button>
           </div>
@@ -297,57 +304,15 @@ export default function BrandsPage() {
         </div>
       )}
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="grid gap-4 rounded-2xl border border-border bg-white p-6 shadow-sm lg:grid-cols-2">
-          <div className="lg:col-span-2 rounded-xl bg-violet-50 px-4 py-3 text-sm text-violet-950">
-            {isAr
-              ? '«قيمة الفلتر» يجب أن تطابق حقل brand في المنتجات — مثل Juhayna أو Pampers.'
-              : 'Filter value must match the product brand field — e.g. Juhayna or Pampers.'}
-          </div>
-          <Input label={isAr ? 'الاسم (عربي)' : 'Name AR'} value={form.nameAr} onChange={(e) => setForm({ ...form, nameAr: e.target.value })} required />
-          <Input label={isAr ? 'الاسم (EN)' : 'Name EN'} value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })} required />
-          <Input label="Slug" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder="juhayna" />
-          <Input
-            label={isAr ? 'قيمة فلتر المنتجات' : 'Product filter value'}
-            value={form.queryValue}
-            onChange={(e) => setForm({ ...form, queryValue: e.target.value })}
-            placeholder={form.nameEn || 'Juhayna'}
-          />
-          <Input label={isAr ? 'أيقونة' : 'Emoji'} value={form.emoji} onChange={(e) => setForm({ ...form, emoji: e.target.value })} maxLength={4} />
-          <Input label={isAr ? 'الترتيب' : 'Sort order'} type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} />
-          <Input label={isAr ? 'الموقع (اختياري)' : 'Website (optional)'} value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} dir="ltr" className="lg:col-span-2" />
-          <Textarea label={isAr ? 'وصف عربي' : 'Description AR'} value={form.descriptionAr} onChange={(e) => setForm({ ...form, descriptionAr: e.target.value })} rows={2} />
-          <Textarea label={isAr ? 'وصف EN' : 'Description EN'} value={form.descriptionEn} onChange={(e) => setForm({ ...form, descriptionEn: e.target.value })} rows={2} />
-
-          <div className="lg:col-span-2 space-y-3 rounded-xl border border-border bg-surface-muted/20 p-4">
-            <p className="text-sm font-bold">{isAr ? 'شعار العلامة' : 'Brand logo'}</p>
-            <Input label={isAr ? 'رابط الشعار' : 'Logo URL'} value={form.logo} onChange={(e) => { setForm({ ...form, logo: e.target.value }); setLogoPreview(e.target.value); setLogoFile(null); setClearLogo(false); }} dir="ltr" />
-            <input type="file" accept="image/*" onChange={handleLogoChange} className="block w-full text-sm" />
-            {(logoPreview || form.logo) && !clearLogo && (
-              <div className="flex items-center gap-3">
-                <img src={logoPreview || form.logo} alt="" className="h-16 w-16 rounded-xl border border-border object-contain bg-white p-1" />
-                <Button type="button" variant="secondary" size="sm" onClick={() => { setClearLogo(true); setLogoFile(null); setLogoPreview(''); setForm({ ...form, logo: '' }); }}>
-                  {isAr ? 'إزالة الشعار' : 'Remove logo'}
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-            {isAr ? 'نشطة على الموقع' : 'Active on storefront'}
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} />
-            {isAr ? 'مميزة — تُفضّل في صف الرئيسية' : 'Featured — preferred in homepage row'}
-          </label>
-
-          <div className="flex gap-3 lg:col-span-2">
-            <Button type="submit">{isAr ? 'حفظ العلامة' : 'Save brand'}</Button>
-            <Button type="button" variant="secondary" onClick={resetForm}>{isAr ? 'إلغاء' : 'Cancel'}</Button>
-          </div>
-        </form>
-      )}
+      <BrandFormModal
+        open={formOpen}
+        isAr={isAr}
+        brand={editingBrand}
+        onClose={() => setFormOpen(false)}
+        onSaved={handleFormSaved}
+        createBrand={adminApi.createBrand}
+        updateBrand={adminApi.updateBrand}
+      />
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" variant={viewMode === 'table' ? 'primary' : 'secondary'} onClick={() => setViewMode('table')}>
@@ -425,8 +390,14 @@ export default function BrandsPage() {
           onToggleSelect={list.toggleSelect}
           onToggleSelectAll={list.toggleSelectAll}
           allSelected={list.allSelected}
+          pagination={list.pagination}
+          onPageChange={list.setPage}
+          emptyIcon={Tag}
+          emptyTitle={isAr ? 'لا توجد علامات تجارية بعد' : 'No brands yet'}
+          emptyDescription={isAr ? 'ابدأ بإنشاء علامة جديدة أو استوردها من المنتجات الحالية.' : 'Create your first brand, or import one from existing products.'}
+          emptyAction={<Button type="button" size="sm" onClick={openCreateForm}>{isAr ? '+ علامة جديدة' : '+ New brand'}</Button>}
           rowActions={(b) => [
-            { label: isAr ? 'تعديل' : 'Edit', onClick: () => handleEdit(b) },
+            { label: isAr ? 'تعديل' : 'Edit', onClick: () => openEditForm(b) },
             {
               label: isAr ? 'منتجات' : 'Products',
               onClick: () => window.open(brandProductHref(b.queryValue), '_blank'),

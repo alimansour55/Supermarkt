@@ -73,7 +73,7 @@ async function cleanup() {
   const cats = await Category.find({ slug: slugRx }).select('_id');
   const catIds = cats.map((c) => c._id);
   await Product.deleteMany({ slug: slugRx });
-  await Product.deleteMany({ subCategory: { $in: catIds } });
+  await Product.deleteMany({ category: { $in: catIds } });
   await HomepageSection.deleteMany({ titleEn: slugRx });
   await Category.deleteMany({ _id: { $in: catIds } });
 }
@@ -87,7 +87,6 @@ async function runCreateFlow() {
 
   const fields = await resolveProductCategoryFields({
     mainCategory: main._id,
-    subCategory: leaf._id,
     category: leaf._id,
   });
 
@@ -125,7 +124,7 @@ async function runCreateFlow() {
   else fail('categoryAncestors: root → leaf path stored', `${actualPath} ≠ ${expectedPath}`);
 
   // Product attached directly to a parent category (mid), not a leaf.
-  const parentFields = await resolveProductCategoryFields({ subCategory: mid._id, category: mid._id });
+  const parentFields = await resolveProductCategoryFields({ category: mid._id });
   const parentProduct = await Product.create({
     nameAr: 'منتج على قسم أب',
     nameEn: `${PREFIX}-parent-product`,
@@ -187,7 +186,6 @@ async function runEditFlow(ctx) {
   const leaf2 = await createCategory({ nameEn: 'Accept Leaf 2', slug: 'leaf-2', parent: main, level: 2 });
   const newFields = await resolveProductCategoryFields({
     mainCategory: main._id,
-    subCategory: leaf2._id,
     category: leaf2._id,
   });
 
@@ -205,12 +203,11 @@ async function runEditFlow(ctx) {
   const doc = await Product.findById(product._id);
   if (
     String(doc.mainCategory) === String(main._id)
-    && String(doc.subCategory) === String(leaf2._id)
     && String(doc.category) === String(leaf2._id)
   ) {
-    pass('Edit: mainCategory / subCategory / category in sync');
+    pass('Edit: mainCategory / category in sync');
   } else {
-    fail('Edit: mainCategory / subCategory / category in sync');
+    fail('Edit: mainCategory / category in sync');
   }
 
   ctx.leaf2 = leaf2;
@@ -232,7 +229,6 @@ async function runEdgeCases(ctx) {
     'Inactive category: create rejected',
     () => resolveProductCategoryFields({
       mainCategory: main._id,
-      subCategory: inactive._id,
       category: inactive._id,
     }),
     'inactive',
@@ -240,7 +236,7 @@ async function runEdgeCases(ctx) {
 
   // Non-leaf categories are valid product targets now.
   try {
-    const parentFields = await resolveProductCategoryFields({ subCategory: mid._id, category: mid._id });
+    const parentFields = await resolveProductCategoryFields({ category: mid._id });
     if (String(parentFields.category) === String(mid._id)
       && String(parentFields.mainCategory) === String(main._id)) {
       pass('Parent (non-leaf) category: create allowed');
@@ -268,7 +264,7 @@ async function runEdgeCases(ctx) {
   const fakeId = new mongoose.Types.ObjectId();
   await Product.collection.updateOne(
     { _id: product._id },
-    { $set: { subCategory: fakeId, category: fakeId } },
+    { $set: { category: fakeId } },
   );
 
   const orphanedDoc = await Product.findById(product._id).lean();
@@ -286,25 +282,18 @@ async function runEdgeCases(ctx) {
 
   const fields = await resolveProductCategoryFields({
     mainCategory: main._id,
-    subCategory: ctx.leaf2._id,
     category: ctx.leaf2._id,
   });
   await Product.collection.updateOne({ _id: product._id }, { $set: fields });
 
-  const bulkTarget = await resolveProductCategoryFields({
-    mainCategory: main._id,
-    subCategory: ctx.leaf2._id,
-    category: ctx.leaf2._id,
-  });
-  await Product.collection.updateOne({ _id: product._id }, { $set: bulkTarget });
   const afterBulk = await Product.findById(product._id);
-  if (String(afterBulk.subCategory) === String(ctx.leaf2._id)) {
-    pass('Bulk category change: subCategory updated');
+  if (String(afterBulk.category) === String(ctx.leaf2._id)) {
+    pass('Bulk category change: category updated');
   } else {
-    fail('Bulk category change: subCategory updated');
+    fail('Bulk category change: category updated');
   }
 
-  const bulkToParent = await resolveProductCategoryFields({ subCategory: mid._id, category: mid._id });
+  const bulkToParent = await resolveProductCategoryFields({ category: mid._id });
   if (String(bulkToParent.category) === String(mid._id)) pass('Bulk to parent category: allowed');
   else fail('Bulk to parent category: allowed');
 

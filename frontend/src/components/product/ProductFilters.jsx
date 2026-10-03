@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Sparkles, Store } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCategories } from '../../context/CategoriesContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
@@ -11,16 +10,7 @@ import {
   sourceOptionLabel,
 } from '../../utils/productFilterSettings';
 import { PRODUCT_FILTER_SECTION_LABELS } from '../../constants/productFilterSettings';
-import CategoryImage from '../category/CategoryImage';
 import { FilterSection, RadioRow, FILTER_CHECKBOX_CLASS } from '../filters/FilterAccordion';
-
-const SOURCE_ICONS = {
-  all: null,
-  our_products: Store,
-  offers: Sparkles,
-  best_sellers: null,
-  new_arrivals: null,
-};
 
 function sectionTitle(sectionId, isAr) {
   const labels = PRODUCT_FILTER_SECTION_LABELS[sectionId];
@@ -52,8 +42,8 @@ export default function ProductFilters({
   );
 
   const enabledSections = useMemo(
-    () => getEnabledFilterSections(filterSettings, { hideMainCategory, hideSubCategory, hideOffersFilter }),
-    [filterSettings, hideMainCategory, hideSubCategory, hideOffersFilter],
+    () => getEnabledFilterSections(filterSettings, { hideMainCategory, hideSubCategory }),
+    [filterSettings, hideMainCategory, hideSubCategory],
   );
 
   const sourceOptions = useMemo(
@@ -132,7 +122,6 @@ export default function ProductFilters({
       <FilterSection title={sectionTitle('productSource', isAr)} defaultOpen>
         <div className="space-y-0.5">
           {sourceOptions.map((option) => {
-            const Icon = SOURCE_ICONS[option.id];
             const checked = option.id === 'all' ? !effectiveSource : effectiveSource === option.id;
             return (
               <RadioRow
@@ -141,11 +130,6 @@ export default function ProductFilters({
                 onChange={() => handleSourceChange(option.id)}
                 label={sourceOptionLabel(option, isAr)}
                 count={option.count}
-                leading={Icon ? (
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                ) : null}
               />
             );
           })}
@@ -172,7 +156,6 @@ export default function ProductFilters({
             label={categoryLabel(cat, isAr)}
             count={cat.count}
             disabled={Boolean(lockedMainSlug)}
-            leading={<CategoryImage category={cat} size="xs" className="!h-7 !w-7" />}
           />
         ))}
       </div>
@@ -211,7 +194,6 @@ export default function ProductFilters({
                 label={filterSubcategoryLabel(sub, isAr)}
                 count={sub.count}
                 disabled={Boolean(lockedSubSlug)}
-                leading={<CategoryImage category={sub} size="xs" className="!h-7 !w-7" />}
               />
             ))
           )}

@@ -55,13 +55,12 @@ export function normalizeProductFilterSettings(raw = {}) {
   };
 }
 
-export function getEnabledFilterSections(settings, { hideMainCategory, hideSubCategory, hideOffersFilter } = {}) {
+export function getEnabledFilterSections(settings, { hideMainCategory, hideSubCategory } = {}) {
   const normalized = normalizeProductFilterSettings(settings || {});
   return normalized.sections.filter((section) => {
     if (!section.enabled) return false;
     if (hideMainCategory && section.id === 'mainCategory') return false;
     if (hideSubCategory && section.id === 'subCategory') return false;
-    if (hideOffersFilter && section.id === 'quickFilters') return false;
     return true;
   });
 }

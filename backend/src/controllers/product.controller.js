@@ -4,6 +4,7 @@ import Brand from '../models/Brand.js';
 import Category from '../models/Category.js';
 import { AppError } from '../utils/AppError.js';
 import { formatProduct } from '../utils/formatters.js';
+import { buildSimilarProducts } from '../utils/relatedProducts.js';
 import { slugify } from '../utils/slugify.js';
 import {
   uploadFilesToCloudinary,
@@ -53,11 +54,12 @@ import {
   scanProductCategoryIntegrity,
   repairProductCategories,
   repairCategoryLinks,
+  diagnoseProductCategory,
 } from '../utils/repairCategoryLinks.js';
 import { LOW_STOCK_THRESHOLD } from '../services/inventoryAlert.service.js';
 import { getAdminStockAlertThreshold, normalizeAdminStockAlertThreshold } from '../utils/adminStockThreshold.js';
 
-const ADMIN_PRODUCT_SORT = ['createdAt', 'nameEn', 'nameAr', 'price', 'stock', 'soldCount'];
+const ADMIN_PRODUCT_SORT = ['createdAt', 'nameEn', 'nameAr', 'price', 'wholesalePrice', 'stock', 'soldCount'];
 
 function parseAdminProductSort(query) {
   const alias = String(query.sort || '').trim();
@@ -130,14 +132,50 @@ async function buildAdminProductFilter(query) {
   if (section === 'offers') applyOffersOnlyFilter(filter);
 
   if (query.q) {
+    const q = String(query.q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     filter.$or = [
-      { nameAr: { $regex: query.q, $options: 'i' } },
-      { nameEn: { $regex: query.q, $options: 'i' } },
-      { slug: { $regex: query.q, $options: 'i' } },
-      { brand: { $regex: query.q, $options: 'i' } },
-      { sku: { $regex: query.q, $options: 'i' } },
-      { barcode: { $regex: query.q, $options: 'i' } },
+      { nameAr: { $regex: q, $options: 'i' } },
+      { nameEn: { $regex: q, $options: 'i' } },
+      { slug: { $regex: q, $options: 'i' } },
+      { brand: { $regex: q, $options: 'i' } },
+      { sku: { $regex: q, $options: 'i' } },
+      { barcode: { $regex: q, $options: 'i' } },
     ];
+  }
+
+  const priceMin = Number(query.priceMin);
+  const priceMax = Number(query.priceMax);
+  if (Number.isFinite(priceMin) || Number.isFinite(priceMax)) {
+    filter.price = {};
+    if (Number.isFinite(priceMin)) filter.price.$gte = priceMin;
+    if (Number.isFinite(priceMax)) filter.price.$lte = priceMax;
+  }
+
+  const marginBelow = Number(query.marginBelow);
+  if (Number.isFinite(marginBelow) && marginBelow > 0) {
+    filter.$expr = {
+      $and: [
+        { $gt: ['$price', 0] },
+        {
+          $lt: [
+            { $divide: [{ $subtract: ['$price', { $ifNull: ['$wholesalePrice', 0] }] }, '$price'] },
+            marginBelow / 100,
+          ],
+        },
+      ],
+    };
+  }
+
+  if (query.noCategory === 'true') {
+    const candidates = await Product.find(filter).select('mainCategory category').lean();
+    const categoryCache = new Map();
+    const badIds = [];
+    for (const product of candidates) {
+      // eslint-disable-next-line no-await-in-loop
+      const diagnosis = await diagnoseProductCategory(product, categoryCache);
+      if (!diagnosis.healthy) badIds.push(product._id);
+    }
+    filter._id = { $in: badIds };
   }
 
   return filter;
@@ -303,8 +341,7 @@ export const getProductsByIds = asyncHandler(async (req, res) => {
   }
 
   const products = await Product.find({ _id: { $in: validIds }, isActive: true })
-    .populate('category', 'slug nameAr nameEn')
-    .populate('subCategory', 'slug nameAr nameEn');
+    .populate('category', 'slug nameAr nameEn');
 
   const order = new Map(validIds.map((id, index) => [id, index]));
   products.sort((a, b) => (order.get(String(a._id)) ?? 0) - (order.get(String(b._id)) ?? 0));
@@ -479,11 +516,9 @@ export const getProductById = asyncHandler(async (req, res) => {
   const query = isObjectId(req.params.id) ? { _id: req.params.id } : { slug: req.params.id };
   const product = await Product.findOne({ ...query, isActive: true })
     .populate('category', 'slug nameAr nameEn')
-    .populate('subCategory', 'slug nameAr nameEn')
     .populate('reviews.user', 'name')
     .populate('reviews.adminReply.repliedBy', 'name')
     .populate('frequentlyBoughtTogether', 'nameAr nameEn slug price emoji images stock variants sku isActive')
-    .populate('similarProducts', 'nameAr nameEn slug price emoji images stock variants sku isActive')
     .lean();
 
   if (!product) throw new AppError('Product not found', 404);
@@ -491,9 +526,9 @@ export const getProductById = asyncHandler(async (req, res) => {
   product._fbtProducts = (product.frequentlyBoughtTogether || [])
     .filter((p) => p?.isActive !== false)
     .map((p) => formatProduct(p));
-  product._relatedProducts = (product.similarProducts || [])
-    .filter((p) => p?.isActive !== false)
-    .map((p) => formatProduct(p));
+
+  const fbtIds = (product.frequentlyBoughtTogether || []).map((p) => String(p?._id ?? p));
+  product._relatedProducts = await buildSimilarProducts(product, { limit: 8, excludeIds: fbtIds });
 
   res.json({ success: true, data: formatProduct(product) });
 });
@@ -517,7 +552,7 @@ export const getProductsByMainSub = asyncHandler(async (req, res) => {
 
   const { sort, page = 1, limit = 24 } = req.query;
   const filter = await buildFilter({ ...req.query, category: undefined, mainCategory: undefined, subCategory: undefined });
-  filter.$or = [{ subCategory: sub._id }, { category: sub._id }];
+  filter.category = sub._id;
 
   const siblings = await getActiveChildren(main._id);
   const { products, total, page: p, limit: l } = await fetchProducts(filter, sort, page, limit);
@@ -625,7 +660,7 @@ export const getProductsByCategory = asyncHandler(async (req, res) => {
     : children;
 
   const filter = await buildFilter({ ...req.query, category: undefined });
-  filter.$or = [{ subCategory: category._id }, { category: category._id }];
+  filter.category = category._id;
 
   const { products, total, page: p, limit: l } = await fetchProducts(filter, sort, page, limit);
 
@@ -692,7 +727,7 @@ export const getProductsByCategoryPath = asyncHandler(async (req, res) => {
     : [];
 
   const filter = await buildFilter({ ...req.query, category: undefined });
-  filter.$or = [{ subCategory: current._id }, { category: current._id }];
+  filter.category = current._id;
 
   const { products, total, page: p, limit: l } = await fetchProducts(filter, sort, page, limit);
 
@@ -800,6 +835,66 @@ export const getAdminStockSummary = asyncHandler(async (req, res) => {
   });
 });
 
+export const getAdminProductsStats = asyncHandler(async (req, res) => {
+  const threshold = await resolveStockThreshold(req.query);
+  const filter = await buildAdminProductFilter(req.query);
+
+  const [total, active, outOfStock, lowStock, valueAgg, categoryRows] = await Promise.all([
+    Product.countDocuments(filter),
+    Product.countDocuments({ ...filter, isActive: true }),
+    Product.countDocuments({ ...filter, stock: 0 }),
+    Product.countDocuments({ ...filter, stock: { $gt: 0, $lte: threshold } }),
+    Product.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          retailValue: { $sum: { $multiply: ['$price', '$stock'] } },
+          costValue: { $sum: { $multiply: [{ $ifNull: ['$wholesalePrice', 0] }, '$stock'] } },
+          marginSum: {
+            $sum: {
+              $cond: [
+                { $gt: ['$price', 0] },
+                { $divide: [{ $subtract: ['$price', { $ifNull: ['$wholesalePrice', 0] }] }, '$price'] },
+                0,
+              ],
+            },
+          },
+          marginCount: { $sum: { $cond: [{ $gt: ['$price', 0] }, 1, 0] } },
+        },
+      },
+    ]),
+    Product.find(filter).select('mainCategory category').lean(),
+  ]);
+
+  const { retailValue = 0, costValue = 0, marginSum = 0, marginCount = 0 } = valueAgg[0] || {};
+  const avgMarginPct = marginCount > 0 ? Math.round((marginSum / marginCount) * 1000) / 10 : 0;
+
+  const categoryCache = new Map();
+  let noCategory = 0;
+  for (const product of categoryRows) {
+    // eslint-disable-next-line no-await-in-loop
+    const diagnosis = await diagnoseProductCategory(product, categoryCache);
+    if (!diagnosis.healthy) noCategory += 1;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      total,
+      active,
+      inactive: total - active,
+      outOfStock,
+      lowStock,
+      noCategory,
+      retailValue: Math.round(retailValue * 100) / 100,
+      costValue: Math.round(costValue * 100) / 100,
+      avgMarginPct,
+      threshold,
+    },
+  });
+});
+
 export const getAdminProducts = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
   const filter = await buildAdminProductFilter(req.query);
@@ -808,7 +903,6 @@ export const getAdminProducts = asyncHandler(async (req, res) => {
   const [products, total] = await Promise.all([
     Product.find(filter)
       .populate('category', 'slug nameAr nameEn')
-      .populate('subCategory', 'slug nameAr nameEn')
       .populate('mainCategory', 'slug nameAr nameEn')
       .sort(sort)
       .skip(skip)
@@ -818,7 +912,7 @@ export const getAdminProducts = asyncHandler(async (req, res) => {
 
   const pathCache = new Map();
   const data = await Promise.all(products.map(async (product) => {
-    const leafId = product.subCategory?._id || product.subCategory || product.category?._id || product.category;
+    const leafId = product.category?._id || product.category;
     const formatted = formatProduct(product);
     if (!leafId) {
       return {
@@ -845,8 +939,7 @@ export const getAdminProducts = asyncHandler(async (req, res) => {
     }
 
     const productMain = product.mainCategory?._id || product.mainCategory;
-    const productSub = product.subCategory?._id || product.subCategory
-      || product.category?._id || product.category;
+    const productSub = product.category?._id || product.category;
 
     return {
       ...formatted,
@@ -884,8 +977,7 @@ export const bulkAdminProducts = asyncHandler(async (req, res) => {
   } else if (action === 'setCategory') {
     const categoryFields = await resolveProductCategoryFields({
       mainCategory: req.body.mainCategory,
-      subCategory: req.body.subCategory,
-      category: req.body.category,
+      category: req.body.category ?? req.body.subCategory,
     });
     await Product.updateMany(filter, { $set: categoryFields });
   } else if (action === 'markOurProduct') {
@@ -912,13 +1004,12 @@ export const duplicateAdminProduct = asyncHandler(async (req, res) => {
 
   const categoryFields = await resolveProductCategoryFields({
     mainCategory: source.mainCategory,
-    subCategory: source.subCategory || source.category,
     category: source.category,
   });
 
   let categorySlug = '';
-  if (categoryFields.subCategory) {
-    const cat = await Category.findById(categoryFields.subCategory).select('slug').lean();
+  if (categoryFields.category) {
+    const cat = await Category.findById(categoryFields.category).select('slug').lean();
     categorySlug = cat?.slug || '';
   }
 
@@ -973,7 +1064,6 @@ export const duplicateAdminProduct = asyncHandler(async (req, res) => {
   await copy.populate([
     { path: 'category', select: 'slug nameAr nameEn' },
     { path: 'mainCategory', select: 'slug nameAr nameEn' },
-    { path: 'subCategory', select: 'slug nameAr nameEn' },
   ]);
   res.status(201).json({ success: true, data: formatProduct(copy) });
 });
@@ -984,7 +1074,6 @@ export const exportAdminProducts = asyncHandler(async (req, res) => {
 
   const products = await Product.find(filter)
     .populate('category', 'slug nameAr nameEn')
-    .populate('subCategory', 'slug nameAr nameEn')
     .populate('mainCategory', 'slug nameAr nameEn')
     .sort(sort)
     .limit(5000);
@@ -1013,7 +1102,7 @@ export const exportAdminProducts = asyncHandler(async (req, res) => {
     },
     {
       header: 'categorySlug',
-      value: (p) => categoryMetaById.get(String(p._id))?.categorySlug || p.subCategory?.slug || p.category?.slug || '',
+      value: (p) => categoryMetaById.get(String(p._id))?.categorySlug || p.category?.slug || '',
     },
     { header: 'sku', value: (p) => p.sku || '' },
     { header: 'barcode', value: (p) => p.barcode || '' },
@@ -1043,14 +1132,31 @@ export const exportAdminProducts = asyncHandler(async (req, res) => {
 });
 
 export const getAdminProductById = asyncHandler(async (req, res) => {
+  const linkSelect = 'nameAr nameEn slug brand price emoji images';
   const product = await Product.findById(req.params.id)
     .populate('category', 'slug nameAr nameEn')
-    .populate('subCategory', 'slug nameAr nameEn')
-    .populate('frequentlyBoughtTogether', 'nameAr nameEn slug')
-    .populate('similarProducts', 'nameAr nameEn slug');
+    .populate('frequentlyBoughtTogether', linkSelect)
+    .populate('similarProducts', linkSelect);
 
   if (!product) throw new AppError('Product not found', 404);
-  res.json({ success: true, data: formatProduct(product) });
+
+  const seed = (p) => ({
+    _id: p._id,
+    nameAr: p.nameAr,
+    nameEn: p.nameEn,
+    brand: p.brand,
+    price: p.price,
+    image: p.images?.[0] || p.emoji || null,
+  });
+  const data = formatProduct(product);
+  data.linkedProducts = [
+    ...(product.frequentlyBoughtTogether || []),
+    ...(product.similarProducts || []),
+  ]
+    .filter((p) => p && typeof p === 'object' && p._id)
+    .map(seed);
+
+  res.json({ success: true, data });
 });
 
 export const createProduct = asyncHandler(async (req, res) => {
@@ -1065,10 +1171,12 @@ export const createProduct = asyncHandler(async (req, res) => {
     oldPrice,
     mainCategory,
     category,
-    subCategory,
+    subCategory, // legacy client field name, treated as an alias of `category`
     brand,
     stock,
     unit,
+    unitAr,
+    unitEn,
     images,
     isFeatured,
     isOffer,
@@ -1082,21 +1190,25 @@ export const createProduct = asyncHandler(async (req, res) => {
     specs,
     frequentlyBoughtTogether,
     similarProducts,
+    similarMode,
   } = req.body;
 
   if (!nameAr || !nameEn || price == null) {
     throw new AppError('nameAr, nameEn, and price are required', 400);
   }
 
-  const categoryFields = await resolveProductCategoryFields({ mainCategory, subCategory, category });
+  const categoryFields = await resolveProductCategoryFields({
+    mainCategory,
+    category: category ?? subCategory,
+  });
   const productSlug = slug || slugify(nameEn);
 
   const existing = await Product.findOne({ slug: productSlug });
   if (existing) throw new AppError('Product slug already exists', 400);
 
   let categorySlug = '';
-  if (categoryFields.subCategory) {
-    const cat = await Category.findById(categoryFields.subCategory).select('slug').lean();
+  if (categoryFields.category) {
+    const cat = await Category.findById(categoryFields.category).select('slug').lean();
     categorySlug = cat?.slug || '';
   }
 
@@ -1122,6 +1234,8 @@ export const createProduct = asyncHandler(async (req, res) => {
     brand,
     stock,
     unit,
+    unitAr,
+    unitEn,
     images,
     isFeatured,
     isOffer,
@@ -1135,13 +1249,13 @@ export const createProduct = asyncHandler(async (req, res) => {
     specs: specs || [],
     frequentlyBoughtTogether: frequentlyBoughtTogether || [],
     similarProducts: similarProducts || [],
+    similarMode: ['auto', 'manual', 'off'].includes(similarMode) ? similarMode : 'auto',
     createdBy: req.user?._id || null,
   });
 
   await product.populate([
     { path: 'category', select: 'slug nameAr nameEn' },
     { path: 'mainCategory', select: 'slug nameAr nameEn' },
-    { path: 'subCategory', select: 'slug nameAr nameEn' },
   ]);
 
   await logAudit({
@@ -1185,15 +1299,15 @@ export const updateProduct = asyncHandler(async (req, res) => {
   };
 
   const updates = { ...req.body };
+  delete updates.subCategory; // legacy client field name — folded into `category` below
 
-  const categoryTouched = ['mainCategory', 'subCategory', 'category'].some(
+  const categoryTouched = ['mainCategory', 'category'].some(
     (key) => updates[key] !== undefined && updates[key] !== null && updates[key] !== '',
-  );
+  ) || req.body.subCategory != null;
   if (categoryTouched) {
     const categoryFields = await resolveProductCategoryFields({
       mainCategory: updates.mainCategory ?? product.mainCategory,
-      subCategory: updates.subCategory ?? updates.category ?? product.subCategory ?? product.category,
-      category: updates.category ?? updates.subCategory ?? product.category ?? product.subCategory,
+      category: updates.category ?? req.body.subCategory ?? product.category,
     });
     Object.assign(updates, categoryFields);
   }
@@ -1211,7 +1325,7 @@ export const updateProduct = asyncHandler(async (req, res) => {
       updates.sku = trimmed;
     } else {
       let categorySlug = '';
-      const leafId = updates.subCategory || updates.category || product.subCategory || product.category;
+      const leafId = updates.category || product.category;
       if (leafId) {
         const cat = await Category.findById(leafId).select('slug').lean();
         categorySlug = cat?.slug || '';
@@ -1240,7 +1354,6 @@ export const updateProduct = asyncHandler(async (req, res) => {
   await product.populate([
     { path: 'category', select: 'slug nameAr nameEn' },
     { path: 'mainCategory', select: 'slug nameAr nameEn' },
-    { path: 'subCategory', select: 'slug nameAr nameEn' },
   ]);
 
   await checkInventoryAlert(product, previousStock);

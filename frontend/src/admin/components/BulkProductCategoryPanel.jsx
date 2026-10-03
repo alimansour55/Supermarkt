@@ -23,7 +23,6 @@ export default function BulkProductCategoryPanel({
     }
     await onApply({
       mainCategory: selection.mainCategory,
-      subCategory: selection.subCategory,
       category: selection.subCategory,
     });
   };

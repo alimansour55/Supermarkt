@@ -3,18 +3,24 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Download, Package, PackageX, Upload } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
-import { useAdminListPage } from '../hooks/useAdminListPage';
+import { useProductsListPage } from '../hooks/useProductsListPage';
 import { downloadBlob } from '../utils/downloadBlob';
 import Button from '../../components/ui/Button';
 import { formatPrice } from '../../utils/formatters';
 import { pickProductImage } from '../../utils/imageHelpers';
-import { AdminListPage, BulkActionsBar, ListFilterSelect } from '../components/list';
+import { ListFilterSelect, BulkActionsBar } from '../components/list';
+import Pagination from '../components/Pagination';
 import { useConfirm, useToast } from '../components';
 import AdminProductCategoryFilter from '../components/AdminProductCategoryFilter';
 import BulkProductCategoryPanel from '../components/BulkProductCategoryPanel';
 import ProductCategoryIntegrityPanel from '../components/ProductCategoryIntegrityPanel';
 import ProductRowCategory from '../components/ProductRowCategory';
 import ProductStockFilter from '../components/ProductStockFilter';
+import ProductsStatsRow from '../components/products/ProductsStatsRow';
+import ProductsToolbar from '../components/products/ProductsToolbar';
+import ProductAdvancedFiltersPopover from '../components/products/ProductAdvancedFiltersPopover';
+import ProductsTable from '../components/products/ProductsTable';
+import ProductsGrid from '../components/products/ProductsGrid';
 import { useAdminStockAlertThreshold } from '../hooks/useAdminStockAlertThreshold';
 import { localizeAdminApiError } from '../constants/productCategoryErrors';
 import { DEFAULT_STOCK_THRESHOLD } from '../utils/stockThreshold';
@@ -46,6 +52,22 @@ function ProductThumbnail({ product }) {
   );
 }
 
+const INITIAL_FILTERS = {
+  mainCategory: '',
+  subCategory: '',
+  isActive: '',
+  isOurProduct: '',
+  isFeatured: '',
+  isBestSeller: '',
+  offers: '',
+  noCategory: '',
+  stock: '',
+  stockMax: '',
+  priceMin: '',
+  priceMax: '',
+  marginBelow: '',
+};
+
 export default function ProductsPage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
@@ -60,21 +82,12 @@ export default function ProductsPage() {
   const fileInputRef = useRef(null);
   const { thresholdString, ready: thresholdReady } = useAdminStockAlertThreshold();
 
-  const list = useAdminListPage({
-    fetchFn: (params) => adminApi.getProducts(params),
-    initialFilters: {
-      mainCategory: '',
-      subCategory: '',
-      isActive: '',
-      isOurProduct: '',
-      stock: '',
-      stockMax: thresholdString,
-    },
-  });
+  const list = useProductsListPage({ initialFilters: INITIAL_FILTERS });
 
   useEffect(() => {
     if (!thresholdReady) return;
     list.patchFilters({ stockMax: thresholdString });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thresholdReady, thresholdString]);
 
   const stockThreshold = Number(list.filters.stockMax) || DEFAULT_STOCK_THRESHOLD;
@@ -96,6 +109,7 @@ export default function ProductsPage() {
       await adminApi.bulkProducts(list.selectedIds, action, payload);
       list.clearSelection();
       list.reload();
+      list.reloadStats();
       toast.success(isAr ? 'تم التحديث' : 'Updated');
     } catch (err) {
       toast.error(err.response?.data?.message || (isAr ? 'فشل التحديث' : 'Update failed'));
@@ -108,6 +122,7 @@ export default function ProductsPage() {
       await adminApi.bulkProducts(list.selectedIds, 'setCategory', categoryPayload);
       list.clearSelection();
       list.reload();
+      list.reloadStats();
       setBulkCategoryOpen(false);
       toast.success(isAr ? 'تم تحديث أقسام المنتجات' : 'Product categories updated');
     } catch (err) {
@@ -142,6 +157,7 @@ export default function ProductsPage() {
       const csv = await file.text();
       const { data } = await adminApi.importProducts(csv);
       list.reload();
+      list.reloadStats();
       toast.success(
         isAr
           ? `تم: ${data.created} جديد، ${data.updated} محدّث`
@@ -149,12 +165,8 @@ export default function ProductsPage() {
       );
       if (data.errors?.length) {
         const first = data.errors[0];
-        const detail = first?.message
-          ? (isAr ? ` — ${first.message}` : ` — ${first.message}`)
-          : '';
-        toast.error(
-          `${data.errors.length} ${isAr ? 'صفوف فشلت' : 'rows failed'}${detail}`,
-        );
+        const detail = first?.message ? ` — ${first.message}` : '';
+        toast.error(`${data.errors.length} ${isAr ? 'صفوف فشلت' : 'rows failed'}${detail}`);
       }
     } catch (err) {
       toast.error(err.response?.data?.message || (isAr ? 'فشل الاستيراد' : 'Import failed'));
@@ -179,13 +191,21 @@ export default function ProductsPage() {
     if (!ok) return;
     await adminApi.deleteProduct(id);
     list.reload();
+    list.reloadStats();
   };
+
+  const rowActions = (p) => [
+    { label: isAr ? 'تعديل' : 'Edit', onClick: () => navigate(`/admin/products/${p._id}/edit`) },
+    { label: isAr ? 'نسخ' : 'Duplicate', onClick: () => handleDuplicate(p._id) },
+    { label: isAr ? 'حذف' : 'Delete', danger: true, onClick: () => handleDeleteOne(p._id) },
+  ];
 
   const columns = [
     {
       key: 'product',
       header: isAr ? 'المنتج' : 'Product',
       sortKey: 'nameEn',
+      hideable: false,
       render: (p) => (
         <div className="flex min-w-0 items-center gap-3">
           <ProductThumbnail product={p} />
@@ -225,6 +245,7 @@ export default function ProductsPage() {
     {
       key: 'wholesale',
       header: isAr ? 'سعر الجملة' : 'Wholesale',
+      sortKey: 'wholesalePrice',
       render: (p) => <span className="tabular-nums">{formatPrice(p.wholesalePrice ?? 0)}</span>,
       headerClassName: 'hidden xl:table-cell',
       cellClassName: 'hidden xl:table-cell',
@@ -263,26 +284,123 @@ export default function ProductsPage() {
     {
       key: 'status',
       header: isAr ? 'الحالة' : 'Status',
-      render: (p) => (
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${p.isActive ? 'bg-green-100 text-green-800 ring-green-200' : 'bg-slate-100 text-slate-600 ring-slate-200'}`}>
-          {p.isActive ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
-        </span>
-      ),
+      render: (p) => {
+        const sellableButEmpty = p.isActive && p.stock <= 0;
+        const className = sellableButEmpty
+          ? 'bg-amber-100 text-amber-800 ring-amber-200'
+          : p.isActive
+            ? 'bg-green-100 text-green-800 ring-green-200'
+            : 'bg-slate-100 text-slate-600 ring-slate-200';
+        return (
+          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${className}`}>
+            {sellableButEmpty
+              ? (isAr ? 'نشط · نفذ المخزون' : 'Active · out of stock')
+              : p.isActive ? (isAr ? 'نشط' : 'Active') : (isAr ? 'معطل' : 'Inactive')}
+          </span>
+        );
+      },
       headerClassName: 'hidden md:table-cell',
       cellClassName: 'hidden md:table-cell',
     },
   ];
 
+  const rowClassName = (p) => (p.isActive && p.stock <= 0 ? 'bg-amber-50/60 hover:bg-amber-50' : '');
+
+  /** These "drill-down" filters describe mutually exclusive views of the same list
+   * (e.g. "out of stock" vs "no category") — picking one always replaces whichever
+   * of these was active before, so a stat card or chip click shows that slice alone
+   * instead of silently stacking on top of the last one clicked. */
+  const QUICK_FILTER_KEYS = ['isActive', 'stock', 'noCategory', 'isFeatured', 'isBestSeller', 'isOurProduct', 'offers'];
+
+  const applyQuickFilter = (key, value) => {
+    const patch = QUICK_FILTER_KEYS.reduce((acc, k) => ({ ...acc, [k]: '' }), {});
+    if (list.filters[key] !== value) patch[key] = value;
+    list.patchFilters(patch);
+  };
+
+  const activeQuickFilterCount = QUICK_FILTER_KEYS.filter((k) => list.filters[k] !== '').length;
+
+  const quickFilters = [
+    {
+      key: 'active',
+      label: isAr ? 'نشط' : 'Active',
+      active: list.filters.isActive === 'true',
+      onClick: () => applyQuickFilter('isActive', 'true'),
+    },
+    {
+      key: 'inactive',
+      label: isAr ? 'معطل' : 'Inactive',
+      active: list.filters.isActive === 'false',
+      onClick: () => applyQuickFilter('isActive', 'false'),
+    },
+    {
+      key: 'out',
+      label: isAr ? 'نفد المخزون' : 'Out of stock',
+      active: list.filters.stock === 'out',
+      onClick: () => applyQuickFilter('stock', 'out'),
+    },
+    {
+      key: 'low',
+      label: isAr ? 'مخزون منخفض' : 'Low stock',
+      active: list.filters.stock === 'low',
+      onClick: () => applyQuickFilter('stock', 'low'),
+    },
+    {
+      key: 'noCategory',
+      label: isAr ? 'بدون قسم صحيح' : 'No valid category',
+      active: list.filters.noCategory === 'true',
+      onClick: () => applyQuickFilter('noCategory', 'true'),
+    },
+    {
+      key: 'featured',
+      label: isAr ? 'وصل حديثاً' : 'Featured',
+      active: list.filters.isFeatured === 'true',
+      onClick: () => applyQuickFilter('isFeatured', 'true'),
+    },
+    {
+      key: 'bestSeller',
+      label: isAr ? 'الأكثر مبيعاً' : 'Best seller',
+      active: list.filters.isBestSeller === 'true',
+      onClick: () => applyQuickFilter('isBestSeller', 'true'),
+    },
+    {
+      key: 'ourProduct',
+      label: isAr ? 'منتجنا' : 'Our product',
+      active: list.filters.isOurProduct === 'true',
+      onClick: () => applyQuickFilter('isOurProduct', 'true'),
+    },
+    {
+      key: 'offers',
+      label: isAr ? 'عليها عرض' : 'On offer',
+      active: list.filters.offers === 'true',
+      onClick: () => applyQuickFilter('offers', 'true'),
+    },
+  ];
+
   return (
-    <>
-      <ProductCategoryIntegrityPanel isAr={isAr} onRepaired={list.reload} />
-      <AdminListPage
+    <div className="space-y-4">
+      <ProductsStatsRow
+        stats={list.stats}
+        loading={list.statsLoading}
+        isAr={isAr}
+        onFilterShortcut={(patch) => {
+          const [key, value] = Object.entries(patch)[0];
+          applyQuickFilter(key, value);
+        }}
+      />
+
+      <ProductCategoryIntegrityPanel isAr={isAr} onRepaired={() => { list.reload(); list.reloadStats(); }} />
+
+      <ProductsToolbar
         isAr={isAr}
         q={list.q}
         onSearchChange={list.setQ}
-        searchPlaceholder={isAr ? 'بحث...' : 'Search...'}
-        sort={list.sort}
-        onSort={list.toggleSort}
+        view={list.view}
+        onViewChange={list.setView}
+        quickFilters={quickFilters}
+        onClearQuickFilters={activeQuickFilterCount > 0 ? () => list.patchFilters(
+          QUICK_FILTER_KEYS.reduce((acc, k) => ({ ...acc, [k]: '' }), {}),
+        ) : null}
         actions={(
           <>
             <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={handleImportFile} />
@@ -301,7 +419,7 @@ export default function ProductsPage() {
               </Button>
             </Link>
             <Link to="/admin/products/new">
-              <Button size="sm">{isAr ? '+ إضافة' : '+ Add'}</Button>
+              <Button size="sm">{isAr ? '+ إضافة منتج' : '+ Add product'}</Button>
             </Link>
           </>
         )}
@@ -324,62 +442,95 @@ export default function ProductsPage() {
                 { value: 'false', label: isAr ? 'معطل' : 'Inactive' },
               ]}
             />
-            <ListFilterSelect
-              label={isAr ? 'منتجنا' : 'Our product'}
-              value={list.filters.isOurProduct}
-              onChange={(v) => list.setFilter('isOurProduct', v)}
-              options={[
-                { value: '', label: isAr ? 'الكل' : 'All' },
-                { value: 'true', label: isAr ? 'منتجاتنا فقط' : 'Our products only' },
-                { value: 'false', label: isAr ? 'غير منتجاتنا' : 'Not our products' },
-              ]}
-            />
             <ProductStockFilter
               isAr={isAr}
               stock={list.filters.stock}
               stockMax={list.filters.stockMax}
               onStockChange={(v) => list.setFilter('stock', v)}
               onStockMaxChange={(v) => list.setFilter('stockMax', v)}
+              hideThreshold
+            />
+            <ProductAdvancedFiltersPopover
+              isAr={isAr}
+              priceMin={list.filters.priceMin}
+              priceMax={list.filters.priceMax}
+              marginBelow={list.filters.marginBelow}
+              isOurProduct={list.filters.isOurProduct}
+              stockMax={list.filters.stockMax}
+              onApply={(patch) => list.patchFilters(patch)}
             />
           </>
         )}
-        bulkBar={(
-          <BulkActionsBar
-            count={list.selectedIds.length}
-            isAr={isAr}
-            onChangeCategory={() => setBulkCategoryOpen(true)}
-            onMarkOurProduct={() => runBulk('markOurProduct', isAr ? 'تعيين كمنتجنا' : 'Mark as our product')}
-            onUnmarkOurProduct={() => runBulk('unmarkOurProduct', isAr ? 'إلغاء منتجنا' : 'Unmark our product')}
-            onActivate={() => runBulk('activate', isAr ? 'تفعيل المنتجات' : 'Activate products')}
-            onDeactivate={() => runBulk('deactivate', isAr ? 'تعطيل المنتجات' : 'Deactivate products')}
-            onDelete={() => runBulk('delete', isAr ? 'حذف المنتجات' : 'Delete products')}
-            onClear={list.clearSelection}
-          />
-        )}
-        columns={columns}
-        data={list.data}
-        loading={list.loading}
-        selectable
-        selectedIds={list.selectedIds}
-        onToggleSelect={list.toggleSelect}
-        onToggleSelectAll={list.toggleSelectAll}
-        allSelected={list.allSelected}
-        rowActions={(p) => [
-          { label: isAr ? 'تعديل' : 'Edit', onClick: () => navigate(`/admin/products/${p._id}/edit`) },
-          { label: isAr ? 'نسخ' : 'Duplicate', onClick: () => handleDuplicate(p._id) },
-          { label: isAr ? 'حذف' : 'Delete', danger: true, onClick: () => handleDeleteOne(p._id) },
-        ]}
-        pagination={list.pagination}
-        onPageChange={list.setPage}
-        emptyIcon={Package}
-        emptyTitle={isAr ? 'لا توجد منتجات' : 'No products'}
-        emptyDescription={isAr ? 'أضف منتجاً أو غيّر الفلاتر' : 'Add a product or adjust filters'}
-        emptyAction={(
-          <Link to="/admin/products/new">
-            <Button size="sm">{isAr ? 'إضافة منتج' : 'Add product'}</Button>
-          </Link>
-        )}
       />
+
+      <BulkActionsBar
+        count={list.selectedIds.length}
+        isAr={isAr}
+        onChangeCategory={() => setBulkCategoryOpen(true)}
+        onMarkOurProduct={() => runBulk('markOurProduct', isAr ? 'تعيين كمنتجنا' : 'Mark as our product')}
+        onUnmarkOurProduct={() => runBulk('unmarkOurProduct', isAr ? 'إلغاء منتجنا' : 'Unmark our product')}
+        onActivate={() => runBulk('activate', isAr ? 'تفعيل المنتجات' : 'Activate products')}
+        onDeactivate={() => runBulk('deactivate', isAr ? 'تعطيل المنتجات' : 'Deactivate products')}
+        onDelete={() => runBulk('delete', isAr ? 'حذف المنتجات' : 'Delete products')}
+        onClear={list.clearSelection}
+      />
+
+      {list.view === 'table' ? (
+        <ProductsTable
+          columns={columns}
+          data={list.data}
+          loading={list.loading}
+          sort={list.sort}
+          onSort={list.toggleSort}
+          selectedIds={list.selectedIds}
+          onToggleSelect={list.toggleSelect}
+          onToggleSelectAll={list.toggleSelectAll}
+          allSelected={list.allSelected}
+          rowActions={rowActions}
+          rowClassName={rowClassName}
+          hiddenColumns={list.hiddenColumns}
+          onToggleColumn={list.toggleColumn}
+          density={list.density}
+          isAr={isAr}
+          emptyIcon={Package}
+          emptyTitle={isAr ? 'لا توجد منتجات' : 'No products'}
+          emptyDescription={isAr ? 'أضف منتجاً أو غيّر الفلاتر' : 'Add a product or adjust filters'}
+          emptyAction={(
+            <Link to="/admin/products/new">
+              <Button size="sm">{isAr ? 'إضافة منتج' : 'Add product'}</Button>
+            </Link>
+          )}
+        />
+      ) : (
+        <ProductsGrid
+          data={list.data}
+          loading={list.loading}
+          isAr={isAr}
+          selectedIds={list.selectedIds}
+          onToggleSelect={list.toggleSelect}
+          rowActions={rowActions}
+          stockThreshold={stockThreshold}
+          emptyIcon={Package}
+          emptyTitle={isAr ? 'لا توجد منتجات' : 'No products'}
+          emptyDescription={isAr ? 'أضف منتجاً أو غيّر الفلاتر' : 'Add a product or adjust filters'}
+          emptyAction={(
+            <Link to="/admin/products/new">
+              <Button size="sm">{isAr ? 'إضافة منتج' : 'Add product'}</Button>
+            </Link>
+          )}
+        />
+      )}
+
+      {!list.loading && list.pagination?.total > 0 && (
+        <Pagination
+          page={list.pagination.page}
+          pages={list.pagination.pages}
+          total={list.pagination.total}
+          limit={list.pagination.limit}
+          onPageChange={list.setPage}
+          isAr={isAr}
+        />
+      )}
 
       <BulkProductCategoryPanel
         open={bulkCategoryOpen}
@@ -390,6 +541,6 @@ export default function ProductsPage() {
         applying={bulkCategoryApplying}
         onApply={handleBulkCategoryApply}
       />
-    </>
+    </div>
   );
 }
