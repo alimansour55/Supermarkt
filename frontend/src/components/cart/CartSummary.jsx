@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Fragment } from 'react';
 import { Gift } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';

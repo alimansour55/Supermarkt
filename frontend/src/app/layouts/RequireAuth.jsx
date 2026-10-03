@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet } from '../router';
 import ProtectedRoute from '../../components/auth/ProtectedRoute';
 
 /** Layout route: children render only for signed-in customers. */

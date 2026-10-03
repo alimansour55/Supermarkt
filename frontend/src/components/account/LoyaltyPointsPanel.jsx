@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Gift, Sparkles, Clock } from 'lucide-react';
 import { formatPrice } from '../../utils/formatters';
 import { formatHistoryType, getCashbackPercent, pointsToCashValue } from '../../utils/loyaltyHelpers';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../../app/router';
 import { ExternalLink, Eye, FileText, Plus, Trash2 } from 'lucide-react';
 import Input from '../../../components/ui/Input';
 import Textarea from '../../../components/ui/Textarea';

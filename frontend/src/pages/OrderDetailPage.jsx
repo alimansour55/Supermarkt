@@ -1,4 +1,4 @@
-import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearchParams } from '../app/router';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Download, MapPin, Pencil, XCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';

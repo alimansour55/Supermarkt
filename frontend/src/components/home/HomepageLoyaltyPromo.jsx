@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronLeft, Gift, Sparkles } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';

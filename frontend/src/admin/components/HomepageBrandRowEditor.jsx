@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Plus, Tag, Trash2 } from 'lucide-react';
 import HomepageDestinationPicker from './HomepageDestinationPicker';
 import { normalizeHomepageLink } from '../utils/homepageSectionMeta';

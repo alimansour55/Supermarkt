@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { CalendarClock, ExternalLink, Layers, RefreshCw } from 'lucide-react';
 import { adminApi } from '../adminApi';
 import Input from '../../components/ui/Input';

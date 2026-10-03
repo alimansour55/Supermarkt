@@ -1,5 +1,5 @@
 import { ChevronUp, Phone, Mail, Clock, Apple, Play } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';

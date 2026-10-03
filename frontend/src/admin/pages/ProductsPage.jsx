@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '../../app/router';
 import { Download, Package, PackageX, Upload } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';

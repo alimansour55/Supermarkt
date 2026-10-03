@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from './router';
 import { withSuspense } from './routeSuspense';
 import * as P from './lazyAdminRoutes';
 

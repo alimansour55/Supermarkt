@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from '../../app/router';
 import {
   ArrowLeft, Banknote, Calculator, Check, CheckCircle2, ChevronDown, ChevronUp,
   Clock, Copy, ListChecks, MapPin, MessageCircle, Navigation, Package, Phone,

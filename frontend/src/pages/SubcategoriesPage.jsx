@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from '../app/router';
 import {
   LayoutGrid, Search, X, ShoppingBag, ChevronLeft, Sparkles,
 } from 'lucide-react';

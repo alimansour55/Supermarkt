@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronLeft, Package } from 'lucide-react';
 import { useCategories } from '../../context/CategoriesContext';
 import { categoryLabel, categoryHref, filterSubcategoryLabel } from '../../utils/categoryHelpers';

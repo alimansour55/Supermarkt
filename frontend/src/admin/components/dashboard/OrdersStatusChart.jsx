@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '../../../app/router';
 import { ChevronLeft } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Sector, Tooltip } from 'recharts';
 import { formatCount } from '../../../utils/formatters';

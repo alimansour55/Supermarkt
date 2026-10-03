@@ -12,6 +12,9 @@ import {
   useLoaderData,
   useRouteError,
   useRouteLoaderData,
+  // Raw hook on purpose: <html lang> needs the real, prefixed URL.
+  // eslint-disable-next-line no-restricted-imports
+  useLocation as useRouterLocation,
 } from 'react-router';
 import stylesheet from './index.css?url';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
@@ -33,6 +36,7 @@ import {
 } from './constants/siteThemes';
 import { getFont } from './constants/siteFonts';
 import { buildMeta } from './seo/meta';
+import { DEFAULT_LANG, langFromPath } from './i18n/routing';
 import { apiGetSafe } from './server/api.server';
 import { isSpaBuild, resolveSiteUrl } from './server/site.server';
 
@@ -61,7 +65,7 @@ export const links = () => [
   { rel: 'stylesheet', href: stylesheet },
 ];
 
-export const meta = ({ matches }) => buildMeta({ matches, path: '/' });
+export const meta = ({ matches, location }) => buildMeta({ matches, location });
 
 /** Primary palette + font as CSS variables so the first paint already uses the store theme. */
 function themeCss(settings) {
@@ -89,6 +93,7 @@ function analyticsId(settings) {
 
 export function Layout({ children }) {
   const data = useRouteLoaderData('root');
+  const lang = langFromPath(useRouterLocation().pathname) || DEFAULT_LANG;
   const settings = data?.settings;
   const gaId = analyticsId(settings);
   const themeColor = getThemeColors(
@@ -97,7 +102,7 @@ export function Layout({ children }) {
   )[600];
 
   return (
-    <html lang="ar" dir="rtl">
+    <html lang={lang} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       <head>
         <meta charSet="UTF-8" />
         <meta

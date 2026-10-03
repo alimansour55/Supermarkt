@@ -1,9 +1,9 @@
 /**
- * /today-deals — limited-time deals.
+ * /:lang/today-deals — limited-time deals.
  */
 import TodaysDealsPage from '../pages/TodaysDealsPage';
 import { apiGetSafe } from '../server/api.server';
-import { buildMeta, getRootData, listingSeo, storeName } from '../seo/meta';
+import { buildMeta, getRootData, listingSeo, metaLang, pickLang, storeName } from '../seo/meta';
 import { productListJsonLd } from '../seo/jsonLd';
 import {
   TODAYS_DEALS_DEFAULT_SORT,
@@ -34,14 +34,20 @@ export const headers = () => ({ 'Cache-Control': 'public, max-age=0, s-maxage=30
 export const shouldRevalidate = ({ currentUrl, nextUrl }) => currentUrl.pathname !== nextUrl.pathname;
 
 export function meta({ data: loaderData, matches, location }) {
+  const lang = metaLang(location);
   const { settings, siteUrl } = getRootData(matches) || {};
   const { path, page, noindex } = listingSeo(location);
+  const listName = pickLang(lang, 'عروض اليوم', "Today's deals");
+  const store = storeName(settings, lang);
   return buildMeta({
     matches,
+    location,
     path,
-    title: `عروض اليوم${page > 1 ? ` - صفحة ${page}` : ''}`,
-    description: `خصومات لفترة محدودة اليوم فقط في ${storeName(settings)} — الحق العروض قبل انتهائها.`,
+    title: `${listName}${page > 1 ? ` - ${pickLang(lang, 'صفحة', 'Page')} ${page}` : ''}`,
+    description: lang === 'en'
+      ? `Limited-time discounts, today only at ${store} — grab them before they end.`
+      : `خصومات لفترة محدودة اليوم فقط في ${store} — الحق العروض قبل انتهائها.`,
     noindex,
-    jsonLd: [productListJsonLd(loaderData?.result?.data, { siteUrl, name: 'عروض اليوم' })],
+    jsonLd: [productListJsonLd(loaderData?.result?.data, { siteUrl, name: listName, lang })],
   });
 }

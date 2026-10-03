@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from '../app/router';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { paymentService } from '../services/apiServices';

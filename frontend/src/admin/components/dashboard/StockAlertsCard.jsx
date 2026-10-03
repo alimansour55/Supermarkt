@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../../app/router';
 import { PackageOpen } from 'lucide-react';
 import { formatPrice } from '../../../utils/formatters';
 import { EmptyState } from '../index';

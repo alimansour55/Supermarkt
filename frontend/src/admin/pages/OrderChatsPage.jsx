@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import { useAdminListPage } from '../hooks/useAdminListPage';

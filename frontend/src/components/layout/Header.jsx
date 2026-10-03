@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Menu, ShoppingBag } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { AlertTriangle, MapPin, Phone, RefreshCw, Truck } from 'lucide-react';
 import { adminApi } from '../adminApi';
 import TrackingMapView from '../../components/order/TrackingMapView';

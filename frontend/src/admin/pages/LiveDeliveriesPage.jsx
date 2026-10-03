@@ -1,7 +1,7 @@
 import {
   useCallback, useEffect, useMemo, useRef, useState,
 } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import {
   AlertTriangle, MapPin, Phone, Radio, RefreshCw, Ruler, Search, Truck, X,
 } from 'lucide-react';

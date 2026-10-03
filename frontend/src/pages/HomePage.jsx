@@ -1,4 +1,4 @@
-import { useLoaderData } from 'react-router-dom';
+import { useLoaderData } from '../app/router';
 import HeroSlider from '../components/home/HeroSlider';
 import HomeFreeDeliveryBanner from '../components/home/HomeFreeDeliveryBanner';
 import HomeBrowseHub from '../components/home/HomeBrowseHub';

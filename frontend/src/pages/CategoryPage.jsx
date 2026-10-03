@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from '../app/router';
 import { fetchCategorySlugPath } from '../services/productApi';
 import { buildCategoryPath } from '../utils/categoryHelpers';
 import { CategoryGridSkeleton } from '../components/ui/Skeleton';

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronLeft, Save } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Loader from '../../components/ui/Loader';

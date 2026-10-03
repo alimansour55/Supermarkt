@@ -1,8 +1,9 @@
 /**
  * schema.org structured data builders (rendered as <script type="application/ld+json">).
+ * Paths are logical app paths; URLs are localized to `lang`.
  * Validate with https://search.google.com/test/rich-results
  */
-import { absoluteImage, absoluteUrl, pickLang, plainText, storeName } from './meta';
+import { absoluteImage, pageUrl, pickLang, plainText, storeName } from './meta';
 
 const SCHEMA = 'https://schema.org';
 
@@ -11,13 +12,14 @@ export function organizationJsonLd(settings, siteUrl, lang) {
   const sameAs = [social.facebook, social.instagram, social.x, social.youtube, settings?.whatsappUrl]
     .filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url));
   const address = pickLang(lang, settings?.defaultLocationAr, settings?.defaultLocationEn);
+  const home = pageUrl(siteUrl, lang, '/');
 
   return {
     '@context': SCHEMA,
     '@type': 'GroceryStore',
-    '@id': `${absoluteUrl(siteUrl, '/')}#store`,
+    '@id': `${pageUrl(siteUrl, 'ar', '/')}#store`,
     name: storeName(settings, lang),
-    url: absoluteUrl(siteUrl, '/'),
+    url: home,
     logo: absoluteImage(siteUrl, settings?.logoUrl) || undefined,
     image: absoluteImage(siteUrl, settings?.seo?.ogImageUrl || settings?.logoUrl) || undefined,
     telephone: settings?.supportPhone || undefined,
@@ -32,23 +34,23 @@ export function websiteJsonLd(settings, siteUrl, lang) {
   return {
     '@context': SCHEMA,
     '@type': 'WebSite',
-    '@id': `${absoluteUrl(siteUrl, '/')}#website`,
+    '@id': `${pageUrl(siteUrl, lang, '/')}#website`,
     name: storeName(settings, lang),
-    url: absoluteUrl(siteUrl, '/'),
+    url: pageUrl(siteUrl, lang, '/'),
     inLanguage: lang === 'en' ? 'en' : 'ar',
     potentialAction: {
       '@type': 'SearchAction',
       target: {
         '@type': 'EntryPoint',
-        urlTemplate: `${absoluteUrl(siteUrl, '/search/results')}?q={search_term_string}`,
+        urlTemplate: `${pageUrl(siteUrl, lang, '/search/results')}?q={search_term_string}`,
       },
       'query-input': 'required name=search_term_string',
     },
   };
 }
 
-/** @param {{ name: string, path: string }[]} items — home first */
-export function breadcrumbJsonLd(items, siteUrl) {
+/** @param {{ name: string, path: string }[]} items — home first, logical paths */
+export function breadcrumbJsonLd(items, siteUrl, lang) {
   const list = items.filter((item) => item?.name);
   if (list.length < 2) return null;
   return {
@@ -58,7 +60,7 @@ export function breadcrumbJsonLd(items, siteUrl) {
       '@type': 'ListItem',
       position: index + 1,
       name: item.name,
-      item: absoluteUrl(siteUrl, item.path),
+      item: pageUrl(siteUrl, lang, item.path),
     })),
   };
 }
@@ -78,7 +80,7 @@ function availability(inStock) {
 
 export function productJsonLd(product, { siteUrl, settings, lang, path }) {
   if (!product) return null;
-  const url = absoluteUrl(siteUrl, path);
+  const url = pageUrl(siteUrl, lang, path);
   const currency = settings?.currency || 'EGP';
   const name = pickLang(lang, product.nameAr || product.name, product.nameEn);
   const description = plainText(
@@ -137,7 +139,7 @@ export function productJsonLd(product, { siteUrl, settings, lang, path }) {
 }
 
 /** ItemList of product URLs for category / listing pages. */
-export function productListJsonLd(products, { siteUrl, name }) {
+export function productListJsonLd(products, { siteUrl, name, lang }) {
   const list = (products || []).filter((product) => product?.slug).slice(0, 30);
   if (!list.length) return null;
   return {
@@ -148,7 +150,24 @@ export function productListJsonLd(products, { siteUrl, name }) {
     itemListElement: list.map((product, index) => ({
       '@type': 'ListItem',
       position: index + 1,
-      url: absoluteUrl(siteUrl, `/products/${product.slug}`),
+      url: pageUrl(siteUrl, lang, `/products/${product.slug}`),
+    })),
+  };
+}
+
+/** ItemList of named links (e.g. categories). @param {{ name: string, path: string }[]} items */
+export function linkListJsonLd(items, { siteUrl, name, lang }) {
+  const list = (items || []).filter((item) => item?.name && item?.path);
+  if (!list.length) return null;
+  return {
+    '@context': SCHEMA,
+    '@type': 'ItemList',
+    name: name || undefined,
+    itemListElement: list.map((item, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: item.name,
+      url: pageUrl(siteUrl, lang, item.path),
     })),
   };
 }

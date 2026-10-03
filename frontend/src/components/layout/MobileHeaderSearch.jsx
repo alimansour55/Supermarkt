@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 

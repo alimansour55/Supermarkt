@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { fetchHeroBanners } from '../../services/bannerApi';

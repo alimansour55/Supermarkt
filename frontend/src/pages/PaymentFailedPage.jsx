@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from '../app/router';
 import { useLanguage } from '../context/LanguageContext';
 import Button from '../components/ui/Button';
 

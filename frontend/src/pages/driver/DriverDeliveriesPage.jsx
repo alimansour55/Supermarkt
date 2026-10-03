@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext } from '../../app/router';
 import {
   Banknote, History, ListChecks, LocateFixed, Loader2, Package, RefreshCw, Search, Truck, X,
 } from 'lucide-react';

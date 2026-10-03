@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '../../app/router';
 import {
   Search, Clock, Flame, Package, FolderOpen, X, ChevronDown,
 } from 'lucide-react';

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ExternalLink, MessageCircle } from 'lucide-react';
 import OrderChat from '../../components/order/OrderChat';
 import StatusBadge from './StatusBadge';

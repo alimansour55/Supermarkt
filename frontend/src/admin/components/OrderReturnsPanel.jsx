@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ExternalLink, RotateCcw } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import ReturnRequestForm from '../../components/order/ReturnRequestForm';

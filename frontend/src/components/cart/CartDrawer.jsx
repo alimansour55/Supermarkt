@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '../../app/router';
 import { ArrowLeft, ArrowRight, ShoppingBag, ShoppingCart, Sparkles, Trash2, X } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';

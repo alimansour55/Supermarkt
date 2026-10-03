@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useLoaderData, useSearchParams } from 'react-router-dom';
+import { useLoaderData, useSearchParams } from '../app/router';
 import { SlidersHorizontal, Tag } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchOffersPaginated, fetchProductFilters } from '../services/productApi';

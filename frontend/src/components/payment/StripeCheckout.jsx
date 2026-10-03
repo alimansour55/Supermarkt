@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import {
   X, Truck, User, ClipboardList, Globe, RefreshCw, Gift, Headphones,
 } from 'lucide-react';

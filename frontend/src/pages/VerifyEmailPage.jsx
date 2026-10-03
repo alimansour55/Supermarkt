@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useParams, useLocation } from 'react-router-dom';
+import { Link, useParams, useLocation } from '../app/router';
 import { useLanguage } from '../context/LanguageContext';
 import { authService } from '../services/apiServices';
 import Button from '../components/ui/Button';

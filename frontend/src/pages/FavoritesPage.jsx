@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../app/router';
 import { Heart } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useFavorites } from '../context/FavoritesContext';

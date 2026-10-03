@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../../app/router';
 import { ChevronLeft, Truck, MapPin, Navigation, Radar, Users, Zap } from 'lucide-react';
 import Input from '../../../components/ui/Input';
 import OsmMapCanvas from '../../../components/maps/OsmMapCanvas';

@@ -16,7 +16,7 @@ export function HydrateFallback() {
   return <PageLoader />;
 }
 
-export const meta = ({ matches }) => buildMeta({ matches, noindex: true });
+export const meta = ({ matches, location }) => buildMeta({ matches, location, noindex: true });
 
 export default function ClientOnlyRoute() {
   return <Outlet />;

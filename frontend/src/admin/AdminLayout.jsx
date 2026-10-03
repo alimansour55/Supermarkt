@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from '../app/router';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import AdminUIProvider from './components/AdminUIProvider';

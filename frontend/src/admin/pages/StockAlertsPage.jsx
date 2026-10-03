@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from '../../app/router';
 import {
   Download, ExternalLink, Package, RefreshCw, RotateCcw, X,
 } from 'lucide-react';

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronDown, Home, Link2, Tag } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';

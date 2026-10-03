@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronLeft, MapPinPlus, Radar, Save, Trash2 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Loader from '../../components/ui/Loader';

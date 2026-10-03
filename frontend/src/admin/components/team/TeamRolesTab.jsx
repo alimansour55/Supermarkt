@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Check, ChevronDown, ChevronUp, Crown, Store, ClipboardList, Truck, X, Users, ExternalLink,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../../app/router';
 import {
   PERMISSION_GROUPS,
   ROLE_GUIDE,

@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { formatPrice } from '../../utils/formatters';

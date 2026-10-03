@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate } from '../app/router';
 import { useAuth } from '../context/AuthContext';
 import Loader from '../components/ui/Loader';
 import { hasPermission } from './adminPermissions';

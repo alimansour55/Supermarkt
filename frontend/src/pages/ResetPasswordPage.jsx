@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from '../app/router';
 import { useLanguage } from '../context/LanguageContext';
 import { authService } from '../services/apiServices';
 import Input from '../components/ui/Input';

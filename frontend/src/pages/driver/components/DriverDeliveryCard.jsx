@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../../app/router';
 import {
   Banknote, ChevronLeft, ChevronRight, Clock, MapPin, Package,
 } from 'lucide-react';

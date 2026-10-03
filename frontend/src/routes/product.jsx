@@ -1,18 +1,19 @@
 /**
- * /products/:slug — server-rendered product page with Product + Breadcrumb structured data.
+ * /:lang/products/:slug — server-rendered product page with Product + Breadcrumb structured data.
  */
 import { data, redirect } from 'react-router';
 import ProductDetailsPage from '../pages/ProductDetailsPage';
 import { apiGet, apiGetSafe } from '../server/api.server';
 import { PUBLIC_PAGE_CACHE } from '../server/site.server';
-import { buildMeta, getRootData, pickLang, plainText, storeName } from '../seo/meta';
+import { buildMeta, getRootData, homeLabel, metaLang, pickLang, plainText, storeName } from '../seo/meta';
 import { breadcrumbJsonLd, productJsonLd } from '../seo/jsonLd';
+import { langFromPath, localizedPath, requestLang } from '../i18n/routing';
 import { buildCategoryPath } from '../utils/categoryHelpers';
 import { formatPrice } from '../utils/formatters';
 
 export default ProductDetailsPage;
 
-export async function loader({ params }) {
+export async function loader({ params, request }) {
   const slug = params.slug;
   let body;
   try {
@@ -30,7 +31,7 @@ export async function loader({ params }) {
 
   // Requested by id or an old slug → one canonical URL per product.
   if (product.slug && product.slug !== slug) {
-    throw redirect(`/products/${product.slug}`, 301);
+    throw redirect(localizedPath(requestLang(request), `/products/${product.slug}`), 301);
   }
 
   const categorySlug = product.categorySlug || product.category;
@@ -52,22 +53,23 @@ export function headers({ loaderHeaders }) {
 }
 
 // Same product, only the query string changed (e.g. ?variant=) — keep the loaded data.
-export function shouldRevalidate({ currentParams, nextParams }) {
-  return currentParams.slug !== nextParams.slug;
+export function shouldRevalidate({ currentParams, nextParams, currentUrl, nextUrl }) {
+  return currentParams.slug !== nextParams.slug
+    || langFromPath(currentUrl.pathname) !== langFromPath(nextUrl.pathname);
 }
 
-export function meta({ data: loaderData, matches, params }) {
-  const lang = 'ar';
+export function meta({ data: loaderData, matches, location, params }) {
+  const lang = metaLang(location);
   const path = `/products/${params.slug}`;
   const product = loaderData?.product;
 
   if (!product) {
     return buildMeta({
       matches,
+      location,
       path,
-      lang,
       noindex: true,
-      title: loaderData?.notFound ? 'المنتج غير موجود' : undefined,
+      title: loaderData?.notFound ? pickLang(lang, 'المنتج غير موجود', 'Product not found') : undefined,
     });
   }
 
@@ -75,13 +77,16 @@ export function meta({ data: loaderData, matches, params }) {
   const name = pickLang(lang, product.nameAr || product.name, product.nameEn);
   const brand = pickLang(lang, product.brandAr || product.brand, product.brandEn || product.brand);
   const price = formatPrice(product.price, lang, settings?.currency || 'EGP');
+  const store = storeName(settings, lang);
   const description = plainText(
     pickLang(lang, product.descriptionAr || product.description, product.descriptionEn),
-  ) || `اشترِ ${name}${brand ? ` من ${brand}` : ''} بسعر ${price} من ${storeName(settings, lang)} مع توصيل سريع.`;
+  ) || (lang === 'en'
+    ? `Buy ${name}${brand ? ` by ${brand}` : ''} for ${price} at ${store} with fast delivery.`
+    : `اشترِ ${name}${brand ? ` من ${brand}` : ''} بسعر ${price} من ${store} مع توصيل سريع.`);
 
   const chain = loaderData.categoryChain || [];
   const crumbs = [
-    { name: lang === 'ar' ? 'الرئيسية' : 'Home', path: '/' },
+    { name: homeLabel(lang), path: '/' },
     ...chain.map((cat, index) => ({
       name: pickLang(lang, cat.nameAr || cat.name, cat.nameEn),
       path: buildCategoryPath(chain.slice(0, index + 1).map((c) => c.slug).join('/')),
@@ -91,7 +96,7 @@ export function meta({ data: loaderData, matches, params }) {
 
   return buildMeta({
     matches,
-    lang,
+    location,
     path,
     type: 'product',
     title: brand && !name.toLowerCase().includes(brand.toLowerCase()) ? `${name} - ${brand}` : name,
@@ -99,7 +104,7 @@ export function meta({ data: loaderData, matches, params }) {
     image: product.images?.find((src) => /^https?:\/\//.test(src)) || product.image,
     jsonLd: [
       productJsonLd(product, { siteUrl, settings, lang, path }),
-      breadcrumbJsonLd(crumbs, siteUrl),
+      breadcrumbJsonLd(crumbs, siteUrl, lang),
     ],
   });
 }

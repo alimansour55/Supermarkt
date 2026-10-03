@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronLeft, MapPin, Package, Pencil } from 'lucide-react';
 import ProductImage from '../ui/ProductImage';
 import OrderProgressLine from './OrderProgressLine';

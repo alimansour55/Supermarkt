@@ -20,46 +20,51 @@ function metaContent(body, attr, name) {
 }
 
 test.describe('SEO: server-rendered HTML', () => {
-  test('product page has content, canonical and Product structured data', async ({ request }) => {
+  test('product page has content, canonical, hreflang and Product structured data', async ({ request }) => {
     const product = await firstProduct(request);
-    const { res, body } = await html(request, `/products/${product.slug}`);
+    const { res, body } = await html(request, `/ar/products/${product.slug}`);
     expect(res.status()).toBe(200);
 
     const name = product.nameAr || product.name;
-    expect(body).toContain(`<h1`);
+    expect(body).toContain('<html lang="ar" dir="rtl"');
+    expect(body).toContain('<h1');
     expect(body).toContain(name);
-    expect(body).toMatch(new RegExp(`<link rel="canonical" href="[^"]*/products/${product.slug}"`));
+    expect(body).toMatch(new RegExp(`<link rel="canonical" href="[^"]*/ar/products/${product.slug}"`));
+    expect(body).toMatch(new RegExp(`hreflang="en" href="[^"]*/en/products/${product.slug}"`, 'i'));
+    expect(body).toMatch(/hreflang="x-default"/i);
     expect(metaContent(body, 'name', 'robots')).toContain('index');
     expect(metaContent(body, 'property', 'og:title')).toContain(name);
 
-    const types = jsonLdBlocks(body).map((block) => block['@type']);
+    const blocks = jsonLdBlocks(body);
+    const types = blocks.map((block) => block['@type']);
     expect(types).toContain('Product');
     expect(types).toContain('BreadcrumbList');
-    const productLd = jsonLdBlocks(body).find((block) => block['@type'] === 'Product');
+    const productLd = blocks.find((block) => block['@type'] === 'Product');
     expect(productLd.offers.price ?? productLd.offers.lowPrice).toBeGreaterThan(0);
+    expect(productLd.offers.url).toContain('/ar/products/');
   });
 
   test('private fields never reach the page', async ({ request }) => {
     const product = await firstProduct(request);
-    const { body } = await html(request, `/products/${product.slug}`);
+    const { body } = await html(request, `/ar/products/${product.slug}`);
     expect(body).not.toContain('wholesalePrice');
     expect(body).not.toContain('stockHistory');
     expect(body).not.toContain('partnerRevenue');
   });
 
   test('unknown product returns 404 and noindex', async ({ request }) => {
-    const { res, body } = await html(request, '/products/this-product-does-not-exist-xyz');
+    const { res, body } = await html(request, '/ar/products/this-product-does-not-exist-xyz');
     expect(res.status()).toBe(404);
     expect(metaContent(body, 'name', 'robots')).toContain('noindex');
   });
 
   test('unknown URL returns 404', async ({ request }) => {
-    const { res } = await html(request, '/this-page-does-not-exist-123');
+    const { res } = await html(request, '/ar/this-page-does-not-exist-123');
     expect(res.status()).toBe(404);
   });
 
   test('home page has a heading and store structured data', async ({ request }) => {
-    const { res, body } = await html(request, '/');
+    const { res, body } = await html(request, '/ar');
     expect(res.status()).toBe(200);
     expect(body).toMatch(/<h1[^>]*>[^<]+<\/h1>/);
     const types = jsonLdBlocks(body).map((block) => block['@type']);
@@ -71,7 +76,7 @@ test.describe('SEO: server-rendered HTML', () => {
     const category = await firstCategory(request);
     const pathRes = await request.get(`/api/categories/path/${category.slug}`);
     const { slugPath } = await pathRes.json();
-    const { res, body } = await html(request, `/category/${slugPath}`);
+    const { res, body } = await html(request, `/ar/category/${slugPath}`);
     expect(res.status()).toBe(200);
     expect(body).toContain(category.nameAr || category.name);
     expect(jsonLdBlocks(body).map((block) => block['@type'])).toContain('BreadcrumbList');
@@ -79,22 +84,59 @@ test.describe('SEO: server-rendered HTML', () => {
 
   test('legacy /categories/:slug permanently redirects', async ({ request }) => {
     const category = await firstCategory(request);
-    const res = await request.get(`/categories/${category.slug}`, { maxRedirects: 0 });
+    const res = await request.get(`/ar/categories/${category.slug}`, { maxRedirects: 0 });
     expect(res.status()).toBe(301);
-    expect(res.headers().location).toMatch(/\/category\//);
+    expect(res.headers().location).toMatch(/\/ar\/category\//);
   });
 
   test('filtered listings are noindex, plain listings are indexable', async ({ request }) => {
-    const plain = await html(request, '/products');
+    const plain = await html(request, '/ar/products');
     expect(metaContent(plain.body, 'name', 'robots')).toContain('index, follow');
-    const filtered = await html(request, '/products?sort=price-asc');
+    const filtered = await html(request, '/ar/products?sort=price-asc');
     expect(metaContent(filtered.body, 'name', 'robots')).toContain('noindex');
   });
 
-  for (const path of ['/cart', '/checkout', '/login', '/orders', '/admin/login', '/driver/login', '/search/results?q=x']) {
+  for (const path of ['/ar/cart', '/ar/checkout', '/ar/login', '/en/orders', '/admin/login', '/driver/login', '/ar/search/results?q=x']) {
     test(`private page ${path} is noindex`, async ({ request }) => {
       const { body } = await html(request, path);
       expect(metaContent(body, 'name', 'robots')).toContain('noindex');
     });
   }
+
+  test('English pages are left-to-right with an English canonical', async ({ request }) => {
+    const { res, body } = await html(request, '/en/faq');
+    expect(res.status()).toBe(200);
+    expect(body).toContain('<html lang="en" dir="ltr"');
+    expect(body).toMatch(/<link rel="canonical" href="[^"]*\/en\/faq"/);
+  });
+});
+
+test.describe('SEO: language URLs and redirects', () => {
+  test('/ redirects to the Arabic home page', async ({ request }) => {
+    const res = await request.get('/', { maxRedirects: 0 });
+    expect([301, 302]).toContain(res.status());
+    expect(res.headers().location).toMatch(/\/ar$/);
+  });
+
+  test('old unprefixed URLs permanently redirect to /ar and keep the query', async ({ request }) => {
+    const product = await firstProduct(request);
+    const res = await request.get(`/products/${product.slug}?ref=old`, { maxRedirects: 0 });
+    expect(res.status()).toBe(301);
+    expect(res.headers().location).toMatch(new RegExp(`/ar/products/${product.slug}\\?ref=old$`));
+  });
+
+  test('admin and driver URLs are not localized', async ({ request }) => {
+    for (const path of ['/admin/login', '/driver/login']) {
+      const res = await request.get(path, { maxRedirects: 0 });
+      expect(res.status(), path).toBe(200);
+    }
+  });
+
+  test('internal links in server HTML carry the language prefix', async ({ request }) => {
+    const { body } = await html(request, '/en/products');
+    const hrefs = [...body.matchAll(/<a [^>]*href="(\/[^"]*)"/g)].map((match) => match[1]);
+    expect(hrefs.length).toBeGreaterThan(5);
+    const unprefixed = hrefs.filter((href) => !/^\/(en|ar)(\/|$|\?)/.test(href));
+    expect(unprefixed).toEqual([]);
+  });
 });

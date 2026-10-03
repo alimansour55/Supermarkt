@@ -11,7 +11,7 @@ import {
 import { Search, TrendingUp, AlertCircle, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { fetchSearchAnalytics } from '../../services/searchApi';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import TrendingSearchesAdmin from '../components/TrendingSearchesAdmin';
 import { Skeleton } from '../components/Skeleton';
 import { EmptyState } from '../components';

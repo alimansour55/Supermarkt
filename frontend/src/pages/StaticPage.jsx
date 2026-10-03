@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLoaderData, useLocation } from 'react-router-dom';
+import { Link, useLoaderData, useLocation } from '../app/router';
 import { useLanguage } from '../context/LanguageContext';
 import { useStoreSettings } from '../context/StoreSettingsContext';
 import { fetchContentPage } from '../services/contentPageApi';

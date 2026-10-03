@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 
 /** Shared height for the 3-up promo banner row (homepage + offers page). */
 export const PROMO_BANNER_TILE_HEIGHT = 'h-[128px] sm:h-[148px] lg:h-[160px]';

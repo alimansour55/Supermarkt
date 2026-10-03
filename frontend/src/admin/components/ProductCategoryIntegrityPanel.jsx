@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { AlertTriangle, CheckCircle2, Loader2, Wrench } from 'lucide-react';
 import { adminApi } from '../adminApi';
 import Button from '../../components/ui/Button';

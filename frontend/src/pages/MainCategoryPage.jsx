@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from '../app/router';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchSubcategories } from '../services/productApi';
 import SubcategoryGrid from '../components/category/SubcategoryGrid';

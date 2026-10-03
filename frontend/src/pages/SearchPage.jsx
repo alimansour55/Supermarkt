@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import SearchAutocomplete from '../components/search/SearchAutocomplete';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '../app/router';
 import { POPULAR_SEARCHES } from '../utils/searchConstants';
 import { getCategoryLabel, useCategories } from '../context/CategoriesContext';
 import { getRecentSearches } from '../utils/searchStorage';

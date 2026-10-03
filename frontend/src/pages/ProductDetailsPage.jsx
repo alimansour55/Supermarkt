@@ -1,4 +1,4 @@
-import { useParams, Link, useLoaderData } from 'react-router-dom';
+import { useParams, Link, useLoaderData } from '../app/router';
 import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
 import { Heart, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';

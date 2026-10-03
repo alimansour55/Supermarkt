@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Shield, Truck, UserPlus, Users, X } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';

@@ -1,4 +1,4 @@
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from '../../app/router';
 import { Home, Search, ShoppingCart, Heart, User } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';

@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation } from '../../app/router';
 import { Heart, LayoutGrid, LogOut, MapPin, RefreshCw, Settings, Sparkles, ShoppingBag, Wallet } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';

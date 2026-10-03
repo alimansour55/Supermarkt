@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../../app/router';
 import { BarChart3, ImagePlus, ShoppingCart, SquarePlus } from 'lucide-react';
 
 const ACTIONS = [

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Gift } from 'lucide-react';
 import Button from '../ui/Button';
 import { formatPrice } from '../../utils/formatters';

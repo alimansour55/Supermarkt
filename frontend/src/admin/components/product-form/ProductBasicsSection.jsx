@@ -1,5 +1,5 @@
 import { Controller } from 'react-hook-form';
-import { Link } from 'react-router-dom';
+import { Link } from '../../../app/router';
 import Input from '../../../components/ui/Input';
 import Textarea from '../../../components/ui/Textarea';
 import BrandFilterSelect from '../BrandFilterSelect';

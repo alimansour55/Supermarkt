@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from '../../app/router';
 import { ChevronDown, ExternalLink, LogOut, X } from 'lucide-react';
 import { ADMIN_NAV_GROUPS } from '../adminNavGroups';
 import { APP_NAME, APP_NAME_EN } from '../../utils/constants';

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';

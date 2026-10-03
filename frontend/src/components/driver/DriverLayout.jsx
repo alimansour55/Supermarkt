@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet } from '../../app/router';
 import { ListChecks, UserRound } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';

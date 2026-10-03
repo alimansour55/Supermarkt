@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronRight } from 'lucide-react';
 
 export default function AdminBreadcrumbs({ items, className = '' }) {

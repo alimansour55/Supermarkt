@@ -1,10 +1,10 @@
 /**
- * / — server-rendered home page (CMS sections) with Organization + WebSite structured data.
+ * /:lang — server-rendered home page (CMS sections) with Organization + WebSite structured data.
  */
 import HomePage from '../pages/HomePage';
 import { apiGetSafe } from '../server/api.server';
 import { PUBLIC_PAGE_CACHE } from '../server/site.server';
-import { buildMeta, defaultSeo, getRootData } from '../seo/meta';
+import { buildMeta, defaultSeo, getRootData, metaLang } from '../seo/meta';
 import { organizationJsonLd, websiteJsonLd } from '../seo/jsonLd';
 
 export default HomePage;
@@ -16,13 +16,13 @@ export async function loader() {
 
 export const headers = () => ({ 'Cache-Control': PUBLIC_PAGE_CACHE });
 
-export function meta({ matches }) {
-  const lang = 'ar';
+export function meta({ matches, location }) {
+  const lang = metaLang(location);
   const { settings, siteUrl } = getRootData(matches) || {};
   const defaults = defaultSeo(settings, lang);
   return buildMeta({
     matches,
-    lang,
+    location,
     path: '/',
     title: defaults.title,
     description: defaults.description,

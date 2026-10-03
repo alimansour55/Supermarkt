@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '../app/router';
 import {
   Check, ChevronDown, ChevronLeft, ChevronRight, CreditCard,
   MapPin, Pencil, ShieldCheck, Truck,

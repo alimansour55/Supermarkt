@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useLoaderData, useSearchParams } from 'react-router-dom';
+import { Link, useLoaderData, useSearchParams } from '../app/router';
 import { ArrowLeft } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchTodaysDealsPaginated } from '../services/productApi';

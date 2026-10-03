@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
 import ProductGrid from '../product/ProductGrid';
 import DealCountdown from './DealCountdown';

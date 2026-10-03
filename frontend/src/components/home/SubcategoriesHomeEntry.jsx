@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronLeft, LayoutGrid } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCategories } from '../../context/CategoriesContext';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '../../app/router';
 import { Calendar, Receipt } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';

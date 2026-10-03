@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import {
   ArrowDown, ArrowUp, Award, ExternalLink, RefreshCw, Sparkles, Star, Tag, Wrench,
 } from 'lucide-react';

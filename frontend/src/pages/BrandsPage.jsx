@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLoaderData } from 'react-router-dom';
+import { Link, useLoaderData } from '../app/router';
 import { Search, Tag, X } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchBrands } from '../services/brandApi';

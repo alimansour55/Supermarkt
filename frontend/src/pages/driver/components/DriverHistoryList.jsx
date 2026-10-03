@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../../app/router';
 import { Banknote, MapPin, Package } from 'lucide-react';
 import DriverStatusBadge from './DriverStatusBadge';
 import { formatDriverAddress, formatOrderTotal, paymentLabel } from '../driverUtils';

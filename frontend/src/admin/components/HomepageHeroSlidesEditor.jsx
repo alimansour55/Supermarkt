@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { GripVertical, ImagePlus, Plus, Trash2, Upload } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';

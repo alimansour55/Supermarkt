@@ -1,4 +1,4 @@
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext } from '../../app/router';
 import { LogOut, Package, Phone, ShieldCheck, UserRound, XCircle } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';

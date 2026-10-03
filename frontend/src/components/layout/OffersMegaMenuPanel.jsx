@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';

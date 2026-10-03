@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Star, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { reviewService } from '../../services/apiServices';
 import Button from '../ui/Button';

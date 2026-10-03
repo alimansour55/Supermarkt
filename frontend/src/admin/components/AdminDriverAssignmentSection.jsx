@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import {
   Check, ChevronDown, ChevronUp, ExternalLink, Phone, Radio, Truck, UserPlus, X,
 } from 'lucide-react';

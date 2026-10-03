@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from '../../app/router';
 import { MessageCircle, Package, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';

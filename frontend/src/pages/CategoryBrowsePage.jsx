@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLoaderData, useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useLoaderData, useParams, useSearchParams, useNavigate } from '../app/router';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchCategoryBrowse, fetchProductsByCategoryPath, fetchProductFilters } from '../services/productApi';
 import ProductGrid from '../components/product/ProductGrid';

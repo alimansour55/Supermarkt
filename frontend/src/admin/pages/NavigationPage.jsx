@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import {
   AlertTriangle, ChevronDown, ChevronUp, FileText, HelpCircle, LayoutTemplate, Link2, Menu, RefreshCw, X,
 } from 'lucide-react';

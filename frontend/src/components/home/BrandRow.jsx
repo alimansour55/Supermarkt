@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
 import { fetchBrands } from '../../services/brandApi';
 import { SHOP_BRANDS } from '../../data/shopBrands';

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Eye } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import Input from '../../components/ui/Input';
 import { adminApi } from '../adminApi';
 import { pickProductImage } from '../../utils/imageHelpers';

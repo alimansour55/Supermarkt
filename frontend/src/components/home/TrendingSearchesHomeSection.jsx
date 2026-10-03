@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
 import { fetchTrendingSearches, buildSearchResultsUrl, resolveTrendingSearchTerm } from '../../services/searchApi';
 import { POPULAR_SEARCHES } from '../../utils/searchConstants';

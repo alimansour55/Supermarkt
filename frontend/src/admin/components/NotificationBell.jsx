@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '../../app/router';
 import { Bell, MessageCircle, Package, ShoppingCart } from 'lucide-react';
 import { adminApi } from '../adminApi';
 import { formatRelativeTime } from '../../utils/formatters';

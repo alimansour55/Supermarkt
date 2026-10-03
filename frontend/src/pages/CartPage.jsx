@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from '../app/router';
 import { ArrowLeft, ArrowRight, ShoppingCart, Trash2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
