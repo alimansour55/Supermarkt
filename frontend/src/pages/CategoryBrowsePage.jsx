@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLoaderData, useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchCategoryBrowse, fetchProductsByCategoryPath, fetchProductFilters } from '../services/productApi';
 import ProductGrid from '../components/product/ProductGrid';
@@ -16,32 +16,15 @@ import { buildCategoryPath, categoryLabel } from '../utils/categoryHelpers';
 import { CategoryGridSkeleton } from '../components/ui/Skeleton';
 import CategoryImage from '../components/category/CategoryImage';
 import { productFiltersToParams } from '../utils/productFilterParams';
+import {
+  DEFAULT_CATEGORY_FILTERS,
+  categoryFiltersFromSearch,
+  paramsKey,
+} from '../utils/listingParams';
+import { useSsrSeed } from '../hooks/useSsrSeed';
 
-const DEFAULT_FILTERS = {
-  productSource: '',
-  brand: '',
-  minPrice: '',
-  maxPrice: '',
-  minRating: '',
-  offers: '',
-  inStock: '',
-  sort: '',
-  page: 1,
-};
-
-function paramsToFilters(params) {
-  return {
-    productSource: params.get('productSource') || '',
-    brand: params.get('brand') || '',
-    minPrice: params.get('minPrice') || '',
-    maxPrice: params.get('maxPrice') || '',
-    minRating: params.get('minRating') || '',
-    offers: params.get('offers') || '',
-    inStock: params.get('inStock') || '',
-    sort: params.get('sort') || '',
-    page: Number(params.get('page')) || 1,
-  };
-}
+const DEFAULT_FILTERS = DEFAULT_CATEGORY_FILTERS;
+const paramsToFilters = categoryFiltersFromSearch;
 
 export default function CategoryBrowsePage() {
   const params = useParams();
@@ -50,13 +33,21 @@ export default function CategoryBrowsePage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
   const [searchParams, setSearchParams] = useSearchParams();
+  // Server-rendered data for this exact category path (see routes/category-browse.jsx).
+  const loaderData = useLoaderData();
+  const ssr = loaderData?.slugPath === slugPath ? loaderData : null;
+  const ssrSlugPath = useRef(ssr?.browse ? slugPath : null);
+  const isSsrSeeded = useSsrSeed(ssr?.productsKey);
   const [filters, setFilters] = useState(() => paramsToFilters(searchParams));
   const [meta, setMeta] = useState(null);
-  const [browse, setBrowse] = useState(null);
-  const [siblingSubcategories, setSiblingSubcategories] = useState([]);
-  const [result, setResult] = useState({ products: [], pagination: null });
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const [browse, setBrowse] = useState(() => ssr?.browse || null);
+  const [siblingSubcategories, setSiblingSubcategories] = useState(() => ssr?.products?.subcategories || []);
+  const [result, setResult] = useState(() => ({
+    products: ssr?.products?.products || [],
+    pagination: ssr?.products?.pagination || null,
+  }));
+  const [loading, setLoading] = useState(() => !(ssr?.browse && (!ssr.browse.isLeaf || ssr.products)));
+  const [notFound, setNotFound] = useState(() => Boolean(ssr?.notFound));
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const chain = browse?.chain || [];
@@ -82,6 +73,8 @@ export default function CategoryBrowsePage() {
   };
 
   useEffect(() => {
+    if (ssrSlugPath.current === slugPath) return;
+    ssrSlugPath.current = null;
     setFilters({ ...DEFAULT_FILTERS });
     setBrowse(null);
     setSiblingSubcategories([]);
@@ -91,6 +84,8 @@ export default function CategoryBrowsePage() {
   }, [slugPath]);
 
   useEffect(() => {
+    // Category already rendered by the server.
+    if (ssrSlugPath.current === slugPath) return undefined;
     if (!slugPath) {
       setNotFound(true);
       setLoading(false);
@@ -131,6 +126,8 @@ export default function CategoryBrowsePage() {
 
   useEffect(() => {
     if (!slugPath || !browse?.isLeaf) return undefined;
+    // Products for these filters already rendered by the server.
+    if (isSsrSeeded(`${slugPath}|${paramsKey(filters)}`)) return undefined;
 
     let active = true;
     setLoading(true);
@@ -153,7 +150,7 @@ export default function CategoryBrowsePage() {
       });
 
     return () => { active = false; };
-  }, [slugPath, browse?.isLeaf, filters]);
+  }, [slugPath, browse?.isLeaf, filters, isSsrSeeded]);
 
   useEffect(() => {
     if (!isLeaf || !category?.slug) return undefined;

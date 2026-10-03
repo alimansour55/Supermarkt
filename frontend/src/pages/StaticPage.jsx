@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLoaderData, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useStoreSettings } from '../context/StoreSettingsContext';
 import { fetchContentPage } from '../services/contentPageApi';
@@ -17,29 +17,21 @@ const PATH_TO_SLUG = {
   '/careers': 'careers',
 };
 
-function setPageMeta({ title, description }) {
-  if (title) document.title = title;
-
-  let meta = document.querySelector('meta[name="description"]');
-  if (!meta) {
-    meta = document.createElement('meta');
-    meta.setAttribute('name', 'description');
-    document.head.appendChild(meta);
-  }
-  if (description) meta.setAttribute('content', description);
-}
-
 export default function StaticPage() {
   const { pathname } = useLocation();
   const { language } = useLanguage();
   const { settings } = useStoreSettings();
   const slug = PATH_TO_SLUG[pathname];
   const isAr = language === 'ar';
-  const [page, setPage] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const loaderData = useLoaderData();
+  const ssrPage = loaderData?.page?.slug === slug ? loaderData.page : null;
+  const [page, setPage] = useState(ssrPage);
+  const [loading, setLoading] = useState(!ssrPage);
+  const [notFound, setNotFound] = useState(Boolean(loaderData?.notFound));
 
   useEffect(() => {
+    // Already rendered by the server.
+    if (ssrPage) return;
     if (!slug) {
       setNotFound(true);
       setLoading(false);
@@ -62,34 +54,9 @@ export default function StaticPage() {
         setPage(null);
       })
       .finally(() => setLoading(false));
+  // `ssrPage` is derived from loader data for this slug.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
-
-  useEffect(() => {
-    if (!page) return;
-    const pageTitle = isAr ? page.titleAr : page.titleEn;
-    const seoTitleOverride = isAr ? page.seoTitleAr : page.seoTitleEn;
-    const storeName = isAr ? settings?.storeNameAr : settings?.storeNameEn;
-    const seoTitle = seoTitleOverride || (storeName ? `${pageTitle} — ${storeName}` : pageTitle);
-    const seoDescription = isAr ? page.seoDescriptionAr : page.seoDescriptionEn;
-    setPageMeta({ title: seoTitle, description: seoDescription });
-
-    // Leaving this static page: restore the site-wide default title/description
-    // (store name, or the admin's custom SEO override) so it doesn't linger on other routes.
-    return () => {
-      const defaultTitle = (isAr ? settings?.seo?.defaultTitleAr : settings?.seo?.defaultTitleEn) || storeName;
-      const defaultDescription = isAr ? settings?.seo?.defaultDescriptionAr : settings?.seo?.defaultDescriptionEn;
-      setPageMeta({ title: defaultTitle, description: defaultDescription });
-    };
-  }, [
-    page,
-    isAr,
-    settings?.storeNameAr,
-    settings?.storeNameEn,
-    settings?.seo?.defaultTitleAr,
-    settings?.seo?.defaultTitleEn,
-    settings?.seo?.defaultDescriptionAr,
-    settings?.seo?.defaultDescriptionEn,
-  ]);
 
   if (loading) return <PageContentSkeleton />;
 

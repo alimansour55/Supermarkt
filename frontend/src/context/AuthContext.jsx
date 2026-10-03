@@ -6,7 +6,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [token, setToken, removeToken] = useLocalStorage(STORAGE_KEYS.TOKEN, null);
+  const [token, setToken, removeToken, tokenReady] = useLocalStorage(STORAGE_KEYS.TOKEN, null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,6 +14,9 @@ export function AuthProvider({ children }) {
   const skipNextFetch = useRef(false);
 
   const fetchUser = useCallback(async () => {
+    // After SSR the stored token is read post-hydration — stay "loading" until then
+    // so protected routes don't redirect a signed-in user to /login.
+    if (!tokenReady) return;
     if (!token) {
       setUser(null);
       setLoading(false);
@@ -36,7 +39,7 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [token, removeToken]);
+  }, [token, tokenReady, removeToken]);
 
   useEffect(() => {
     fetchUser();

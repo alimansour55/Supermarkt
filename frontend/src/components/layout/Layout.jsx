@@ -14,11 +14,14 @@ import { useStoreSettings } from '../../context/StoreSettingsContext';
 export default function Layout() {
   const routerLocation = useRouterLocation();
   const { settings, loading: settingsLoading } = useStoreSettings();
-  const { confirmed, gateOpen } = useDeliveryLocation();
+  const { confirmed, confirmedReady, gateOpen } = useDeliveryLocation();
 
   const gateEnabled = Boolean(settings?.locationGate?.enabled);
+  // Never part of the server HTML: the popup only opens once the visitor's stored
+  // location choice has been read in the browser.
   const showGate = gateOpen
-    || (gateEnabled && !confirmed && !settingsLoading && !isLocationGateDismissedThisSession());
+    || (confirmedReady && gateEnabled && !confirmed && !settingsLoading
+      && !isLocationGateDismissedThisSession());
 
   return (
     <SupportChatProvider>

@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLoaderData } from 'react-router-dom';
 import { lazy, Suspense, useState, useMemo, useEffect } from 'react';
 import { Heart, Minus, Plus, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
@@ -55,7 +55,8 @@ export default function ProductDetailsPage() {
   const { language } = useLanguage();
   const { addItem } = useCart();
   const { isFavorite, toggleFavorite } = useFavorites();
-  const { product, loading, refetch } = useProduct(slug);
+  const loaderData = useLoaderData();
+  const { product, loading, refetch } = useProduct(slug, loaderData?.product);
   const [quantity, setQuantity] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [added, setAdded] = useState(false);

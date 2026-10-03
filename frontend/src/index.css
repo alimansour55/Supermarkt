@@ -487,3 +487,12 @@
     cursor: pointer;
   }
 }
+
+/* Top navigation progress bar (components/ui/NavigationProgress.jsx) */
+@keyframes nav-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+[dir='rtl'] .animate-\[nav-progress_1\.1s_ease-in-out_infinite\] {
+  animation-direction: reverse;
+}

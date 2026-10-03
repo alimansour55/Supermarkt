@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { isHydrating } from '../utils/hydration';
 
 function readStoredValue(key, initialValue) {
   try {
@@ -47,12 +48,30 @@ function removeStoredValue(key) {
 
 export function useLocalStorage(key, initialValue) {
   const memoryFallback = useRef(null);
+  // Hydration must match the server HTML, so stored values are applied after mount.
+  const deferredRead = useRef(isHydrating());
 
   const [storedValue, setStoredValue] = useState(() => {
+    if (deferredRead.current) return initialValue;
     const value = readStoredValue(key, initialValue);
     if (value !== initialValue) memoryFallback.current = value;
     return value;
   });
+  // False only until the deferred read has happened (first render after SSR).
+  const [ready, setReady] = useState(() => !deferredRead.current);
+
+  useEffect(() => {
+    if (!deferredRead.current) return;
+    deferredRead.current = false;
+    const value = readStoredValue(key, initialValue);
+    if (value !== initialValue) {
+      memoryFallback.current = value;
+      setStoredValue(value);
+    }
+    setReady(true);
+  // Runs once after the hydration render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setValue = useCallback(
     (value) => {
@@ -73,5 +92,5 @@ export function useLocalStorage(key, initialValue) {
     setStoredValue(initialValue);
   }, [key, initialValue]);
 
-  return [storedValue ?? memoryFallback.current, setValue, removeValue];
+  return [storedValue ?? memoryFallback.current, setValue, removeValue, ready];
 }

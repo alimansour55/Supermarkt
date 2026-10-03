@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLoaderData, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchProductsPaginated, fetchProductFilters } from '../services/productApi';
 import ProductGrid from '../components/product/ProductGrid';
@@ -17,6 +17,8 @@ import {
   productFiltersToApiParams,
   countActiveProductFilters,
 } from '../utils/productFilterParams';
+import { paramsKey } from '../utils/listingParams';
+import { useSsrSeed } from '../hooks/useSsrSeed';
 
 function filtersForMeta(filters) {
   const rest = { ...filters };
@@ -29,10 +31,12 @@ export default function ProductListingPage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
   const [searchParams, setSearchParams] = useSearchParams();
+  const loaderData = useLoaderData();
+  const isSsrSeeded = useSsrSeed(loaderData?.seedKey);
   const [filters, setFilters] = useState(() => paramsToProductFilters(searchParams));
   const [meta, setMeta] = useState(null);
-  const [result, setResult] = useState({ data: [], pagination: null });
-  const [loading, setLoading] = useState(true);
+  const [result, setResult] = useState(() => loaderData?.result || { data: [], pagination: null });
+  const [loading, setLoading] = useState(() => !loaderData?.result);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   useEffect(() => {
@@ -58,12 +62,13 @@ export default function ProductListingPage() {
   }, [filters]);
 
   useEffect(() => {
-    loadProducts();
+    // The server already rendered these exact results — don't fetch them again.
+    if (!isSsrSeeded(paramsKey(productFiltersToApiParams(filters)))) loadProducts();
     const next = productFiltersToParams(filters).toString();
     if (searchParams.toString() !== next) {
       setSearchParams(productFiltersToParams(filters), { replace: true });
     }
-  }, [filters, loadProducts, setSearchParams, searchParams]);
+  }, [filters, loadProducts, setSearchParams, searchParams, isSsrSeeded]);
 
   const updateFilters = (next) => setFilters(next);
   const clearFilters = () => setFilters({

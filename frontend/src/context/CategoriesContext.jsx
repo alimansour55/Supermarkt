@@ -9,6 +9,7 @@ import {
 } from '../utils/categoryHelpers';
 import { invalidateMegaMenuCache } from '../utils/megaMenuCache';
 import { readSessionCache, writeSessionCache } from '../utils/sessionCache';
+import { isHydrating } from '../utils/hydration';
 
 const CATEGORIES_CACHE_KEY = 'mp_categories_v1';
 
@@ -26,11 +27,27 @@ export function getCategoryLabel(category, isAr) {
   return isAr ? (category.nameAr || category.name) : (category.nameEn || category.name);
 }
 
-export function CategoriesProvider({ children }) {
-  const cached = readSessionCache(CATEGORIES_CACHE_KEY);
-  const [categories, setCategories] = useState(() => cached?.flat ?? []);
-  const [categoryTree, setCategoryTree] = useState(() => cached?.tree ?? []);
-  const [loading, setLoading] = useState(() => !cached);
+function fromTree(tree) {
+  if (!Array.isArray(tree) || !tree.length) return null;
+  return {
+    flat: flattenCategoryTree(tree).filter((cat) => cat.isActive !== false),
+    tree: tree.filter((cat) => cat.isActive !== false),
+  };
+}
+
+/**
+ * @param {object} props
+ * @param {object[]} [props.initialTree] category tree loaded during SSR (root loader)
+ */
+export function CategoriesProvider({ children, initialTree = null }) {
+  // SSR data wins; the session cache is only read outside hydration so the first
+  // browser render matches the server HTML.
+  const [initial] = useState(() => fromTree(initialTree)
+    || (isHydrating() ? null : readSessionCache(CATEGORIES_CACHE_KEY)));
+  const cached = initial;
+  const [categories, setCategories] = useState(() => initial?.flat ?? []);
+  const [categoryTree, setCategoryTree] = useState(() => initial?.tree ?? []);
+  const [loading, setLoading] = useState(() => !initial);
 
   const refetchCategories = useCallback(async (background = false) => {
     if (!background) setLoading(true);
@@ -62,7 +79,14 @@ export function CategoriesProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    if (initialTree?.length) {
+      // Fresh from the server — just prime the session cache.
+      writeSessionCache(CATEGORIES_CACHE_KEY, initial);
+      return;
+    }
     refetchCategories(Boolean(cached));
+  // Initial load only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetchCategories]);
 
   const rootCategories = useMemo(() => getRootCategories(categories), [categories]);

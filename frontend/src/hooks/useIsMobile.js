@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { isHydrating } from '../utils/hydration';
 
 export default function useIsMobile(breakpoint = 768) {
   const query = `(max-width: ${breakpoint - 1}px)`;
 
   const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false;
+    // Desktop layout on the server and during hydration; corrected in the effect.
+    if (isHydrating()) return false;
     return window.matchMedia(query).matches;
   });
 

@@ -1,4 +1,15 @@
 import { useState, useEffect } from 'react';
+import { isHydrating } from '../utils/hydration';
+
+/** Shown on the server and during hydration — the real time left differs per second. */
+const PENDING = {
+  total: null,
+  hours: 0,
+  minutes: 0,
+  seconds: 0,
+  label: '--:--:--',
+  expired: false,
+};
 
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -6,7 +17,7 @@ function pad(n) {
 
 /** Returns time left until `endDate` (updates every second). */
 export function useCountdown(endDate) {
-  const [left, setLeft] = useState(() => calcLeft(endDate));
+  const [left, setLeft] = useState(() => (isHydrating() ? PENDING : calcLeft(endDate)));
 
   useEffect(() => {
     const tick = () => setLeft(calcLeft(endDate));

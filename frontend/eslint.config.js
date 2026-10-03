@@ -48,8 +48,8 @@ export default defineConfig([
     },
   },
   {
-    // Node-side files (SSR server, build config)
-    files: ['server.js', '*.config.js'],
+    // Node-side files (SSR server, build config, route config, server-only modules)
+    files: ['server.js', '*.config.js', 'src/routes.js', 'src/**/*.server.js'],
     languageOptions: { globals: globals.node },
   },
 ])

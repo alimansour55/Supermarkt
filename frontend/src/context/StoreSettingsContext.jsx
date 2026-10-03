@@ -1,5 +1,4 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLanguage } from './LanguageContext';
 import { fetchStoreSettings } from '../services/storeSettingsApi';
 import { applySiteTheme, isThemePreviewActive, shouldApplyCommittedTheme } from '../utils/applySiteTheme';
 import { applySiteFont, shouldApplyCommittedFont } from '../utils/applySiteFont';
@@ -8,6 +7,7 @@ import { DEFAULT_SITE_FONT } from '../constants/siteFonts';
 import { normalizeThemeRotation } from '../constants/themeRotation';
 import { setThemeRotationStoppedHandler, startThemeRotation, stopThemeRotation } from '../utils/themeRotation';
 import { readSessionCache, writeSessionCache } from '../utils/sessionCache';
+import { isHydrating } from '../utils/hydration';
 
 const SETTINGS_CACHE_KEY = 'mp_store_settings_v2';
 
@@ -31,10 +31,17 @@ function applyCommittedAppearance(settings) {
   applySiteTheme(theme, { themeShade: shade });
 }
 
-export function StoreSettingsProvider({ children }) {
-  const { language } = useLanguage();
-  const [settings, setSettings] = useState(() => readSessionCache(SETTINGS_CACHE_KEY));
-  const [loading, setLoading] = useState(() => !readSessionCache(SETTINGS_CACHE_KEY));
+/**
+ * @param {object} props
+ * @param {object} [props.initialSettings] settings loaded during SSR (root loader)
+ */
+export function StoreSettingsProvider({ children, initialSettings = null }) {
+  // SSR data wins; the session cache is only read outside hydration so the first
+  // browser render matches the server HTML.
+  const [initial] = useState(() => initialSettings
+    || (isHydrating() ? null : readSessionCache(SETTINGS_CACHE_KEY)));
+  const [settings, setSettings] = useState(initial);
+  const [loading, setLoading] = useState(!initial);
   const settingsRef = useRef(settings);
 
   useEffect(() => {
@@ -52,6 +59,11 @@ export function StoreSettingsProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    if (initialSettings) {
+      // Fresh from the server — just prime the session cache.
+      writeSessionCache(SETTINGS_CACHE_KEY, initialSettings);
+      return undefined;
+    }
     let mounted = true;
     if (!settings) setLoading(true);
     fetchStoreSettings()
@@ -104,28 +116,6 @@ export function StoreSettingsProvider({ children }) {
     if (!shouldApplyCommittedFont(font)) return;
     applySiteFont(font);
   }, [settings?.siteFont]);
-
-  useEffect(() => {
-    if (!settings) return;
-    const isAr = language === 'ar';
-    const title = (isAr ? settings.seo?.defaultTitleAr : settings.seo?.defaultTitleEn)
-      || (isAr ? settings.storeNameAr : settings.storeNameEn);
-    const description = isAr ? settings.seo?.defaultDescriptionAr : settings.seo?.defaultDescriptionEn;
-    if (title) document.title = title;
-    if (description) {
-      let meta = document.querySelector('meta[name="description"]');
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.setAttribute('name', 'description');
-        document.head.appendChild(meta);
-      }
-      meta.setAttribute('content', description);
-    }
-    if (settings.faviconUrl) {
-      let link = document.querySelector('link[rel="icon"]');
-      if (link) link.setAttribute('href', settings.faviconUrl);
-    }
-  }, [language, settings]);
 
   const value = useMemo(
     () => ({ settings, loading, refreshSettings }),

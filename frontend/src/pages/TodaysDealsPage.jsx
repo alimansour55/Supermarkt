@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLoaderData, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchTodaysDealsPaginated } from '../services/productApi';
@@ -7,14 +7,16 @@ import ProductGrid from '../components/product/ProductGrid';
 import ProductGridSkeleton from '../components/product/ProductGridSkeleton';
 import { ProductPagination, ProductSortBar } from '../components/product/ProductFilters';
 import DealCountdown from '../components/home/DealCountdown';
+import {
+  TODAYS_DEALS_DEFAULT_SORT,
+  TODAYS_DEALS_PAGE_SIZE,
+  paramsKey,
+  parsePage,
+  todaysDealsApiParams,
+} from '../utils/listingParams';
+import { useSsrSeed } from '../hooks/useSsrSeed';
 
-const DEFAULT_SORT = 'discount';
-const PAGE_SIZE = 24;
-
-function parsePage(value) {
-  const page = Number(value) || 1;
-  return page < 1 ? 1 : page;
-}
+const DEFAULT_SORT = TODAYS_DEALS_DEFAULT_SORT;
 
 export default function TodaysDealsPage() {
   const { language } = useLanguage();
@@ -22,8 +24,10 @@ export default function TodaysDealsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sort, setSort] = useState(() => searchParams.get('sort') || DEFAULT_SORT);
   const [page, setPage] = useState(() => parsePage(searchParams.get('page')));
-  const [result, setResult] = useState({ data: [], pagination: null, meta: null });
-  const [loading, setLoading] = useState(true);
+  const loaderData = useLoaderData();
+  const isSsrSeeded = useSsrSeed(loaderData?.seedKey);
+  const [result, setResult] = useState(() => loaderData?.result || { data: [], pagination: null, meta: null });
+  const [loading, setLoading] = useState(() => !loaderData?.result);
 
   const countdownEnd = useMemo(() => {
     const raw = result.meta?.countdownEnd;
@@ -35,7 +39,7 @@ export default function TodaysDealsPage() {
   const loadDeals = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchTodaysDealsPaginated({ page, limit: PAGE_SIZE, sort });
+      const res = await fetchTodaysDealsPaginated({ page, limit: TODAYS_DEALS_PAGE_SIZE, sort });
       setResult(res);
     } finally {
       setLoading(false);
@@ -43,8 +47,10 @@ export default function TodaysDealsPage() {
   }, [page, sort]);
 
   useEffect(() => {
+    // The server already rendered these exact results — don't fetch them again.
+    if (isSsrSeeded(paramsKey(todaysDealsApiParams({ page, sort })))) return;
     loadDeals();
-  }, [loadDeals]);
+  }, [loadDeals, isSsrSeeded, page, sort]);
 
   useEffect(() => {
     const next = new URLSearchParams();

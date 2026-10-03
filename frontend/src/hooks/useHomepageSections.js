@@ -7,6 +7,7 @@ import {
   trackHomepageInflight,
 } from '../utils/homepageCache';
 import { seedProductListCache } from '../utils/productCache';
+import { isHydrating } from '../utils/hydration';
 
 function seedProductsFromSections(sections = []) {
   sections.forEach((section) => {
@@ -14,9 +15,15 @@ function seedProductsFromSections(sections = []) {
   });
 }
 
-export function useHomepageSections() {
-  const [sections, setSections] = useState(() => getCachedHomepageSections());
-  const [loading, setLoading] = useState(() => !getCachedHomepageSections());
+/**
+ * Homepage CMS sections.
+ * @param {object[]|null} [initialSections] sections from the SSR loader — used as-is, no refetch
+ */
+export function useHomepageSections(initialSections = null) {
+  const seeded = Array.isArray(initialSections) ? initialSections : null;
+  const readCache = () => (isHydrating() ? null : getCachedHomepageSections());
+  const [sections, setSections] = useState(() => seeded || readCache());
+  const [loading, setLoading] = useState(() => !(seeded || readCache()));
   const [error, setError] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -25,6 +32,13 @@ export function useHomepageSections() {
   }, []);
 
   useEffect(() => {
+    // Fresh from the server: prime the client caches and skip the network.
+    if (seeded && reloadKey === 0) {
+      setCachedHomepageSections(seeded);
+      seedProductsFromSections(seeded);
+      return undefined;
+    }
+
     const cached = getCachedHomepageSections();
     if (cached) {
       setSections(cached);
@@ -65,6 +79,8 @@ export function useHomepageSections() {
     return () => {
       active = false;
     };
+  // `seeded` comes from loader data captured on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadKey]);
 
   return { sections, loading: loading && !sections, error, refetch };

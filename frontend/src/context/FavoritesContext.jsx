@@ -1,5 +1,6 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { STORAGE_KEYS } from '../utils/constants';
+import { isHydrating } from '../utils/hydration';
 import { useAuth } from './AuthContext';
 import { favoriteService } from '../services/apiServices';
 import { fetchProductsByIds } from '../services/productApi';
@@ -39,16 +40,37 @@ const orderProductsByIds = (products, ids) => {
   return ids.map((id) => map.get(String(id))).filter(Boolean);
 };
 
+function readGuestFavoriteIds() {
+  return normalizeIds(readJson(STORAGE_KEYS.FAVORITES, []));
+}
+
+function readGuestFavoriteProducts() {
+  const products = normalizeProducts(readJson(STORAGE_KEYS.FAVORITE_PRODUCTS, []));
+  return orderProductsByIds(products, readGuestFavoriteIds());
+}
+
 export function FavoritesProvider({ children }) {
   const { isAuthenticated, user, token } = useAuth();
   const userId = user?.id || user?._id || null;
 
-  const [favorites, setFavorites] = useState(() => normalizeIds(readJson(STORAGE_KEYS.FAVORITES, [])));
-  const [favoriteProducts, setFavoriteProducts] = useState(() => {
-    const ids = normalizeIds(readJson(STORAGE_KEYS.FAVORITES, []));
-    const products = normalizeProducts(readJson(STORAGE_KEYS.FAVORITE_PRODUCTS, []));
-    return orderProductsByIds(products, ids);
-  });
+  // After SSR, guest favorites are read from storage post-hydration (see effect below).
+  const deferStorageRead = useRef(isHydrating());
+  const [favorites, setFavorites] = useState(() => (
+    deferStorageRead.current ? [] : readGuestFavoriteIds()
+  ));
+  const [favoriteProducts, setFavoriteProducts] = useState(() => (
+    deferStorageRead.current ? [] : readGuestFavoriteProducts()
+  ));
+
+  useEffect(() => {
+    if (!deferStorageRead.current) return;
+    deferStorageRead.current = false;
+    const ids = readGuestFavoriteIds();
+    if (ids.length) {
+      setFavorites(ids);
+      setFavoriteProducts(readGuestFavoriteProducts());
+    }
+  }, []);
   const [loading, setLoading] = useState(false);
 
   const syncedUserId = useRef(null);

@@ -9,7 +9,8 @@ const DEFAULT_LOCATION_ID = 'cairo-helwan';
 
 export function LocationProvider({ children }) {
   const [locationId, setLocationId] = useLocalStorage('marketplus_location', DEFAULT_LOCATION_ID);
-  const [confirmed, setConfirmed] = useLocalStorage('marketplus_location_confirmed', false);
+  // `confirmedReady` turns true once the stored choice has been read (after hydration).
+  const [confirmed, setConfirmed, , confirmedReady] = useLocalStorage('marketplus_location_confirmed', false);
   const [pin, setPin] = useLocalStorage('marketplus_location_pin', null);
   const [manualAddress, setManualAddress] = useLocalStorage('marketplus_location_address', null);
   const [zones, setZones] = useState(DELIVERY_LOCATIONS);
@@ -75,6 +76,7 @@ export function LocationProvider({ children }) {
       loading,
       refetchZones,
       confirmed,
+      confirmedReady,
       pin,
       manualAddress,
       confirmLocation,
@@ -85,7 +87,7 @@ export function LocationProvider({ children }) {
     };
   }, [
     zones, locationId, setLocationId, loading, refetchZones,
-    confirmed, pin, manualAddress, confirmLocation, resetLocationConfirmation,
+    confirmed, confirmedReady, pin, manualAddress, confirmLocation, resetLocationConfirmation,
     gateOpen, openGate, closeGate,
   ]);
 

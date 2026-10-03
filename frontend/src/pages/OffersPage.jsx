@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLoaderData, useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, Tag } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchOffersPaginated, fetchProductFilters } from '../services/productApi';
@@ -14,35 +14,22 @@ import PromoBanners from '../components/home/PromoBanners';
 import CategoryImage from '../components/category/CategoryImage';
 import { categoryLabel } from '../utils/categoryHelpers';
 import {
-  paramsToProductFilters,
   productFiltersToParams,
-  productFiltersToApiParams,
   countActiveProductFilters,
 } from '../utils/productFilterParams';
-
-const DEFAULT_OFFERS_FILTERS = {
-  mainCategory: '',
-  subCategory: '',
-  brand: '',
-  minPrice: '',
-  maxPrice: '',
-  minRating: '',
-  offers: 'true',
-  inStock: '',
-  sort: 'discount',
-  q: '',
-  page: 1,
-};
+import {
+  DEFAULT_OFFERS_FILTERS,
+  offersApiParams,
+  offersFiltersFromSearch,
+  paramsKey,
+} from '../utils/listingParams';
+import { useSsrSeed } from '../hooks/useSsrSeed';
 
 function filtersForMeta(filters) {
   const rest = { ...filters };
   delete rest.page;
   delete rest.sort;
   return { ...rest, offers: 'true' };
-}
-
-function filtersForApi(filters) {
-  return { ...productFiltersToApiParams(filters), offers: 'true' };
 }
 
 function OffersCategoryStrip({ meta, filters, onChange, isAr }) {
@@ -108,18 +95,12 @@ export default function OffersPage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
   const [searchParams, setSearchParams] = useSearchParams();
-  const [filters, setFilters] = useState(() => {
-    const fromUrl = paramsToProductFilters(searchParams);
-    return {
-      ...DEFAULT_OFFERS_FILTERS,
-      ...fromUrl,
-      offers: 'true',
-      sort: fromUrl.sort || DEFAULT_OFFERS_FILTERS.sort,
-    };
-  });
+  const loaderData = useLoaderData();
+  const isSsrSeeded = useSsrSeed(loaderData?.seedKey);
+  const [filters, setFilters] = useState(() => offersFiltersFromSearch(searchParams));
   const [meta, setMeta] = useState(null);
-  const [result, setResult] = useState({ data: [], pagination: null });
-  const [loading, setLoading] = useState(true);
+  const [result, setResult] = useState(() => loaderData?.result || { data: [], pagination: null });
+  const [loading, setLoading] = useState(() => !loaderData?.result);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   useEffect(() => {
@@ -146,7 +127,7 @@ export default function OffersPage() {
   const loadOffers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchOffersPaginated(filtersForApi(filters));
+      const res = await fetchOffersPaginated(offersApiParams(filters));
       setResult(res);
     } finally {
       setLoading(false);
@@ -154,12 +135,13 @@ export default function OffersPage() {
   }, [filters]);
 
   useEffect(() => {
-    loadOffers();
+    // The server already rendered these exact results — don't fetch them again.
+    if (!isSsrSeeded(paramsKey(offersApiParams(filters)))) loadOffers();
     const next = productFiltersToParams({ ...filters, offers: 'true' }).toString();
     if (searchParams.toString() !== next) {
       setSearchParams(productFiltersToParams({ ...filters, offers: 'true' }), { replace: true });
     }
-  }, [filters, loadOffers, setSearchParams, searchParams]);
+  }, [filters, loadOffers, setSearchParams, searchParams, isSsrSeeded]);
 
   const updateFilters = (next) => setFilters({ ...next, offers: 'true' });
   const clearFilters = () => setFilters({ ...DEFAULT_OFFERS_FILTERS });

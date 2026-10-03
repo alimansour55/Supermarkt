@@ -1,14 +1,7 @@
 import api from './api';
+import { normalizeStoreSettings } from '../utils/normalizeStoreSettings';
 
 export async function fetchStoreSettings() {
   const { data } = await api.get('/store-settings');
-  const settings = data.data;
-  if (!settings) return settings;
-  return {
-    ...settings,
-    aiChatEnabled: settings.aiChatEnabled !== false,
-    gpsDeliveryEnabled: settings.gpsDeliveryEnabled !== false,
-    freeDeliveryEnabled: settings.freeDeliveryEnabled !== false,
-    liveChat: { enabled: true, available: true, nextAvailableAt: null, ...(settings.liveChat || {}) },
-  };
+  return normalizeStoreSettings(data.data);
 }

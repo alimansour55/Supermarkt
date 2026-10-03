@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLoaderData } from 'react-router-dom';
 import { Search, Tag, X } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchBrands } from '../services/brandApi';
@@ -42,12 +42,16 @@ function BrandTile({ brand, isAr }) {
 export default function BrandsPage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
-  const [brands, setBrands] = useState(() => SHOP_BRANDS.map(normalizeBrandEntry));
-  const [loading, setLoading] = useState(true);
+  const loaderData = useLoaderData();
+  const ssrBrands = Array.isArray(loaderData?.brands) ? loaderData.brands : null;
+  const [brands, setBrands] = useState(() => (ssrBrands || SHOP_BRANDS).map(normalizeBrandEntry));
+  const [loading, setLoading] = useState(!ssrBrands);
   const [query, setQuery] = useState('');
   const [letter, setLetter] = useState(null);
 
   useEffect(() => {
+    // Already rendered by the server.
+    if (ssrBrands) return undefined;
     let active = true;
     setLoading(true);
     fetchBrands()
@@ -59,6 +63,8 @@ export default function BrandsPage() {
         if (active) setLoading(false);
       });
     return () => { active = false; };
+  // Mount only — `ssrBrands` is the loader data captured on first render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Index letter each brand is filed under, based on the displayed-language name.

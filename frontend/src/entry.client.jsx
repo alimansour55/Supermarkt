@@ -4,7 +4,9 @@ import { HydratedRouter } from 'react-router/dom';
 import { warmStorefront } from './utils/warmStorefront';
 import { clearChunkRetryFlags } from './app/lazyWithRetry';
 
-warmStorefront();
+// Server-rendered pages already carry their data; only the static Capacitor
+// build needs to warm the critical storefront APIs up front.
+if (window.__reactRouterContext?.isSpaMode) warmStorefront();
 
 startTransition(() => {
   hydrateRoot(
