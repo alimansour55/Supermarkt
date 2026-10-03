@@ -140,3 +140,32 @@ test.describe('SEO: language URLs and redirects', () => {
     expect(unprefixed).toEqual([]);
   });
 });
+
+test.describe('SEO: crawler files', () => {
+  test('robots.txt blocks private areas and links the sitemap', async ({ request }) => {
+    const res = await request.get('/robots.txt');
+    expect(res.status()).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('Disallow: /admin');
+    expect(body).toContain('Disallow: /*/checkout');
+    expect(body).toMatch(/Sitemap: https?:\/\/\S+\/sitemap\.xml/);
+  });
+
+  test('sitemap index lists page, category and product sitemaps', async ({ request }) => {
+    const res = await request.get('/sitemap.xml');
+    expect(res.status()).toBe(200);
+    expect(res.headers()['content-type']).toContain('xml');
+    const body = await res.text();
+    expect(body).toContain('<sitemapindex');
+    expect(body).toContain('/sitemaps/pages.xml');
+    expect(body).toContain('/sitemaps/products-1.xml');
+  });
+
+  test('product sitemap lists both languages with hreflang alternates', async ({ request }) => {
+    const product = await firstProduct(request);
+    const body = await (await request.get('/sitemaps/products-1.xml')).text();
+    expect(body).toMatch(new RegExp(`<loc>[^<]*/ar/products/${product.slug}</loc>`));
+    expect(body).toMatch(new RegExp(`<loc>[^<]*/en/products/${product.slug}</loc>`));
+    expect(body).toContain('hreflang="x-default"');
+  });
+});

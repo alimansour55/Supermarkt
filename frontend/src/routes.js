@@ -105,6 +105,13 @@ export default [
     ]),
   ]),
 
+  // Crawler files (resource routes — server build only)
+  ...(isSpa ? [] : [
+    route('robots.txt', 'routes/robots.js'),
+    route('sitemap.xml', 'routes/sitemap-index.js'),
+    route('sitemaps/:name', 'routes/sitemap-file.js'),
+  ]),
+
   // / → /ar
   index(seo('routes/root-redirect.jsx', 'app/layouts/RootRedirect.jsx')),
 
