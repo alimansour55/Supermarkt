@@ -176,6 +176,14 @@ Fawry cash payments and valU can't be refunded electronically: the refund is rec
 **Safety**: payment state changes only on a verified signature (Paymob HMAC-SHA512, Fawry SHA-256) or a direct
 status query to the gateway; amounts are checked against the order total; duplicate callbacks are no-ops.
 
+## Push notifications (Firebase)
+
+Dormant until `FIREBASE_SERVICE_ACCOUNT_JSON` (base64 or raw JSON) or `FIREBASE_SERVICE_ACCOUNT_FILE`
+is set in `backend/.env`. Then every customer notification (order status, wallet, support) is also
+pushed to the customer's phones in their app language, and admin → **App push notifications** can
+broadcast offers to all app users. App-side setup (google-services.json, GoogleService-Info.plist,
+APNs key) is in the Flutter project's `PUSH_SETUP.md`.
+
 ## Product search (Meilisearch)
 
 Search runs on Meilisearch: typo-tolerant, Arabic-normalized (أ/إ/آ → ا, ة → ه, ى → ي, Arabic digits),

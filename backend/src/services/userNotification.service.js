@@ -1,4 +1,5 @@
 import UserNotification from '../models/UserNotification.js';
+import { sendPushToUser } from './push.service.js';
 
 export async function createUserNotification({
   userId,
@@ -11,7 +12,7 @@ export async function createUserNotification({
   data = {},
 }) {
   if (!userId) return null;
-  return UserNotification.create({
+  const notification = await UserNotification.create({
     user: userId,
     type,
     titleAr,
@@ -21,6 +22,17 @@ export async function createUserNotification({
     link,
     data,
   });
+  // Every in-app notification also rings the customer's phone (no-op until Firebase is
+  // configured). Not awaited: a slow push must never delay the request that triggered it.
+  sendPushToUser(userId, {
+    titleAr,
+    titleEn,
+    bodyAr: messageAr,
+    bodyEn: messageEn,
+    link,
+    data: { type, notificationId: String(notification._id), ...(data?.orderId ? { orderId: String(data.orderId) } : {}) },
+  });
+  return notification;
 }
 
 export async function getUserNotifications(userId, { page = 1, limit = 20, unreadOnly = false } = {}) {

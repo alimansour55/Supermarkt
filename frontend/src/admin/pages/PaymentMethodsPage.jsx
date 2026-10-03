@@ -13,7 +13,9 @@ function sortMethods(methods) {
 }
 
 function CheckoutPreview({ methods, isAr }) {
-  const enabled = sortMethods(methods).filter((method) => method.enabled !== false);
+  // What customers actually see: enabled, and (for gateways) configured on the server.
+  const enabled = sortMethods(methods)
+    .filter((method) => method.enabled !== false && method.gatewayConfigured !== false);
 
   if (!enabled.length) {
     return (

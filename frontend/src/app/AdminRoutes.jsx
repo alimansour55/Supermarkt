@@ -54,6 +54,7 @@ export default function AdminRoutes() {
         <Route path="payments" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.PaymentMethodsPage /></P.AdminPermissionRoute>)} />
         <Route path="customer-service" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.CustomerServiceSettingsPage /></P.AdminPermissionRoute>)} />
         <Route path="notifications" element={withSuspense(<P.AdminPermissionRoute permission="notifications:write"><P.NotificationTemplatesPage /></P.AdminPermissionRoute>)} />
+        <Route path="push" element={withSuspense(<P.AdminPermissionRoute permission="notifications:write"><P.PushNotificationsPage /></P.AdminPermissionRoute>)} />
         <Route path="settings">
           <Route index element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.StoreSettingsPage /></P.AdminPermissionRoute>)} />
           <Route path="identity" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.StoreIdentitySettingsPage /></P.AdminPermissionRoute>)} />

@@ -275,6 +275,8 @@ export const adminApi = {
   adjustUserWallet: (userId, data) => api.post(`/wallet/admin/users/${userId}/adjust`, data),
 
   getNotificationTemplates: () => api.get('/notification-templates/admin'),
+  getPushStats: () => api.get('/push/admin/stats'),
+  sendPushBroadcast: (data) => api.post('/push/admin/broadcast', data),
   getNotificationTemplate: (key) => api.get(`/notification-templates/admin/${key}`),
   updateNotificationTemplate: (key, data) => api.put(`/notification-templates/admin/${key}`, data),
   seedNotificationTemplates: () => api.post('/notification-templates/admin/seed'),
