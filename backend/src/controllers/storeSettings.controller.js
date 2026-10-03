@@ -768,9 +768,13 @@ const serializeSettings = (settings) => (
   settings?.toObject ? settings.toObject({ flattenMaps: true }) : settings
 );
 
+/** Internal-only settings — served by GET /store-settings/admin, never to the storefront. */
+const ADMIN_ONLY_SETTINGS_KEYS = ['partnerRevenue', 'driverSettings', 'adminPanel'];
+
 export const getPublicStoreSettings = asyncHandler(async (_req, res) => {
   const settings = await getOrCreateSettings();
   const data = serializeSettings(settings);
+  ADMIN_ONLY_SETTINGS_KEYS.forEach((key) => { delete data[key]; });
   if (data.liveChat) {
     const available = isLiveChatAvailableNow(data.liveChat);
     data.liveChat = {

@@ -8,6 +8,7 @@ import cookieParser from 'cookie-parser';
 import routes from './routes/index.js';
 import { stripeWebhook } from './controllers/payment.controller.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
+import { hidePrivateFields } from './middleware/hidePrivateFields.js';
 import { corsOptions } from './config/cors.js';
 
 const app = express();
@@ -34,7 +35,7 @@ app.get('/', (_req, res) => {
   });
 });
 
-app.use('/api', routes);
+app.use('/api', hidePrivateFields, routes);
 
 app.use(notFound);
 app.use(errorHandler);
