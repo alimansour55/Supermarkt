@@ -350,6 +350,10 @@ const orderSchema = new mongoose.Schema(
     deliveryFailureReasonKey: { type: String, trim: true, default: '' },
     deliveryFailureReasonAr: { type: String, trim: true, default: '' },
     deliveryFailureReasonEn: { type: String, trim: true, default: '' },
+    deliveryProofPhoto: {
+      url: { type: String, trim: true, default: '' },
+      publicId: { type: String, trim: true, default: '' },
+    },
     statusHistory: {
       type: [
         {
@@ -361,6 +365,22 @@ const orderSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    /**
+     * Two-stage recycle bin. `none` = active/visible order. `bin1` = soft-deleted,
+     * fully restorable. `bin2` = second-stage bin; `purgeAt` drives a Mongo TTL
+     * index that lets the database itself hard-delete the document ~30 days
+     * later, so purging keeps working even if the app server is down.
+     */
+    trash: {
+      stage: { type: String, enum: ['none', 'bin1', 'bin2'], default: 'none' },
+      bin1At: { type: Date, default: null },
+      bin1By: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      bin2At: { type: Date, default: null },
+      bin2By: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      purgeAt: { type: Date, default: null },
+      restoredAt: { type: Date, default: null },
+      restoredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    },
   },
   { timestamps: true },
 );
@@ -369,6 +389,11 @@ orderSchema.index({ assignedDriver: 1, orderStatus: 1 });
 
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index({ 'returns.status': 1 });
+orderSchema.index({ 'trash.stage': 1, createdAt: -1 });
+// TTL index: MongoDB's background task removes a document ~60s after
+// `trash.purgeAt` passes. Documents with `purgeAt: null` (i.e. not in bin2)
+// are ignored by the TTL monitor, so this only ever affects bin2 orders.
+orderSchema.index({ 'trash.purgeAt': 1 }, { expireAfterSeconds: 0 });
 
 orderSchema.pre('validate', function validateOrderStatus(next) {
   if (this.orderStatus && !ORDER_STATUS_VALUES.includes(this.orderStatus)) {

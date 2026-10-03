@@ -55,7 +55,7 @@ import {
   listPublicDeliveryZones,
   validateDeliveryForZone,
 } from '../services/deliveryZone.service.js';
-import { anyZoneHasCoords, findCoveringZone } from '../utils/zoneCoverage.js';
+import { anyZoneHasCoords, findCoveringZone, haversineKm } from '../utils/zoneCoverage.js';
 import { resolveFulfillmentLocationForZone } from '../services/fulfillmentLocation.service.js';
 import { enrichAndValidateAddress } from '../services/addressEnrichment.service.js';
 import {
@@ -99,9 +99,12 @@ import {
   formatSubscription,
 } from '../services/recurringDelivery.service.js';
 
-const ADMIN_ORDER_SORT = ['createdAt', 'total', 'orderNumber'];
+export const ADMIN_ORDER_SORT = ['createdAt', 'total', 'orderNumber'];
 
-function buildAdminOrderFilter(query) {
+/** Orders in the recycle bin (either stage) are hidden from the regular admin list/export. */
+const NOT_TRASHED = { 'trash.stage': { $nin: ['bin1', 'bin2'] } };
+
+export function buildAdminOrderFilter(query) {
   const filter = {};
   if (query.orderStatus) {
     // `confirmed` is a legacy alias of `preparing` (see orderStatuses.js) — keep
@@ -267,22 +270,42 @@ export const createOrder = asyncHandler(async (req, res) => {
   const customerPinLat = enrichedShipping.lat ?? (hasCustomerPin ? rawPinLat : null);
   const customerPinLng = enrichedShipping.lng ?? (hasCustomerPin ? rawPinLng : null);
 
-  // Delivery-area coverage: reject pins that fall outside every active zone's radius.
+  // Delivery-area coverage. The coverage areas (the umbrella — one or more independent
+  // circles) are the hard boundary when configured — they always win over any single zone's
+  // radius. Delivery zones inside them are only used to price/schedule the order, not to
+  // grant coverage on their own.
   if (
     storeSettings?.locationGate?.enabled
     && storeSettings?.locationGate?.enforceCoverage !== false
     && customerPinLat != null
     && customerPinLng != null
   ) {
-    const activeZones = await listPublicDeliveryZones();
-    if (anyZoneHasCoords(activeZones)
-      && !findCoveringZone(activeZones, { lat: customerPinLat, lng: customerPinLng })) {
-      throw new AppError(
-        lang === 'ar'
-          ? 'عذراً! لا نغطي هذه المنطقة.'
-          : 'Sorry! We do not deliver to this area.',
-        400,
+    const gate = storeSettings.locationGate;
+    const coverageAreas = Array.isArray(gate?.coverageAreas)
+      ? gate.coverageAreas.filter((a) => Number.isFinite(a?.lat) && Number.isFinite(a?.lng)
+        && Number.isFinite(a?.radiusKm) && a.radiusKm > 0)
+      : [];
+
+    const notCoveredError = () => new AppError(
+      lang === 'ar'
+        ? 'عذراً! لا نغطي هذه المنطقة.'
+        : 'Sorry! We do not deliver to this area.',
+      400,
+    );
+
+    if (coverageAreas.length) {
+      const withinAnyArea = coverageAreas.some(
+        (area) => haversineKm({ lat: customerPinLat, lng: customerPinLng }, area) <= area.radiusKm,
       );
+      if (!withinAnyArea) {
+        throw notCoveredError();
+      }
+    } else {
+      const activeZones = await listPublicDeliveryZones();
+      if (anyZoneHasCoords(activeZones)
+        && !findCoveringZone(activeZones, { lat: customerPinLat, lng: customerPinLng })) {
+        throw notCoveredError();
+      }
     }
   }
 
@@ -426,63 +449,73 @@ export const createOrder = asyncHandler(async (req, res) => {
     couponClaimed = totals.appliedCoupon.code;
   }
 
-  const order = await Order.create({
-    orderNumber: generateOrderNumber(),
-    user: req.user._id,
-    items: orderItems,
-    shippingAddress: {
-      label: enrichedShipping.label || shippingAddress.label,
-      street: enrichedShipping.street,
-      building: enrichedShipping.building,
-      floor: enrichedShipping.floor,
-      city: enrichedShipping.city || area,
-      governorate: enrichedShipping.governorate,
-      area: enrichedShipping.area || area,
-      postalCode: enrichedShipping.postalCode,
-      lat: customerPinLat,
-      lng: customerPinLng,
-      formattedAddress: enrichedShipping.formattedAddress || shippingAddress.formattedAddress || '',
-      placeId: enrichedShipping.placeId || shippingAddress.placeId || '',
-      locationSource: enrichedShipping.locationSource || shippingAddress.locationSource || '',
-    },
-    phone,
-    alternatePhone: normalizedAlternatePhone || undefined,
-    subtotal: totals.subtotal,
-    deliveryFee: totals.deliveryFee,
-    discount: totals.discountAmount,
-    pointsRedeemed: totals.pointsRedeemed,
-    pointsDiscount: totals.pointsDiscount,
-    walletAmount: totals.walletApplied || 0,
-    couponCode: totals.appliedCoupon?.code || discountCode || null,
-    total: totals.total,
-    paymentMethod,
-    manualPaymentAccount: manualPaymentAccount || undefined,
-    paymentProofUrl: paymentProofUrl || undefined,
-    paymentProofPublicId: paymentProofPublicId || undefined,
-    paymentProofUploadedAt: paymentProofUploadedAt || undefined,
-    deliveryMethod,
-    deliveryZone: /^[a-f\d]{24}$/i.test(deliveryZone._id) ? deliveryZone._id : null,
-    deliveryZoneNameAr: deliveryZone.nameAr,
-    deliveryZoneNameEn: deliveryZone.nameEn,
-    deliveryTimeSlot: selectedSlot ? {
-      labelAr: selectedSlot.labelAr,
-      labelEn: selectedSlot.labelEn,
-      from: selectedSlot.from,
-      to: selectedSlot.to,
-    } : undefined,
-    scheduledDate: parsedScheduledDate,
-    recurringDelivery: deliveryMethod === 'recurring' ? {
-      frequency: recurringFrequency,
-      preferredWeekday: recurringFrequency !== 'monthly' ? Number(recurringPreferredWeekday) : null,
-      preferredDayOfMonth: recurringFrequency === 'monthly' ? Number(recurringPreferredDayOfMonth) : null,
-      isFirstDelivery: true,
-    } : undefined,
-    notes,
-    paymentStatus: 'pending',
-    orderStatus: 'pending',
-    fulfillmentLocationId: fulfillmentLocation?._id ?? null,
-    statusHistory: [{ status: 'pending', changedAt: new Date() }],
-  });
+  const orderNumber = await generateOrderNumber();
+
+  let order;
+  try {
+    order = await Order.create({
+      orderNumber,
+      user: req.user._id,
+      items: orderItems,
+      shippingAddress: {
+        label: enrichedShipping.label || shippingAddress.label,
+        street: enrichedShipping.street,
+        building: enrichedShipping.building,
+        floor: enrichedShipping.floor,
+        city: enrichedShipping.city || area,
+        governorate: enrichedShipping.governorate,
+        area: enrichedShipping.area || area,
+        postalCode: enrichedShipping.postalCode,
+        lat: customerPinLat,
+        lng: customerPinLng,
+        formattedAddress: enrichedShipping.formattedAddress || shippingAddress.formattedAddress || '',
+        placeId: enrichedShipping.placeId || shippingAddress.placeId || '',
+        locationSource: enrichedShipping.locationSource || shippingAddress.locationSource || '',
+      },
+      phone,
+      alternatePhone: normalizedAlternatePhone || undefined,
+      subtotal: totals.subtotal,
+      deliveryFee: totals.deliveryFee,
+      discount: totals.discountAmount,
+      pointsRedeemed: totals.pointsRedeemed,
+      pointsDiscount: totals.pointsDiscount,
+      walletAmount: totals.walletApplied || 0,
+      couponCode: totals.appliedCoupon?.code || discountCode || null,
+      total: totals.total,
+      paymentMethod,
+      manualPaymentAccount: manualPaymentAccount || undefined,
+      paymentProofUrl: paymentProofUrl || undefined,
+      paymentProofPublicId: paymentProofPublicId || undefined,
+      paymentProofUploadedAt: paymentProofUploadedAt || undefined,
+      deliveryMethod,
+      deliveryZone: /^[a-f\d]{24}$/i.test(deliveryZone._id) ? deliveryZone._id : null,
+      deliveryZoneNameAr: deliveryZone.nameAr,
+      deliveryZoneNameEn: deliveryZone.nameEn,
+      deliveryTimeSlot: selectedSlot ? {
+        labelAr: selectedSlot.labelAr,
+        labelEn: selectedSlot.labelEn,
+        from: selectedSlot.from,
+        to: selectedSlot.to,
+      } : undefined,
+      scheduledDate: parsedScheduledDate,
+      recurringDelivery: deliveryMethod === 'recurring' ? {
+        frequency: recurringFrequency,
+        preferredWeekday: recurringFrequency !== 'monthly' ? Number(recurringPreferredWeekday) : null,
+        preferredDayOfMonth: recurringFrequency === 'monthly' ? Number(recurringPreferredDayOfMonth) : null,
+        isFirstDelivery: true,
+      } : undefined,
+      notes,
+      paymentStatus: 'pending',
+      orderStatus: 'pending',
+      fulfillmentLocationId: fulfillmentLocation?._id ?? null,
+      statusHistory: [{ status: 'pending', changedAt: new Date() }],
+    });
+  } catch (err) {
+    // The coupon slot was already claimed above — hand it back if the order
+    // itself couldn't be persisted, same as every other failure path below.
+    if (couponClaimed) await releaseCouponRedemption(couponClaimed);
+    throw err;
+  }
 
   if (totals.pointsRedeemed > 0) {
     const updatedUser = await redeemPointsForOrder({
@@ -850,7 +883,7 @@ export const getAdminOrderChats = asyncHandler(async (req, res) => {
 
 export const getAdminOrders = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
-  const filter = buildAdminOrderFilter(req.query);
+  const filter = { ...buildAdminOrderFilter(req.query), ...NOT_TRASHED };
   const sort = parseSort(req.query, ADMIN_ORDER_SORT);
 
   const [orders, total] = await Promise.all([
@@ -873,7 +906,7 @@ export const getAdminOrders = asyncHandler(async (req, res) => {
 });
 
 export const exportAdminOrders = asyncHandler(async (req, res) => {
-  const filter = buildAdminOrderFilter(req.query);
+  const filter = { ...buildAdminOrderFilter(req.query), ...NOT_TRASHED };
   const sort = parseSort(req.query, ADMIN_ORDER_SORT);
 
   const orders = await Order.find(filter)

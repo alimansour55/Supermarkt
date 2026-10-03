@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { MessageCircle, Package, ShoppingCart } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -8,9 +8,14 @@ import { downloadBlob } from '../utils/downloadBlob';
 import OrderDetailPanel from '../components/OrderDetailPanel';
 import OrdersListPanel from '../components/orders/OrdersListPanel';
 import { useAdminStats } from '../context/AdminStatsContext';
-import { useToast } from '../components';
+import { useConfirm, useToast } from '../components';
 import { scrollToTop } from '../../utils/scrollToTop';
 import { useOrderChat } from '../../hooks/useOrderChat';
+import { TRASHABLE_STATUSES } from '../../constants/orderFlow';
+import { ORDER_STATUSES } from '../adminConstants';
+import OrderNumberChip from '../components/OrderNumberChip';
+import { hasPermission } from '../adminPermissions';
+import { useAuth } from '../../context/AuthContext';
 
 const INITIAL_FILTERS = {
   orderStatus: '',
@@ -23,8 +28,12 @@ export default function OrdersPage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
   const toast = useToast();
+  const confirm = useConfirm();
+  const { user } = useAuth();
+  const canBulkDelete = hasPermission(user, 'orders:delete');
   const [searchParams, setSearchParams] = useSearchParams();
   const orderFromUrl = searchParams.get('order');
+  const statusFromUrl = searchParams.get('status');
   const [selectedId, setSelectedId] = useState(null);
   const [selected, setSelected] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -33,6 +42,7 @@ export default function OrdersPage() {
   const [drivers, setDrivers] = useState([]);
   const [highlightChat, setHighlightChat] = useState(false);
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const [bulkTrashing, setBulkTrashing] = useState(false);
 
   const refreshDrivers = useCallback(() => {
     adminApi.getDeliveryStaff()
@@ -50,9 +60,13 @@ export default function OrdersPage() {
     refreshStats,
   } = useAdminStats();
 
+  const validStatusFromUrl = ORDER_STATUSES.some((s) => s.value === statusFromUrl) ? statusFromUrl : '';
+
   const list = useAdminListPage({
     fetchFn: (params) => adminApi.getOrders(params),
-    initialFilters: INITIAL_FILTERS,
+    initialFilters: validStatusFromUrl
+      ? { ...INITIAL_FILTERS, orderStatus: validStatusFromUrl }
+      : INITIAL_FILTERS,
   });
 
   const loadDetail = useCallback(async (orderId, { updateUrl = true } = {}) => {
@@ -248,6 +262,29 @@ export default function OrdersPage() {
           setUpdating(false);
           return;
         }
+        case 'trash': {
+          const ok = await confirm({
+            title: isAr ? 'نقل الطلب لسلة المحذوفات' : 'Move order to the recycle bin',
+            message: isAr
+              ? `سيتم نقل الطلب #${selected?.orderNumber} إلى سلة المحذوفات. يمكن استرجاعه من هناك.`
+              : `Order #${selected?.orderNumber} will move to the recycle bin. It can be restored from there.`,
+            confirmLabel: isAr ? 'نقل' : 'Move',
+            variant: 'danger',
+          });
+          if (!ok) {
+            setUpdating(false);
+            return;
+          }
+          await adminApi.trashOrder(selectedId);
+          toast.success(isAr ? 'تم نقل الطلب لسلة المحذوفات' : 'Order moved to the recycle bin');
+          setSelected(null);
+          setSelectedId(null);
+          setSearchParams({}, { replace: true });
+          list.reload();
+          refreshStats();
+          setUpdating(false);
+          return;
+        }
         default:
           return;
       }
@@ -277,6 +314,66 @@ export default function OrdersPage() {
     Object.entries(INITIAL_FILTERS).forEach(([key, value]) => {
       list.setFilter(key, value);
     });
+  };
+
+  const trashablePageIds = useMemo(
+    () => list.data.filter((o) => TRASHABLE_STATUSES.includes(o.orderStatus)).map((o) => o._id),
+    [list.data],
+  );
+
+  const handleToggleCheckAll = () => {
+    const allChecked = trashablePageIds.length > 0 && trashablePageIds.every((id) => list.selectedIds.includes(id));
+    trashablePageIds.forEach((id) => {
+      const isSelected = list.selectedIds.includes(id);
+      if (allChecked ? isSelected : !isSelected) {
+        list.toggleSelect(id);
+      }
+    });
+  };
+
+  const handleBulkTrash = async () => {
+    const ids = [...list.selectedIds];
+    if (!ids.length) return;
+    const ok = await confirm({
+      title: isAr ? 'نقل الطلبات لسلة المحذوفات' : 'Move orders to the recycle bin',
+      message: isAr
+        ? `سيتم نقل ${ids.length} طلب إلى سلة المحذوفات. يمكن استرجاعها من هناك.`
+        : `${ids.length} order${ids.length === 1 ? '' : 's'} will move to the recycle bin. They can be restored from there.`,
+      confirmLabel: isAr ? 'نقل' : 'Move',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    setBulkTrashing(true);
+    try {
+      const { data } = await adminApi.bulkTrashOrders(ids);
+      if (data.succeeded.length) {
+        toast.success(
+          isAr
+            ? `تم نقل ${data.succeeded.length} طلب لسلة المحذوفات`
+            : `${data.succeeded.length} order${data.succeeded.length === 1 ? '' : 's'} moved to the recycle bin`,
+        );
+      }
+      if (data.failed.length) {
+        toast.error(
+          isAr
+            ? `تعذّر نقل ${data.failed.length} طلب`
+            : `Could not move ${data.failed.length} order${data.failed.length === 1 ? '' : 's'}`,
+        );
+      }
+      list.clearSelection();
+      if (data.succeeded.includes(selectedId)) {
+        setSelected(null);
+        setSelectedId(null);
+        setSearchParams({}, { replace: true });
+      }
+      list.reload();
+      refreshStats();
+    } catch (err) {
+      toast.error(err.response?.data?.message || (isAr ? 'حدث خطأ' : 'Action failed'));
+    } finally {
+      setBulkTrashing(false);
+    }
   };
 
   const ordersTotal = list.pagination?.total ?? 0;
@@ -328,6 +425,12 @@ export default function OrdersPage() {
           onExport={handleExport}
           exporting={exporting}
           className={mobileShowDetail ? 'hidden lg:flex' : 'flex'}
+          canBulkDelete={canBulkDelete}
+          checkedIds={list.selectedIds}
+          onToggleCheck={list.toggleSelect}
+          onToggleCheckAll={handleToggleCheckAll}
+          onBulkTrash={handleBulkTrash}
+          bulkTrashing={bulkTrashing}
         />
 
         <div
@@ -346,9 +449,7 @@ export default function OrdersPage() {
                 {isAr ? '← القائمة' : '← List'}
               </button>
               {selected?.orderNumber && (
-                <span className="font-mono text-sm font-bold tabular-nums text-text">
-                  #{selected.orderNumber}
-                </span>
+                <OrderNumberChip orderNumber={selected.orderNumber} size="sm" short />
               )}
             </div>
           )}

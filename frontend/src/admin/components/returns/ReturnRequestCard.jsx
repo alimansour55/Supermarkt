@@ -113,7 +113,11 @@ export default function ReturnRequestCard({
 
       <div className="mt-2 grid gap-x-3 gap-y-2 border-t border-black/5 pt-2 sm:grid-cols-2 lg:grid-cols-3">
         <InfoBlock label={isAr ? 'العميل' : 'Customer'}>
-          <p className="font-medium">{row.customerName || '—'}</p>
+          <p className="font-medium">
+            {row.customerName && row.customerName !== row.customerPhone
+              ? row.customerName
+              : (isAr ? 'عميل زائر' : 'Guest customer')}
+          </p>
           {row.customerPhone && (
             <p className="flex items-center gap-0.5 text-text-muted" dir="ltr">
               <Phone className="h-3 w-3" />

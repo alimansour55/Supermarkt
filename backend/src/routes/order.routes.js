@@ -48,6 +48,18 @@ import {
   getAdminReturns,
 } from '../controllers/orderReturn.controller.js';
 import {
+  getOrderTrash,
+  trashOrder,
+  trashOrderSecond,
+  restoreOrder,
+  deleteOrderForever,
+  bulkTrashOrders,
+  bulkTrashOrdersSecond,
+  bulkRestoreOrders,
+  bulkDeleteOrdersForever,
+} from '../controllers/orderTrash.controller.js';
+import { getResetStatus, resetAllOrders } from '../controllers/orderReset.controller.js';
+import {
   getCustomerOrderTracking,
   updateAdminOrderTracking,
   getAdminLiveDeliveries,
@@ -56,6 +68,7 @@ import {
 import {
   getDriverDeliveries,
   getDriverDeliveryById,
+  getDriverHistory,
   getDriverConfig,
   updateDriverAvailability,
   updateDriverOrderLocation,
@@ -99,9 +112,20 @@ router.get('/admin/export', ...adminOnly, exportAdminOrders);
 router.get('/admin/messages', ...adminOnly, getAdminOrderChats);
 router.get('/admin/returns', ...adminOnly, getAdminReturns);
 router.get('/admin', ...adminOnly, getAdminOrders);
+router.get('/admin/trash', ...requirePermission('orders:delete'), getOrderTrash);
+router.post('/admin/trash/bulk', ...requirePermission('orders:delete'), bulkTrashOrders);
+router.post('/admin/trash/second/bulk', ...requirePermission('orders:delete'), bulkTrashOrdersSecond);
+router.post('/admin/restore/bulk', ...requirePermission('orders:delete'), bulkRestoreOrders);
+router.post('/admin/permanent/bulk', ...requirePermission('orders:delete'), bulkDeleteOrdersForever);
+router.get('/admin/reset-all/status', ...requirePermission('orders:reset'), getResetStatus);
+router.post('/admin/reset-all', ...requirePermission('orders:reset'), resetAllOrders);
 router.get('/admin/:id/invoice', ...adminOnly, downloadOrderInvoice);
 router.get('/admin/:id', ...adminOnly, getAdminOrderById);
 router.put('/admin/:id/status', ...adminOnly, updateOrderStatus);
+router.patch('/admin/:id/trash', ...requirePermission('orders:delete'), trashOrder);
+router.patch('/admin/:id/trash/second', ...requirePermission('orders:delete'), trashOrderSecond);
+router.patch('/admin/:id/restore', ...requirePermission('orders:delete'), restoreOrder);
+router.delete('/admin/:id/permanent', ...requirePermission('orders:delete'), deleteOrderForever);
 router.post('/admin/:id/cancel', ...adminOnly, cancelAdminOrder);
 router.post('/admin/:id/refund', ...adminOnly, refundAdminOrder);
 router.post('/admin/:id/substitutions', ...adminOnly, suggestSubstitution);
@@ -130,8 +154,9 @@ router.post('/:id/messages', addCustomerMessage);
 router.get('/driver/config', ...driverOnly, getDriverConfig);
 router.put('/driver/availability', ...driverOnly, updateDriverAvailability);
 router.get('/driver/deliveries', ...driverOnly, getDriverDeliveries);
+router.get('/driver/deliveries/history', ...driverOnly, getDriverHistory);
 router.get('/driver/deliveries/:id', ...driverOnly, getDriverDeliveryById);
-router.post('/driver/deliveries/:id/complete', ...driverOnly, completeDriverDelivery);
+router.post('/driver/deliveries/:id/complete', ...driverOnly, optionalUploadSingle('proofPhoto'), completeDriverDelivery);
 router.post('/driver/deliveries/:id/fail', ...driverOnly, validate(driverFailDeliveryValidation), failDriverDelivery);
 router.put('/:id/tracking/location', ...driverOnly, driverLocationLimiter, validate(driverTrackingLocationValidation), updateDriverOrderLocation);
 

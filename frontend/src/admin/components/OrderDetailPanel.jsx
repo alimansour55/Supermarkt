@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MessageCircle, Printer, RotateCcw, XCircle, Package, Star, MapPin, Truck, CreditCard } from 'lucide-react';
+import { MessageCircle, Printer, RotateCcw, Trash2, XCircle, Package, Star, MapPin, Truck, CreditCard } from 'lucide-react';
 import { adminApi } from '../adminApi';
 import { PAYMENT_STATUSES, getPaymentStatus } from '../adminConstants';
 import { getDeliveryFailureReason } from '../../constants/deliveryFailureReasons';
@@ -22,6 +22,11 @@ import EmptyState from './EmptyState';
 import OrderPaymentProofPanel from './OrderPaymentProofPanel';
 import { getPaymentMethodLabel } from '../../constants/paymentMethods';
 import { useToast } from './index';
+import CopyButton from './CopyButton';
+import OrderNumberChip from './OrderNumberChip';
+import { hasPermission } from '../adminPermissions';
+import { useAuth } from '../../context/AuthContext';
+import { TRASHABLE_STATUSES } from '../../constants/orderFlow';
 
 function deliveryLabel(method, isAr, order) {
   if (method === 'express') return isAr ? 'توصيل سريع' : 'Express';
@@ -68,6 +73,8 @@ export default function OrderDetailPanel({
   const [failureModalOpen, setFailureModalOpen] = useState(false);
   const [requestingReview, setRequestingReview] = useState(false);
   const toast = useToast();
+  const { user } = useAuth();
+  const canDeleteOrders = hasPermission(user, 'orders:delete');
 
   useEffect(() => {
     setAdminNotes(order?.adminNotes || '');
@@ -126,9 +133,14 @@ export default function OrderDetailPanel({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
               {isAr ? 'طلب رقم' : 'Order'}
             </p>
-            <h2 className="mt-0.5 font-mono text-2xl font-bold tabular-nums tracking-tight text-text sm:text-[1.65rem]">
-              #{order.orderNumber}
-            </h2>
+            <div className="mt-1 flex items-center gap-1.5">
+              <OrderNumberChip orderNumber={order.orderNumber} size="lg" />
+              <CopyButton
+                value={order.orderNumber}
+                isAr={isAr}
+                label={isAr ? 'نسخ رقم الطلب' : 'Copy order number'}
+              />
+            </div>
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <StatusBadge status={currentStatus} language={isAr ? 'ar' : 'en'} variant="subtle" />
               <PaymentStatusBadge status={order.paymentStatus} language={isAr ? 'ar' : 'en'} variant="subtle" />
@@ -530,6 +542,18 @@ export default function OrderDetailPanel({
               {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
           </>
+        )}
+        {canDeleteOrders && TRASHABLE_STATUSES.includes(currentStatus) && (
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() => onAction?.('trash')}
+            disabled={updating}
+            title={isAr ? 'نقل الطلب إلى سلة المحذوفات' : 'Move order to the recycle bin'}
+          >
+            <Trash2 className="h-4 w-4" />
+            {isAr ? 'نقل لسلة المحذوفات' : 'Move to recycle bin'}
+          </Button>
         )}
       </div>
 

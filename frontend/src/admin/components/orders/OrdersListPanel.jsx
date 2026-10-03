@@ -7,6 +7,7 @@ import {
   Search,
   ShoppingBag,
   SlidersHorizontal,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -17,7 +18,9 @@ import { ListFilterSelect } from '../list';
 import Pagination from '../Pagination';
 import Loader from '../../../components/ui/Loader';
 import Button from '../../../components/ui/Button';
+import OrderNumberChip from '../OrderNumberChip';
 import { formatCount, formatPrice, formatRelativeTime } from '../../../utils/formatters';
+import { TRASHABLE_STATUSES } from '../../../constants/orderFlow';
 
 const QUICK_TABS = [
   { id: '', labelAr: 'الكل', labelEn: 'All' },
@@ -36,51 +39,62 @@ function hasActiveFilters(filters) {
   );
 }
 
-function OrderRow({ order, isAr, language, selected, onSelect }) {
+function OrderRow({ order, isAr, language, selected, onSelect, canSelect, checked, onToggleCheck }) {
   const hasUnread = order.unreadCustomerMessages > 0;
   const customer = order.user?.name || order.phone || (isAr ? 'عميل' : 'Customer');
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(order)}
+    <div
       className={[
-        'group relative w-full px-4 py-2.5 text-start transition-all duration-150',
+        'group relative flex w-full items-start gap-2 px-4 py-2.5 text-start transition-all duration-150',
         selected
           ? 'border-s-2 border-s-primary-600 bg-white'
           : 'hover:bg-white/70',
         !selected && hasUnread ? 'bg-rose-50/25 hover:bg-rose-50/40' : '',
       ].join(' ')}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-bold tabular-nums tracking-tight text-text">
-              #{order.orderNumber}
-            </span>
-            {hasUnread && (
-              <span className="inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
-                <MessageCircle className="h-2.5 w-2.5" aria-hidden />
-                {order.unreadCustomerMessages}
-              </span>
+      {canSelect && (
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => {
+            e.stopPropagation();
+            onToggleCheck(order._id);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-1 h-4 w-4 shrink-0 rounded border-border"
+          aria-label={isAr ? 'تحديد الطلب' : 'Select order'}
+        />
+      )}
+      <button type="button" onClick={() => onSelect(order)} className="min-w-0 flex-1 text-start">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <OrderNumberChip orderNumber={order.orderNumber} size="sm" short />
+              {hasUnread && (
+                <span className="inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+                  <MessageCircle className="h-2.5 w-2.5" aria-hidden />
+                  {order.unreadCustomerMessages}
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 truncate text-xs text-text-muted">{customer}</p>
+          </div>
+          <div className="shrink-0 text-end">
+            <p className="text-sm font-bold tabular-nums text-text">{formatPrice(order.total)}</p>
+            {order.createdAt && (
+              <p className="mt-0.5 text-[11px] text-text-muted">
+                {formatRelativeTime(order.createdAt, isAr)}
+              </p>
             )}
           </div>
-          <p className="mt-0.5 truncate text-xs text-text-muted">{customer}</p>
         </div>
-        <div className="shrink-0 text-end">
-          <p className="text-sm font-bold tabular-nums text-text">{formatPrice(order.total)}</p>
-          {order.createdAt && (
-            <p className="mt-0.5 text-[11px] text-text-muted">
-              {formatRelativeTime(order.createdAt, isAr)}
-            </p>
-          )}
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <StatusBadge status={order.orderStatus || order.status} language={language} compact variant="subtle" />
+          <PaymentStatusBadge status={order.paymentStatus} language={language} compact variant="subtle" />
         </div>
-      </div>
-      <div className="mt-1.5 flex flex-wrap items-center gap-1">
-        <StatusBadge status={order.orderStatus || order.status} language={language} compact variant="subtle" />
-        <PaymentStatusBadge status={order.paymentStatus} language={language} compact variant="subtle" />
-      </div>
-    </button>
+      </button>
+    </div>
   );
 }
 
@@ -102,6 +116,12 @@ export default function OrdersListPanel({
   onExport,
   exporting,
   className = 'flex',
+  canBulkDelete = false,
+  checkedIds = [],
+  onToggleCheck,
+  onToggleCheckAll,
+  onBulkTrash,
+  bulkTrashing = false,
 }) {
   const [showAdvanced, setShowAdvanced] = useState(hasActiveFilters(filters));
 
@@ -114,6 +134,11 @@ export default function OrdersListPanel({
     if (total === 0) return isAr ? 'لا توجد طلبات' : 'No orders';
     return isAr ? `${formatCount(total)} طلب` : `${formatCount(total)} orders`;
   }, [loading, pagination?.total, isAr]);
+
+  const trashableOrders = useMemo(
+    () => (canBulkDelete ? orders.filter((o) => TRASHABLE_STATUSES.includes(o.orderStatus || o.status)) : []),
+    [orders, canBulkDelete],
+  );
 
   return (
     <aside
@@ -266,6 +291,33 @@ export default function OrdersListPanel({
             </div>
           )}
         </div>
+
+        {canBulkDelete && (
+          <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-text-muted">
+              <input
+                type="checkbox"
+                checked={trashableOrders.length > 0 && trashableOrders.every((o) => checkedIds.includes(o._id))}
+                onChange={onToggleCheckAll}
+                disabled={trashableOrders.length === 0}
+                className="h-3.5 w-3.5 rounded border-border"
+              />
+              {isAr ? 'تحديد القابلة للحذف' : 'Select deletable'}
+            </label>
+            {checkedIds.length > 0 && (
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={onBulkTrash}
+                disabled={bulkTrashing}
+                className="h-7 px-2.5 text-xs"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {isAr ? `نقل ${checkedIds.length} لسلة المحذوفات` : `Trash ${checkedIds.length}`}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-white">
@@ -297,6 +349,9 @@ export default function OrdersListPanel({
                   language={language}
                   selected={selectedId === order._id}
                   onSelect={onSelect}
+                  canSelect={canBulkDelete && TRASHABLE_STATUSES.includes(order.orderStatus || order.status)}
+                  checked={checkedIds.includes(order._id)}
+                  onToggleCheck={onToggleCheck}
                 />
               </li>
             ))}

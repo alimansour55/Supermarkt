@@ -232,6 +232,7 @@ export const getAdminReturns = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
   const statusFilter = (req.query.status || '').trim();
   const q = (req.query.q || '').trim().toLowerCase();
+  const sortOrder = req.query.order === 'asc' ? 1 : -1;
 
   const orders = await Order.find({
     returns: { $exists: true, $not: { $size: 0 } },
@@ -272,7 +273,7 @@ export const getAdminReturns = asyncHandler(async (req, res) => {
     });
   }
 
-  rows.sort((a, b) => new Date(b.requestedAt || b.createdAt) - new Date(a.requestedAt || a.createdAt));
+  rows.sort((a, b) => sortOrder * (new Date(b.requestedAt || b.createdAt) - new Date(a.requestedAt || a.createdAt)));
 
   const stats = buildReturnStats(allRows);
 

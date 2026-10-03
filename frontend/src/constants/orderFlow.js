@@ -200,6 +200,10 @@ export function getOrderStatusMeta(value) {
   return ORDER_FLOW_STEPS[0];
 };
 
+/** Only these statuses can be moved to the recycle bin — mirrors the backend's
+ * TRASHABLE_STATUSES guard in orderTrash.service.js. */
+export const TRASHABLE_STATUSES = ['delivered', 'delivery_failed', 'cancelled', 'returned'];
+
 export const ORDER_STATUS_CHART_COLORS = {
   pending: '#f59e0b',
   confirmed: '#3b82f6',

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RotateCcw, Search } from 'lucide-react';
+import { ArrowDownUp, RotateCcw, Search } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import { useAdminStats } from '../context/AdminStatsContext';
@@ -28,6 +28,7 @@ export default function OrderReturnsPage() {
   const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0, all: 0 });
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [sortOrder, setSortOrder] = useState('desc');
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [updatingId, setUpdatingId] = useState(null);
   const [highlightedId, setHighlightedId] = useState(null);
@@ -48,6 +49,7 @@ export default function OrderReturnsPage() {
       const { data: res } = await adminApi.getReturns({
         page: pageNum,
         limit: 20,
+        order: sortOrder,
         ...(filter ? { status: filter } : {}),
         ...(debouncedQ ? { q: debouncedQ } : {}),
       });
@@ -66,7 +68,7 @@ export default function OrderReturnsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, debouncedQ, isAr]);
+  }, [page, statusFilter, debouncedQ, sortOrder, isAr]);
 
   useEffect(() => {
     load();
@@ -74,7 +76,7 @@ export default function OrderReturnsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, debouncedQ]);
+  }, [statusFilter, debouncedQ, sortOrder]);
 
   const handleTabChange = (tabId) => {
     setStatusFilter(tabId);
@@ -247,19 +249,6 @@ export default function OrderReturnsPage() {
             <RotateCcw className="h-4 w-4 text-primary-600" />
             {isAr ? 'إدارة المرتجعات' : 'Returns management'}
           </h2>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { key: 'pending', color: 'bg-amber-100 text-amber-900' },
-              { key: 'approved', color: 'bg-green-100 text-green-900' },
-              { key: 'rejected', color: 'bg-red-100 text-red-900' },
-            ].map(({ key, color }) => (
-              <span key={key} className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${color}`}>
-                {tabCount(key)}
-                {' '}
-                {TABS.find((t) => t.id === key)?.[isAr ? 'labelAr' : 'labelEn']}
-              </span>
-            ))}
-          </div>
         </div>
 
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -273,6 +262,17 @@ export default function OrderReturnsPage() {
               className="w-full rounded-lg border border-border py-1.5 ps-8 pe-2.5 text-sm"
             />
           </div>
+          <button
+            type="button"
+            onClick={() => setSortOrder((s) => (s === 'desc' ? 'asc' : 'desc'))}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted hover:bg-slate-50"
+            title={isAr ? 'ترتيب حسب التاريخ' : 'Sort by date'}
+          >
+            <ArrowDownUp className="h-3.5 w-3.5" />
+            {sortOrder === 'desc'
+              ? (isAr ? 'الأحدث أولاً' : 'Newest first')
+              : (isAr ? 'الأقدم أولاً' : 'Oldest first')}
+          </button>
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1.5">
