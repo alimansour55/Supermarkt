@@ -1,4 +1,5 @@
-import { Truck, MapPin, Navigation, Users, Zap } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronLeft, Truck, MapPin, Navigation, Radar, Users, Zap } from 'lucide-react';
 import Input from '../../../components/ui/Input';
 import OsmMapCanvas from '../../../components/maps/OsmMapCanvas';
 import SettingToggleCard from '../../components/SettingToggleCard';
@@ -96,24 +97,26 @@ export default function StoreDeliverySettingsPage() {
               </span>
             </label>
 
-            <label className="mt-3 flex items-start gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={gate.enforceCoverage !== false}
-                onChange={(e) => updateNested('locationGate', 'enforceCoverage', e.target.checked)}
-              />
+            <div className="mt-3 flex items-start gap-3 rounded-xl border border-primary-200 bg-primary-50/40 p-4 text-sm">
+              <Radar className="mt-0.5 h-5 w-5 shrink-0 text-primary-700" aria-hidden />
               <span>
                 <span className="font-semibold text-text">
-                  {isAr ? 'التوصيل داخل المناطق المغطّاة فقط' : 'Deliver only inside covered areas'}
+                  {isAr ? 'منطقة التغطية أصبحت صفحة مستقلة' : 'Coverage area now has its own page'}
                 </span>
                 <span className="mt-1 block text-xs text-text-muted">
                   {isAr
-                    ? 'عند التفعيل: أي موقع خارج نطاق كل مناطق التوصيل (مركز المنطقة + نصف القطر في صفحة «مناطق التوصيل») يُرفض برسالة «عذراً! لا نغطي هذه المنطقة».'
-                    : 'When on: a pin outside every delivery zone’s radius (set each zone’s center + radius on the Delivery Zones page) is rejected with "Sorry! We do not deliver to this area."'}
+                    ? 'تفعيل التغطية، ودائرة المظلة العامة (المركز ونصف القطر) انتقلا إلى صفحة مستقلة، منفصلة عن مناطق التوصيل.'
+                    : 'Enforcing coverage, and the general umbrella circle (center + radius), moved to their own page — separate from delivery zones.'}
                 </span>
+                <Link
+                  to="/admin/coverage-area"
+                  className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary-700 hover:text-primary-800"
+                >
+                  {isAr ? 'فتح صفحة منطقة التغطية' : 'Open the Coverage area page'}
+                  <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
+                </Link>
               </span>
-            </label>
+            </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Input

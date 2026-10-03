@@ -1,16 +1,36 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, CornerDownLeft, X, Clock } from 'lucide-react';
+import { Search, CornerDownLeft, X, Clock, Receipt } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { hasPermission } from '../adminPermissions';
 import { useAdminPanel } from '../context/AdminPanelContext';
+import { adminApi } from '../adminApi';
+import { formatOrderNumberShort } from '../../utils/formatters';
 import {
   buildAdminSearchEntries,
   searchAdmin,
   normalizeSearchText,
   normalizeWithMap,
 } from '../adminSearchIndex';
+
+/** Turn a live order match into a search-result entry pointing at its detail panel. */
+function buildOrderMatchEntry(order) {
+  const customer = order.user?.name || order.phone || '';
+  return {
+    key: `order-match:${order._id}`,
+    path: `/admin/orders?order=${order._id}`,
+    Icon: Receipt,
+    titleAr: `#${formatOrderNumberShort(order.orderNumber)}`,
+    titleEn: `#${formatOrderNumberShort(order.orderNumber)}`,
+    groupAr: 'الطلبات والفواتير',
+    groupEn: 'Orders & invoices',
+    descAr: customer,
+    descEn: customer,
+    isOrderMatch: true,
+  };
+}
 
 const RECENT_KEY = 'marketplus_admin_cmdk_recent';
 const MAX_RECENT = 6;
@@ -81,7 +101,7 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
 
   const recentKeys = useMemo(() => (Array.isArray(recent) ? recent : []), [recent]);
 
-  const results = useMemo(
+  const navResults = useMemo(
     () => searchAdmin(entries, query, { isAr, canAccess, recentKeys }),
     [entries, query, isAr, canAccess, recentKeys],
   );
@@ -90,6 +110,33 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
     const n = normalizeSearchText(query);
     return n ? n.split(' ').filter(Boolean) : [];
   }, [query]);
+
+  // Live lookup: typing an invoice/order number or phone jumps straight to
+  // that order, on top of the static nav-page fuzzy results above.
+  const canSearchOrders = hasPermission(user, 'orders:read');
+  const debouncedQuery = useDebouncedValue(query, 300);
+  const [orderMatches, setOrderMatches] = useState([]);
+  const orderSearchSeq = useRef(0);
+
+  useEffect(() => {
+    const trimmed = debouncedQuery.trim();
+    if (!canSearchOrders || trimmed.length < 2) return;
+    const seq = orderSearchSeq.current + 1;
+    orderSearchSeq.current = seq;
+    adminApi.getOrders({ q: trimmed, limit: 5, page: 1 })
+      .then(({ data }) => {
+        if (orderSearchSeq.current === seq) setOrderMatches(data.data || []);
+      })
+      .catch(() => {
+        if (orderSearchSeq.current === seq) setOrderMatches([]);
+      });
+  }, [debouncedQuery, canSearchOrders]);
+
+  const results = useMemo(() => {
+    if (!tokens.length || debouncedQuery.trim().length < 2 || !orderMatches.length) return navResults;
+    const orderEntries = orderMatches.map((o) => ({ entry: buildOrderMatchEntry(o), score: Infinity, recent: false }));
+    return [...orderEntries, ...navResults].slice(0, 12);
+  }, [tokens, debouncedQuery, orderMatches, navResults]);
 
   const activeIdx = results.length ? Math.min(active, results.length - 1) : 0;
   const showingRecent = !tokens.length;
@@ -109,10 +156,12 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
   const go = useCallback((item) => {
     if (!item) return;
     const { entry } = item;
-    setRecent((prev) => {
-      const list = Array.isArray(prev) ? prev : [];
-      return [entry.key, ...list.filter((k) => k !== entry.key)].slice(0, MAX_RECENT);
-    });
+    if (!entry.isOrderMatch) {
+      setRecent((prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        return [entry.key, ...list.filter((k) => k !== entry.key)].slice(0, MAX_RECENT);
+      });
+    }
     setQuery('');
     close();
     inputRef.current?.blur();
@@ -181,11 +230,13 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
     <div ref={rootRef} className={`relative ${className}`}>
       <div
         className={[
-          'flex items-center gap-2 rounded-lg border bg-white px-2.5 py-2 transition-colors',
-          panelOpen ? 'border-primary-300 ring-2 ring-primary-100' : 'border-border hover:border-slate-300',
+          'flex items-center gap-2 rounded-full border px-4 py-2.5 transition-colors',
+          panelOpen
+            ? 'border-primary-200 bg-white ring-2 ring-primary-100'
+            : 'border-transparent bg-primary-50/70 hover:bg-primary-50',
         ].join(' ')}
       >
-        <Search className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
+        <Search className="h-4 w-4 shrink-0 text-primary-500" aria-hidden />
         <input
           ref={inputRef}
           type="text"
@@ -193,8 +244,8 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
           onChange={(e) => updateQuery(e.target.value)}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder={isAr ? 'بحث…' : 'Search…'}
-          className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-muted"
+          placeholder={isAr ? 'ما الذى تبحث عنه؟' : 'What are you looking for?'}
+          className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-text-muted/80"
           autoComplete="off"
           spellCheck={false}
           role="combobox"
@@ -207,13 +258,13 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
           <button
             type="button"
             onClick={() => { updateQuery(''); inputRef.current?.focus(); }}
-            className="rounded p-0.5 text-text-muted hover:bg-slate-100 hover:text-text"
+            className="shrink-0 rounded-full p-0.5 text-text-muted hover:bg-white hover:text-text"
             aria-label={isAr ? 'مسح' : 'Clear'}
           >
             <X className="h-4 w-4" />
           </button>
         ) : (
-          <kbd className="hidden shrink-0 rounded border border-border bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-text-muted sm:inline">
+          <kbd className="hidden shrink-0 rounded-full border border-primary-200/70 bg-white/70 px-2 py-0.5 text-[10px] font-medium text-text-muted sm:inline">
             {isMac ? '⌘K' : 'Ctrl K'}
           </kbd>
         )}
@@ -244,7 +295,7 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
               const desc = isAr ? (entry.descAr || '') : (entry.descEn || '');
               const isActive = idx === activeIdx;
               return (
-                <li key={entry.key}>
+                <li key={entry.key} className="group relative">
                   <button
                     type="button"
                     id={`admin-search-opt-${idx}`}
@@ -255,6 +306,7 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
                     onMouseMove={() => setActive(idx)}
                     className={[
                       'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-start transition-colors',
+                      showingRecent ? 'pe-9' : '',
                       isActive ? 'bg-primary-50 text-primary-800' : 'text-text hover:bg-slate-50',
                     ].join(' ')}
                   >
@@ -287,6 +339,19 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
                       <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-primary-500" aria-hidden />
                     )}
                   </button>
+                  {showingRecent && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRecent((prev) => (Array.isArray(prev) ? prev : []).filter((k) => k !== entry.key));
+                      }}
+                      className="absolute end-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-text-muted opacity-0 transition-opacity hover:bg-slate-200 hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
+                      aria-label={isAr ? 'إزالة من الأخيرة' : 'Remove from recent'}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </li>
               );
             })}

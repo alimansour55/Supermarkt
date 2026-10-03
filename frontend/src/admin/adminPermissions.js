@@ -45,13 +45,13 @@ export const ROLE_GUIDE = {
     en: {
       summary: 'Runs the whole store — catalog, offers, content, settings & reports.',
       bestFor: 'Store manager, marketing, catalog lead',
-      can: ['Everything Operations can do', 'Categories, brands, coupons, offers & banners', 'Homepage & content pages', 'Delivery zones & store / loyalty settings', 'Revenue reports & audit log', 'Moderate reviews'],
+      can: ['Everything Operations can do', 'Categories, brands, coupons, offers & banners', 'Homepage & content pages', 'Delivery zones & store / loyalty settings', 'Revenue reports & audit log', 'Moderate reviews', 'Recycle bin — restore or permanently delete orders'],
       cannot: ['Create, edit or remove team logins', 'Assign roles or reset other members’ passwords'],
     },
     ar: {
       summary: 'يدير المتجر بالكامل — منتجات وعروض ومحتوى وإعدادات وتقارير.',
       bestFor: 'مدير متجر، تسويق، مسؤول كتالوج',
-      can: ['كل ما يفعله دور التشغيل', 'الأقسام والعلامات والكوبونات والعروض والبانرات', 'الصفحة الرئيسية وصفحات المحتوى', 'مناطق التوصيل وإعدادات المتجر والولاء', 'تقارير الإيرادات وسجل التدقيق', 'إدارة التقييمات'],
+      can: ['كل ما يفعله دور التشغيل', 'الأقسام والعلامات والكوبونات والعروض والبانرات', 'الصفحة الرئيسية وصفحات المحتوى', 'مناطق التوصيل وإعدادات المتجر والولاء', 'تقارير الإيرادات وسجل التدقيق', 'إدارة التقييمات', 'سلة المحذوفات — استعادة أو حذف الطلبات نهائياً'],
       cannot: ['إنشاء أو تعديل أو حذف حسابات الفريق', 'تعيين الأدوار أو إعادة تعيين كلمات مرور الأعضاء'],
     },
   },
@@ -118,6 +118,9 @@ export const ROLE_PERMISSIONS = {
   'dashboard:read': STAFF_ROLES,
   'orders:read': STAFF_ROLES,
   'orders:write': STAFF_ROLES,
+  'orders:delete': ['admin', 'super_admin'],
+  'orders:reset': ['super_admin'],
+  'support:chat': STAFF_ROLES,
   'products:read': STAFF_ROLES,
   'products:write': STAFF_ROLES,
   'products:delete': ['admin', 'super_admin'],
@@ -157,7 +160,9 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: 'orders:read', labelEn: 'View orders, chats & returns', labelAr: 'عرض الطلبات والمحادثات والمرتجعات' },
       { key: 'orders:write', labelEn: 'Manage orders & fulfillment', labelAr: 'إدارة الطلبات والتنفيذ' },
+      { key: 'orders:delete', labelEn: 'Recycle bin & permanent delete', labelAr: 'سلة المحذوفات والحذف النهائي' },
       { key: 'delivery:write', labelEn: 'Delivery zones & fulfillment', labelAr: 'التوصيل ومواقع الشحن' },
+      { key: 'support:chat', labelEn: 'Live chat with customers', labelAr: 'الدردشة المباشرة مع العملاء' },
     ],
   },
   {

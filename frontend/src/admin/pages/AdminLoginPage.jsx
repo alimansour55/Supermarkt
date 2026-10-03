@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Lock, User } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
+import { useStoreSettings } from '../../context/StoreSettingsContext';
 import { APP_NAME, APP_NAME_EN } from '../../utils/constants';
 import { isStaffRole } from '../adminPermissions';
 import Loader from '../../components/ui/Loader';
@@ -27,10 +28,14 @@ function mapAdminLoginError(message, isAr) {
 export default function AdminLoginPage() {
   const { language } = useLanguage();
   const { user, loading, isAuthenticated, adminLogin } = useAuth();
+  const { settings } = useStoreSettings();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from || '/admin';
   const isAr = language === 'ar';
+  const storeName = isAr
+    ? (settings?.storeNameAr || APP_NAME)
+    : (settings?.storeNameEn || APP_NAME_EN);
   const sessionExpired = location.state?.reason === 'session';
   const staffRequired = location.state?.reason === 'staff_required';
   const customerSignedIn = staffRequired && isAuthenticated && user && !isStaffRole(user?.role);
@@ -90,7 +95,7 @@ export default function AdminLoginPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-600/20 text-primary-400">
             <Lock className="h-7 w-7" aria-hidden />
           </div>
-          <p className="text-2xl font-bold text-primary-400">{isAr ? APP_NAME : APP_NAME_EN}</p>
+          <p className="text-2xl font-bold text-primary-400">{storeName}</p>
           <h1 className="mt-2 text-xl font-semibold text-white">
             {isAr ? 'تسجيل دخول الإدارة' : 'Admin Login'}
           </h1>

@@ -10,6 +10,8 @@ import {
   DEFAULT_LOW_STOCK_ALERT,
   DEFAULT_LOCATION_GATE,
   DEFAULT_DRIVER_SETTINGS,
+  DEFAULT_CUSTOMER_SERVICE,
+  DEFAULT_LIVE_CHAT,
   DEFAULT_THEME_COLOR,
   DEFAULT_SITE_FONT,
 } from '../constants/storeDefaults.js';
@@ -28,6 +30,8 @@ import {
   uploadFileToCloudinary,
 } from '../utils/cloudinaryUpload.js';
 import { invalidateStoreSettingsCache } from '../services/storeSettings.service.js';
+import { isLiveChatAvailableNow, getNextAvailableAt } from '../utils/liveChatAvailability.js';
+import { promoteFromQueue } from './supportConversation.controller.js';
 import { generateSampleInvoicePdf } from '../services/invoicePdf.service.js';
 
 const SETTINGS_KEY = 'main';
@@ -79,6 +83,8 @@ const ALLOWED_FIELDS = [
   'themeShade',
   'themeRotation',
   'driverSettings',
+  'customerService',
+  'liveChat',
   'siteFont',
   'isActive',
 ];
@@ -225,6 +231,29 @@ const getOrCreateSettings = async () => {
     settings.markModified('driverSettings');
     changed = true;
   }
+  if (!settings.liveChat?.schedule?.length) {
+    const rawLiveChat = settings.liveChat?.toObject?.() || settings.liveChat || {};
+    settings.liveChat = {
+      ...DEFAULT_LIVE_CHAT,
+      ...rawLiveChat,
+      schedule: DEFAULT_LIVE_CHAT.schedule,
+      offlineMessageAr: rawLiveChat.offlineMessageAr || DEFAULT_LIVE_CHAT.offlineMessageAr,
+      offlineMessageEn: rawLiveChat.offlineMessageEn || DEFAULT_LIVE_CHAT.offlineMessageEn,
+    };
+    settings.markModified('liveChat');
+    changed = true;
+  }
+  if (!settings.customerService?.channels?.length) {
+    settings.customerService = {
+      ...DEFAULT_CUSTOMER_SERVICE,
+      ...(settings.customerService?.toObject?.() || settings.customerService || {}),
+      channels: settings.customerService?.channels?.length
+        ? settings.customerService.channels
+        : DEFAULT_CUSTOMER_SERVICE.channels,
+    };
+    settings.markModified('customerService');
+    changed = true;
+  }
   if (settings.lowStockAlertThreshold === undefined || settings.lowStockAlertThreshold === null) {
     settings.lowStockAlertThreshold = DEFAULT_LOW_STOCK_ALERT.lowStockAlertThreshold;
     changed = true;
@@ -297,6 +326,8 @@ const NESTED_SETTINGS_FIELDS = new Set([
   'themeRotation',
   'locationGate',
   'driverSettings',
+  'customerService',
+  'liveChat',
 ]);
 
 const applySettingsUpdates = (settings, updates) => {
@@ -414,6 +445,23 @@ const pickSettings = (payload) => {
       mapCenterLat: clampNum(raw.mapCenterLat, -90, 90, DEFAULT_LOCATION_GATE.mapCenterLat),
       mapCenterLng: clampNum(raw.mapCenterLng, -180, 180, DEFAULT_LOCATION_GATE.mapCenterLng),
       mapZoom: Math.round(clampNum(raw.mapZoom, 3, 18, DEFAULT_LOCATION_GATE.mapZoom)),
+      coverageAreas: Array.isArray(raw.coverageAreas)
+        ? raw.coverageAreas
+          .map((area, index) => {
+            const lat = clampNum(area?.lat, -90, 90, null);
+            const lng = clampNum(area?.lng, -180, 180, null);
+            const radiusKm = clampNum(area?.radiusKm, 0.3, 500, null);
+            if (lat == null || lng == null || radiusKm == null) return null;
+            return {
+              id: String(area?.id || '').trim() || `area-${Date.now()}-${index}`,
+              label: String(area?.label ?? '').trim(),
+              lat,
+              lng,
+              radiusKm,
+            };
+          })
+          .filter(Boolean)
+        : [],
     };
   }
 
@@ -432,6 +480,82 @@ const pickSettings = (payload) => {
       availabilityEnabled: toBool(raw.availabilityEnabled, DEFAULT_DRIVER_SETTINGS.availabilityEnabled),
       pickingChecklistEnabled: toBool(raw.pickingChecklistEnabled, DEFAULT_DRIVER_SETTINGS.pickingChecklistEnabled),
       cashCalculatorEnabled: toBool(raw.cashCalculatorEnabled, DEFAULT_DRIVER_SETTINGS.cashCalculatorEnabled),
+    };
+  }
+
+  if (updates.liveChat !== undefined) {
+    const raw = updates.liveChat || {};
+    const toBool = (value, fallback) => {
+      if (value === undefined) return fallback;
+      return value === true || value === 'true' || value === '1';
+    };
+    const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const normTime = (value, fallback) => (timeRe.test(String(value || '')) ? value : fallback);
+    const scheduleByDay = new Map(
+      (Array.isArray(raw.schedule) ? raw.schedule : []).map((entry) => [Number(entry?.day), entry]),
+    );
+    const schedule = DEFAULT_LIVE_CHAT.schedule.map(({ day, from, to }) => {
+      const entry = scheduleByDay.get(day) || {};
+      return {
+        day,
+        enabled: toBool(entry.enabled, true),
+        from: normTime(entry.from, from),
+        to: normTime(entry.to, to),
+      };
+    });
+    const maxConcurrent = Math.round(Number(raw.maxConcurrentChats));
+    updates.liveChat = {
+      enabled: toBool(raw.enabled, DEFAULT_LIVE_CHAT.enabled),
+      scheduleEnabled: toBool(raw.scheduleEnabled, DEFAULT_LIVE_CHAT.scheduleEnabled),
+      schedule,
+      maxConcurrentChats: Number.isFinite(maxConcurrent)
+        ? Math.min(50, Math.max(0, maxConcurrent))
+        : DEFAULT_LIVE_CHAT.maxConcurrentChats,
+      idlePromptMinutes: Number.isFinite(Number(raw.idlePromptMinutes))
+        ? Math.min(1440, Math.max(0, Math.round(Number(raw.idlePromptMinutes))))
+        : DEFAULT_LIVE_CHAT.idlePromptMinutes,
+      autoCloseMinutes: Number.isFinite(Number(raw.autoCloseMinutes))
+        ? Math.min(10080, Math.max(0, Math.round(Number(raw.autoCloseMinutes))))
+        : DEFAULT_LIVE_CHAT.autoCloseMinutes,
+      ratingEnabled: toBool(raw.ratingEnabled, DEFAULT_LIVE_CHAT.ratingEnabled),
+      csatTargetPercent: Number.isFinite(Number(raw.csatTargetPercent))
+        ? Math.min(100, Math.max(0, Number(raw.csatTargetPercent)))
+        : DEFAULT_LIVE_CHAT.csatTargetPercent,
+      monthlyChatTarget: Number.isFinite(Number(raw.monthlyChatTarget))
+        ? Math.min(100000, Math.max(0, Math.round(Number(raw.monthlyChatTarget))))
+        : DEFAULT_LIVE_CHAT.monthlyChatTarget,
+      offlineMessageAr: String(raw.offlineMessageAr ?? '').trim() || DEFAULT_LIVE_CHAT.offlineMessageAr,
+      offlineMessageEn: String(raw.offlineMessageEn ?? '').trim() || DEFAULT_LIVE_CHAT.offlineMessageEn,
+    };
+  }
+
+  if (updates.customerService !== undefined) {
+    const raw = updates.customerService || {};
+    const allowedTypes = ['phone', 'callback', 'chat', 'email', 'whatsapp', 'custom'];
+    const channels = (Array.isArray(raw.channels) ? raw.channels : [])
+      .map((ch, index) => ({
+        id: String(ch?.id || '').trim() || `channel-${Date.now()}-${index}`,
+        type: allowedTypes.includes(ch?.type) ? ch.type : 'custom',
+        enabled: ch?.enabled !== false && ch?.enabled !== 'false',
+        labelAr: String(ch?.labelAr || '').trim(),
+        labelEn: String(ch?.labelEn || '').trim(),
+        descriptionAr: String(ch?.descriptionAr || '').trim(),
+        descriptionEn: String(ch?.descriptionEn || '').trim(),
+        value: String(ch?.value || '').trim(),
+        icon: String(ch?.icon || '').trim(),
+        sortOrder: Number(ch?.sortOrder ?? index),
+      }))
+      .filter((ch) => ch.labelAr || ch.labelEn);
+
+    updates.customerService = {
+      enabled: raw.enabled !== false && raw.enabled !== 'false',
+      channels,
+      callback: {
+        noteAr: String(raw.callback?.noteAr ?? '').trim() || DEFAULT_CUSTOMER_SERVICE.callback.noteAr,
+        noteEn: String(raw.callback?.noteEn ?? '').trim() || DEFAULT_CUSTOMER_SERVICE.callback.noteEn,
+        workingHoursAr: String(raw.callback?.workingHoursAr ?? '').trim(),
+        workingHoursEn: String(raw.callback?.workingHoursEn ?? '').trim(),
+      },
     };
   }
 
@@ -646,7 +770,16 @@ const serializeSettings = (settings) => (
 
 export const getPublicStoreSettings = asyncHandler(async (_req, res) => {
   const settings = await getOrCreateSettings();
-  res.json({ success: true, data: serializeSettings(settings) });
+  const data = serializeSettings(settings);
+  if (data.liveChat) {
+    const available = isLiveChatAvailableNow(data.liveChat);
+    data.liveChat = {
+      ...data.liveChat,
+      available,
+      nextAvailableAt: available ? null : getNextAvailableAt(data.liveChat),
+    };
+  }
+  res.json({ success: true, data });
 });
 
 export const getAdminStoreSettings = asyncHandler(async (_req, res) => {
@@ -725,6 +858,9 @@ export const updateAdminStoreSettings = asyncHandler(async (req, res) => {
 
   await settings.save();
   invalidateStoreSettingsCache();
+  if (updates.liveChat !== undefined) {
+    promoteFromQueue().catch(() => {});
+  }
   res.json({ success: true, data: serializeSettings(settings) });
 });
 

@@ -225,7 +225,7 @@ export default function HomepageBuilderPage() {
           description={isAr ? typeMeta.descriptionAr : typeMeta.descriptionEn}
           action={(
             <Button type="button" variant="secondary" onClick={closeEditor} disabled={saving}>
-              <ArrowLeft className="h-4 w-4" aria-hidden />
+              <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
               {backToCmsLabel}
             </Button>
           )}

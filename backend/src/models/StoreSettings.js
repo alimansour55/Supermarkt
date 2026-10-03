@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { DEFAULT_LIVE_CHAT } from '../constants/storeDefaults.js';
 
 const socialLinksSchema = new mongoose.Schema(
   {
@@ -113,16 +114,40 @@ const headerToolbarItemSchema = new mongoose.Schema(
   { _id: true },
 );
 
+const footerConfigSchema = new mongoose.Schema(
+  {
+    showBackToTop: { type: Boolean, default: true },
+    showSocial: { type: Boolean, default: true },
+    showContact: { type: Boolean, default: true },
+    showApps: { type: Boolean, default: true },
+    showPayment: { type: Boolean, default: true },
+    showLegal: { type: Boolean, default: true },
+    /** Empty → storefront falls back to the built-in default legal links. */
+    legalLinks: { type: [navLinkSchema], default: [] },
+    /** Empty → storefront falls back to ['visa', 'mastercard']. */
+    paymentMethods: {
+      type: [{ type: String, enum: ['visa', 'mastercard', 'meeza', 'valu', 'fawry', 'instapay', 'vodafone-cash'] }],
+      default: [],
+    },
+  },
+  { _id: false },
+);
+
 const navigationSchema = new mongoose.Schema(
   {
     announcementAr: { type: String, trim: true, default: '' },
     announcementEn: { type: String, trim: true, default: '' },
     showCategoryLinks: { type: Boolean, default: true },
+    /** Top utility bar (desktop) — customer-service link label / target. */
+    topBarServiceLabelAr: { type: String, trim: true, default: '' },
+    topBarServiceLabelEn: { type: String, trim: true, default: '' },
+    topBarServiceHref: { type: String, trim: true, default: '' },
     homeNav: { type: homeNavSchema, default: () => ({}) },
     headerLinks: { type: [navLinkSchema], default: [] },
     navCategories: { type: [navCategorySchema], default: [] },
     headerToolbar: { type: [headerToolbarItemSchema], default: [] },
     footerColumns: { type: [footerColumnSchema], default: [] },
+    footer: { type: footerConfigSchema, default: () => ({}) },
   },
   { _id: false },
 );
@@ -353,6 +378,18 @@ const partnerAttributionStreamsSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const partnerBankSchema = new mongoose.Schema(
+  {
+    bankName: { type: String, trim: true, default: '' },
+    accountHolder: { type: String, trim: true, default: '' },
+    iban: { type: String, trim: true, default: '' },
+    accountNumber: { type: String, trim: true, default: '' },
+    swift: { type: String, trim: true, default: '' },
+    branch: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
+);
+
 const partnerEntrySchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
@@ -369,6 +406,107 @@ const partnerEntrySchema = new mongoose.Schema(
     scopes: { type: partnerScopesSchema, default: () => ({}) },
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
+
+    /** Lifecycle — supersedes isActive; isActive is kept in sync on normalize. */
+    status: { type: String, enum: ['active', 'paused', 'archived'], default: 'active' },
+    displayColor: { type: String, trim: true, default: '' },
+    avatarUrl: { type: String, trim: true, default: '' },
+    tags: { type: [String], default: [] },
+
+    /** CRM / legal */
+    legalName: { type: String, trim: true, default: '' },
+    taxId: { type: String, trim: true, default: '' },
+    commercialRegNo: { type: String, trim: true, default: '' },
+    contactPerson: { type: String, trim: true, default: '' },
+    address: { type: String, trim: true, default: '' },
+    city: { type: String, trim: true, default: '' },
+    country: { type: String, trim: true, default: '' },
+    website: { type: String, trim: true, default: '' },
+    statementEmail: { type: String, trim: true, default: '' },
+    onboardingNotes: { type: String, trim: true, default: '' },
+
+    /** Banking / payout controls */
+    bank: { type: partnerBankSchema, default: () => ({}) },
+    payoutMethod: { type: String, enum: ['bank_transfer', 'cash', 'wallet', 'cheque', 'other', ''], default: '' },
+    payoutCurrency: { type: String, trim: true, default: 'EGP' },
+    payoutScheduleDay: { type: Number, min: 1, max: 28, default: null },
+    minPayoutThreshold: { type: Number, min: 0, default: 0 },
+    maxMonthlyPayout: { type: Number, min: 0, default: null },
+
+    /** Contract window (YYYY-MM-DD) — partner is inert for rules/payouts outside it. */
+    contractStartKey: { type: String, trim: true, default: '' },
+    contractEndKey: { type: String, trim: true, default: '' },
+    defaultCommissionPercent: { type: Number, min: 0, max: 100, default: null },
+  },
+  { _id: true },
+);
+
+const attributionRuleTierSchema = new mongoose.Schema(
+  { upToValue: { type: Number, default: null }, value: { type: Number, default: 0 } },
+  { _id: false },
+);
+
+const attributionRuleRateSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ['percent', 'fixedPerOrder', 'fixedPerUnit', 'tiered'], default: 'percent' },
+    value: { type: Number, default: 100 },
+    tiers: { type: [attributionRuleTierSchema], default: [] },
+  },
+  { _id: false },
+);
+
+const attributionRuleConditionsSchema = new mongoose.Schema(
+  {
+    customers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    customerType: { type: String, enum: ['any', 'new', 'returning'], default: 'any' },
+    minCustomerOrderCount: { type: Number, min: 0, default: null },
+    maxCustomerOrderCount: { type: Number, min: 0, default: null },
+    deliveryZones: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryZone' }],
+    cities: { type: [String], default: [] },
+    governorates: { type: [String], default: [] },
+    fulfillmentLocations: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FulfillmentLocation' }],
+    products: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+    categories: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
+    brands: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Brand' }],
+    promotions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Promotion' }],
+    couponCodes: { type: [String], default: [] },
+    paymentMethods: { type: [String], default: [] },
+    deliveryMethods: { type: [String], default: [] },
+    minOrderValue: { type: Number, min: 0, default: null },
+    maxOrderValue: { type: Number, min: 0, default: null },
+    weekdays: { type: [Number], default: [] },
+    dateFromKey: { type: String, trim: true, default: '' },
+    dateToKey: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
+);
+
+const attributionRuleBeneficiarySchema = new mongoose.Schema(
+  {
+    partnerKey: { type: String, trim: true, required: true },
+    sharePercent: { type: Number, min: 0, max: 100, default: 100 },
+  },
+  { _id: false },
+);
+
+const attributionRuleSchema = new mongoose.Schema(
+  {
+    name: { type: String, trim: true, default: '' },
+    description: { type: String, trim: true, default: '' },
+    enabled: { type: Boolean, default: true },
+    priority: { type: Number, default: 100 },
+    source: { type: String, enum: ['manual', 'auto'], default: 'manual' },
+    sourcePartnerKey: { type: String, trim: true, default: '' },
+    scope: { type: String, enum: ['order', 'line'], default: 'order' },
+    basis: {
+      type: String,
+      enum: ['orderTotal', 'orderSubtotal', 'orderGrossProfit', 'lineRevenue', 'lineGrossProfit', 'deliveryFee'],
+      default: 'lineRevenue',
+    },
+    rate: { type: attributionRuleRateSchema, default: () => ({}) },
+    stackable: { type: Boolean, default: false },
+    beneficiaries: { type: [attributionRuleBeneficiarySchema], default: [] },
+    conditions: { type: attributionRuleConditionsSchema, default: () => ({}) },
   },
   { _id: true },
 );
@@ -384,6 +522,8 @@ const partnerRevenueSchema = new mongoose.Schema(
     weights: { type: partnerRevenueWeightsSchema, default: () => ({}) },
     factorEnabled: { type: partnerFactorEnabledSchema, default: () => ({}) },
     partners: { type: [partnerEntrySchema], default: [] },
+    /** Ordered compound attribution rules (evaluated when mode === 'attribution'). */
+    rules: { type: [attributionRuleSchema], default: [] },
   },
   { _id: false },
 );
@@ -464,6 +604,26 @@ const locationGateSchema = new mongoose.Schema(
     mapCenterLat: { type: Number, default: 29.8453 },
     mapCenterLng: { type: Number, default: 31.3339 },
     mapZoom: { type: Number, min: 3, max: 18, default: 12 },
+    /**
+     * Coverage areas (the umbrella): one or more independent circles that together define
+     * everywhere the business delivers at all — they need not be adjacent (e.g. separate
+     * circles for Cairo and Alexandria). Delivery zones are named sub-areas that must fall
+     * inside at least one of these circles; they cannot extend service beyond them. Empty
+     * until the admin configures at least one.
+     */
+    coverageAreas: {
+      type: [
+        {
+          _id: false,
+          id: { type: String, required: true },
+          label: { type: String, trim: true, default: '' },
+          lat: { type: Number, required: true },
+          lng: { type: Number, required: true },
+          radiusKm: { type: Number, min: 0.3, required: true },
+        },
+      ],
+      default: [],
+    },
   },
   { _id: false },
 );
@@ -506,6 +666,82 @@ const themeRotationSchema = new mongoose.Schema(
     enabled: { type: Boolean, default: false },
     intervalMinutes: { type: Number, min: 1, max: 1440, default: 30 },
     steps: { type: [themeRotationStepSchema], default: [] },
+  },
+  { _id: false },
+);
+
+const customerServiceChannelSchema = new mongoose.Schema(
+  {
+    id: { type: String, trim: true, required: true },
+    type: {
+      type: String,
+      enum: ['phone', 'callback', 'chat', 'email', 'whatsapp', 'custom'],
+      default: 'custom',
+    },
+    enabled: { type: Boolean, default: true },
+    labelAr: { type: String, trim: true, default: '' },
+    labelEn: { type: String, trim: true, default: '' },
+    descriptionAr: { type: String, trim: true, default: '' },
+    descriptionEn: { type: String, trim: true, default: '' },
+    /** Phone number / email address / external URL — unused for 'callback' and 'chat'. */
+    value: { type: String, trim: true, default: '' },
+    icon: { type: String, trim: true, default: '' },
+    sortOrder: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
+const customerServiceCallbackSchema = new mongoose.Schema(
+  {
+    noteAr: { type: String, trim: true, default: 'هنتصل بيك في أقرب وقت ممكن' },
+    noteEn: { type: String, trim: true, default: "We'll call you back as soon as possible" },
+    workingHoursAr: { type: String, trim: true, default: '' },
+    workingHoursEn: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
+);
+
+const customerServiceSchema = new mongoose.Schema(
+  {
+    /** Master switch for the customer-service hub (contact page + assistant integration). */
+    enabled: { type: Boolean, default: true },
+    channels: { type: [customerServiceChannelSchema], default: [] },
+    callback: { type: customerServiceCallbackSchema, default: () => ({}) },
+  },
+  { _id: false },
+);
+
+const liveChatScheduleEntrySchema = new mongoose.Schema(
+  {
+    day: { type: Number, min: 0, max: 6, required: true },
+    enabled: { type: Boolean, default: true },
+    from: { type: String, trim: true, default: '09:00' },
+    to: { type: String, trim: true, default: '23:00' },
+  },
+  { _id: false },
+);
+
+const liveChatSettingsSchema = new mongoose.Schema(
+  {
+    /** Master switch: when false the human live-chat feature is entirely off, regardless of hours. */
+    enabled: { type: Boolean, default: DEFAULT_LIVE_CHAT.enabled },
+    /** When false, live chat is always available (24/7) and `schedule` is ignored. */
+    scheduleEnabled: { type: Boolean, default: DEFAULT_LIVE_CHAT.scheduleEnabled },
+    schedule: { type: [liveChatScheduleEntrySchema], default: () => DEFAULT_LIVE_CHAT.schedule },
+    /** Concurrent active conversations before new ones wait in queue (0 = unlimited). */
+    maxConcurrentChats: { type: Number, min: 0, max: 50, default: DEFAULT_LIVE_CHAT.maxConcurrentChats },
+    /** Team target: % of rated chats scoring 4-5 stars. */
+    csatTargetPercent: { type: Number, min: 0, max: 100, default: DEFAULT_LIVE_CHAT.csatTargetPercent },
+    /** Minutes of customer silence before asking to continue (0 = never). */
+    idlePromptMinutes: { type: Number, min: 0, max: 1440, default: DEFAULT_LIVE_CHAT.idlePromptMinutes },
+    /** Minutes of customer silence before the chat closes itself (0 = never). */
+    autoCloseMinutes: { type: Number, min: 0, max: 10080, default: DEFAULT_LIVE_CHAT.autoCloseMinutes },
+    /** Ask customers to rate a finished chat. */
+    ratingEnabled: { type: Boolean, default: DEFAULT_LIVE_CHAT.ratingEnabled },
+    /** Per-agent monthly handled-chats target (0 = none). */
+    monthlyChatTarget: { type: Number, min: 0, max: 100000, default: DEFAULT_LIVE_CHAT.monthlyChatTarget },
+    offlineMessageAr: { type: String, trim: true, default: DEFAULT_LIVE_CHAT.offlineMessageAr },
+    offlineMessageEn: { type: String, trim: true, default: DEFAULT_LIVE_CHAT.offlineMessageEn },
   },
   { _id: false },
 );
@@ -612,6 +848,8 @@ const storeSettingsSchema = new mongoose.Schema(
     themeShade: { type: Number, default: 600 },
     themeRotation: { type: themeRotationSchema, default: () => ({}) },
     driverSettings: { type: driverSettingsSchema, default: () => ({}) },
+    customerService: { type: customerServiceSchema, default: () => ({}) },
+    liveChat: { type: liveChatSettingsSchema, default: () => ({}) },
     siteFont: { type: String, trim: true, default: 'cairo' },
     isActive: { type: Boolean, default: true },
   },

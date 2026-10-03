@@ -11,9 +11,13 @@ export const ProductFormPage = lazy(() => import('../admin/pages/ProductFormPage
 export const AdminCategoriesPage = lazy(() => import('../admin/pages/CategoriesPage'), 'CategoriesPage');
 export const AdminBrandsPage = lazy(() => import('../admin/pages/BrandsPage'), 'BrandsPage');
 export const AdminOrdersPage = lazy(() => import('../admin/pages/OrdersPage'), 'OrdersPage');
+export const InvoicesPage = lazy(() => import('../admin/pages/InvoicesPage'), 'InvoicesPage');
 export const LiveDeliveriesPage = lazy(() => import('../admin/pages/LiveDeliveriesPage'), 'LiveDeliveriesPage');
 export const OrderChatsPage = lazy(() => import('../admin/pages/OrderChatsPage'), 'OrderChatsPage');
 export const OrderReturnsPage = lazy(() => import('../admin/pages/OrderReturnsPage'), 'OrderReturnsPage');
+export const CallbackRequestsPage = lazy(() => import('../admin/pages/CallbackRequestsPage'), 'CallbackRequestsPage');
+export const LiveChatPage = lazy(() => import('../admin/pages/LiveChatPage'), 'LiveChatPage');
+export const OrderTrashPage = lazy(() => import('../admin/pages/OrderTrashPage'), 'OrderTrashPage');
 export const UsersPage = lazy(() => import('../admin/pages/UsersPage'), 'UsersPage');
 export const CouponsPage = lazy(() => import('../admin/pages/CouponsPage'), 'CouponsPage');
 export const PromotionsPage = lazy(() => import('../admin/pages/PromotionsPage'), 'PromotionsPage');
@@ -28,6 +32,7 @@ export const StoreInvoiceSettingsPage = lazy(() => import('../admin/pages/settin
 export const StoreAdminSettingsPage = lazy(() => import('../admin/pages/settings/StoreAdminSettingsPage'), 'StoreAdminSettingsPage');
 export const ReviewsPage = lazy(() => import('../admin/pages/ReviewsPage'), 'ReviewsPage');
 export const DeliveryZonesPage = lazy(() => import('../admin/pages/DeliveryZonesPage'), 'DeliveryZonesPage');
+export const CoverageAreaPage = lazy(() => import('../admin/pages/CoverageAreaPage'), 'CoverageAreaPage');
 export const FulfillmentLocationsPage = lazy(() => import('../admin/pages/FulfillmentLocationsPage'), 'FulfillmentLocationsPage');
 export const AdminRecurringDeliveriesPage = lazy(() => import('../admin/pages/RecurringDeliveriesPage'), 'RecurringDeliveriesPage');
 export const ReportsPage = lazy(() => import('../admin/pages/ReportsPage'), 'ReportsPage');
@@ -38,11 +43,11 @@ export const TrendingSearchesPage = lazy(() => import('../admin/pages/TrendingSe
 export const FilterSettingsPage = lazy(() => import('../admin/pages/FilterSettingsPage'), 'FilterSettingsPage');
 export const ContentPagesPage = lazy(() => import('../admin/pages/ContentPagesPage'), 'ContentPagesPage');
 export const NavigationPage = lazy(() => import('../admin/pages/NavigationPage'), 'NavigationPage');
-export const SeoSettingsPage = lazy(() => import('../admin/pages/SeoSettingsPage'), 'SeoSettingsPage');
 export const AppearancePage = lazy(() => import('../admin/pages/AppearancePage'), 'AppearancePage');
 export const LoyaltyPage = lazy(() => import('../admin/pages/LoyaltyPage'), 'LoyaltyPage');
 export const WalletPage = lazy(() => import('../admin/pages/WalletPage'), 'WalletPage');
 export const PaymentMethodsPage = lazy(() => import('../admin/pages/PaymentMethodsPage'), 'PaymentMethodsPage');
+export const CustomerServiceSettingsPage = lazy(() => import('../admin/pages/CustomerServiceSettingsPage'), 'CustomerServiceSettingsPage');
 export const NotificationTemplatesPage = lazy(() => import('../admin/pages/NotificationTemplatesPage'), 'NotificationTemplatesPage');
 export const TeamPage = lazy(() => import('../admin/pages/TeamPage'), 'TeamPage');
 export const AuditLogPage = lazy(() => import('../admin/pages/AuditLogPage'), 'AuditLogPage');

@@ -67,14 +67,21 @@ export function useAdminListPage({
     () => JSON.stringify({ debouncedQ, filters, pageSizeState }),
     [debouncedQ, filters, pageSizeState],
   );
+  const filterKeyRef = useRef(filterKey);
 
   useEffect(() => {
-    setPage(1);
-  }, [filterKey]);
-
-  useEffect(() => {
+    // When filters/search/page-size change, reset to page 1 first and skip
+    // this render's fetch — otherwise we'd fire one request with the stale
+    // page + new filters, then immediately a second one once page resets.
+    if (filterKeyRef.current !== filterKey) {
+      filterKeyRef.current = filterKey;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
+    }
     load();
-  }, [load]);
+  }, [filterKey, page, load]);
 
   const setFilter = useCallback((key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));

@@ -4,12 +4,15 @@ import User from '../models/User.js';
 import { countPendingReviews } from '../utils/productRating.js';
 import { countOrdersWithUnreadCustomerMessages } from '../utils/orderMessages.js';
 import { countPendingOrderReturns } from './orderReturn.controller.js';
+import { countPendingCallbackRequests } from './callbackRequest.controller.js';
+import { countOpenUnreadConversations } from './supportConversation.controller.js';
 import { formatOrder } from '../utils/formatters.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { ORDER_STATUSES } from '../constants/orderStatuses.js';
 import {
   fillRevenueByDay,
   getStoreDateKey,
+  parseRevenuePeriod,
   revenueOrderMatch,
   startOfStoreDay,
   storeDateGroupField,
@@ -59,6 +62,8 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
     pendingReviewsCount,
     ordersUnreadMessagesCount,
     pendingReturnsCount,
+    pendingCallbackRequestsCount,
+    pendingLiveChatsCount,
     salesByDayRaw,
     ordersByStatusRaw,
     todayStats,
@@ -92,6 +97,8 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
     countPendingReviews(Product),
     countOrdersWithUnreadCustomerMessages(),
     countPendingOrderReturns(),
+    countPendingCallbackRequests(),
+    countOpenUnreadConversations(),
     Order.aggregate([
       {
         $match: {
@@ -157,6 +164,8 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
       pendingReviewsCount,
       ordersUnreadMessagesCount,
       pendingReturnsCount,
+      pendingCallbackRequestsCount,
+      pendingLiveChatsCount,
       todayOrders: todayStats.orders,
       todayRevenue: todayStats.revenue,
       todayOrdersChange: pctChange(todayStats.orders, yesterdayStats.orders),
@@ -177,4 +186,31 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
       latestOrders: latestOrders.map(formatOrder),
     },
   });
+});
+
+const DASHBOARD_SALES_TREND_PERIODS = new Set(['7d', '30d', '90d']);
+
+export const getDashboardSalesTrend = asyncHandler(async (req, res) => {
+  const period = DASHBOARD_SALES_TREND_PERIODS.has(req.query.period) ? req.query.period : '30d';
+  const { since, days, startKey } = parseRevenuePeriod(period);
+
+  const salesByDayRaw = await Order.aggregate([
+    { $match: { createdAt: { $gte: since }, ...REVENUE_MATCH } },
+    {
+      $group: {
+        _id: storeDateGroupField(),
+        revenue: { $sum: '$total' },
+        orders: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  const salesByDay = fillRevenueByDay(
+    salesByDayRaw.map((r) => ({ date: r._id, revenue: r.revenue, orders: r.orders })),
+    days,
+    startKey,
+  );
+
+  res.json({ success: true, data: { period, salesByDay } });
 });

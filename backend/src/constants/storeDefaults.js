@@ -108,6 +108,8 @@ export const DEFAULT_LOCATION_GATE = {
   mapCenterLat: 29.8453,
   mapCenterLng: 31.3339,
   mapZoom: 12,
+  /** Coverage areas (the umbrella) — one or more circles; no delivery zone may accept orders from outside all of them. Empty until configured. */
+  coverageAreas: [],
 };
 
 export const DEFAULT_LOW_STOCK_ALERT = {
@@ -203,6 +205,81 @@ export const DEFAULT_DRIVER_SETTINGS = {
   availabilityEnabled: true,
   pickingChecklistEnabled: true,
   cashCalculatorEnabled: true,
+};
+
+/** Keep in sync with the `liveChat` sub-schema in models/StoreSettings.js. maxConcurrentChats: 0 = unlimited. */
+export const DEFAULT_LIVE_CHAT = {
+  enabled: true,
+  scheduleEnabled: false,
+  schedule: [0, 1, 2, 3, 4, 5, 6].map((day) => ({ day, enabled: true, from: '09:00', to: '23:00' })),
+  maxConcurrentChats: 2,
+  csatTargetPercent: 90,
+  monthlyChatTarget: 0,
+  idlePromptMinutes: 1,
+  autoCloseMinutes: 15,
+  ratingEnabled: true,
+  offlineMessageAr: 'فريق الدعم غير متاح الآن، هنرد عليك في أقرب وقت خلال ساعات العمل.',
+  offlineMessageEn: "Our support team isn't available right now — we'll reply as soon as we're back.",
+};
+
+export const DEFAULT_CUSTOMER_SERVICE = {
+  enabled: true,
+  channels: [
+    {
+      id: 'phone',
+      type: 'phone',
+      enabled: true,
+      labelAr: 'اتصال هاتفي',
+      labelEn: 'Phone call',
+      descriptionAr: 'اتصل بنا مباشرة',
+      descriptionEn: 'Call us directly',
+      value: '16XXX',
+      icon: 'phone',
+      sortOrder: 0,
+    },
+    {
+      id: 'callback',
+      type: 'callback',
+      enabled: true,
+      labelAr: 'اطلب أن نتصل بك',
+      labelEn: 'Request a call back',
+      descriptionAr: 'اترك رقمك وهنتصل بيك',
+      descriptionEn: "Leave your number and we'll call you",
+      value: '',
+      icon: 'phone-outgoing',
+      sortOrder: 1,
+    },
+    {
+      id: 'chat',
+      type: 'chat',
+      enabled: true,
+      labelAr: 'الدردشة المباشرة',
+      labelEn: 'Live chat',
+      descriptionAr: 'تحدث مع المساعد الذكي',
+      descriptionEn: 'Chat with our assistant',
+      value: '',
+      icon: 'message-circle',
+      sortOrder: 2,
+    },
+    {
+      id: 'email',
+      type: 'email',
+      enabled: true,
+      labelAr: 'البريد الإلكتروني',
+      labelEn: 'Email',
+      descriptionAr: 'راسلنا وسنرد خلال 24 ساعة',
+      descriptionEn: "Email us — we'll reply within 24 hours",
+      value: 'support@marketplus.com',
+      icon: 'mail',
+      sortOrder: 3,
+    },
+  ],
+  callback: {
+    noteAr: 'هنتصل بيك خلال ساعة في أوقات العمل',
+    noteEn: "We'll call you back within an hour during business hours",
+    workingHoursAr: 'يومياً من 9 صباحاً حتى 12 منتصف الليل',
+    workingHoursEn: 'Daily, 9 AM – 12 AM',
+  },
 };
 
 export const DEFAULT_THEME_COLOR = 'hyperone';

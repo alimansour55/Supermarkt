@@ -71,6 +71,7 @@ export default function LoyaltyPage() {
   const isAr = language === 'ar';
   const toast = useToast();
   const [rules, setRules] = useState(DEFAULT_RULES);
+  const [savedRules, setSavedRules] = useState(DEFAULT_RULES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -95,12 +96,36 @@ export default function LoyaltyPage() {
 
   useEffect(() => {
     Promise.all([
-      adminApi.getLoyaltyRules().then(({ data }) => setRules({ ...DEFAULT_RULES, ...data.data })),
+      adminApi.getLoyaltyRules().then(({ data }) => {
+        const merged = { ...DEFAULT_RULES, ...data.data };
+        setRules(merged);
+        setSavedRules(merged);
+      }),
       loadOverview(),
     ])
       .catch(() => toast.error(isAr ? 'تعذر تحميل بيانات الولاء' : 'Failed to load loyalty data'))
       .finally(() => setLoading(false));
   }, [isAr, toast]);
+
+  const isDirty = useMemo(
+    () => Object.keys(DEFAULT_RULES).some((key) => String(rules[key]) !== String(savedRules[key])),
+    [rules, savedRules],
+  );
+
+  const ruleErrors = useMemo(() => {
+    const errors = {};
+    if (rules.enabled && (Number(rules.redemptionEGPPerPoint) || 0) <= 0) {
+      errors.redemptionEGPPerPoint = isAr
+        ? 'يجب أن تكون قيمة النقطة أكبر من صفر عند تفعيل الولاء'
+        : 'Must be greater than zero while loyalty is enabled';
+    }
+    if (Number(rules.maxRedeemPercent) > 100) {
+      errors.maxRedeemPercent = isAr ? 'لا يمكن أن تتجاوز 100%' : 'Cannot exceed 100%';
+    }
+    return errors;
+  }, [rules, isAr]);
+
+  const hasErrors = Object.keys(ruleErrors).length > 0;
 
   const preview = useMemo(() => {
     const percent = effectiveCashbackPercent(rules);
@@ -124,7 +149,9 @@ export default function LoyaltyPage() {
         minRedeemPoints: Number(rules.minRedeemPoints) || 0,
         maxRedeemPercent: Number(rules.maxRedeemPercent) || 0,
       });
-      setRules({ ...DEFAULT_RULES, ...data.data });
+      const merged = { ...DEFAULT_RULES, ...data.data };
+      setRules(merged);
+      setSavedRules(merged);
       toast.success(isAr ? 'تم حفظ قواعد الولاء' : 'Loyalty rules saved');
     } catch (error) {
       toast.error(error.response?.data?.message || (isAr ? 'تعذر الحفظ' : 'Save failed'));
@@ -190,7 +217,13 @@ export default function LoyaltyPage() {
       label={label}
       type="number"
       value={rules[key]}
-      onChange={(e) => setRules({ ...rules, [key]: e.target.value })}
+      disabled={!rules.enabled}
+      error={ruleErrors[key]}
+      onChange={(e) => {
+        const raw = e.target.value;
+        const value = raw === '' ? raw : Math.max(0, Number(raw));
+        setRules({ ...rules, [key]: Number.isNaN(value) ? raw : value });
+      }}
       {...extra}
     />
   );
@@ -239,10 +272,15 @@ export default function LoyaltyPage() {
               <p className="text-sm text-text-muted">{isAr ? 'كيف يكتسب العملاء النقاط ويستبدلونها' : 'How customers earn and redeem points'}</p>
             </div>
           </div>
-          <Button type="submit" disabled={saving}>
-            <Save className="h-4 w-4" />
-            {saving ? (isAr ? 'جار الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
-          </Button>
+          <div className="flex items-center gap-3">
+            {isDirty && !saving && (
+              <span className="text-xs font-medium text-amber-700">{isAr ? 'تغييرات غير محفوظة' : 'Unsaved changes'}</span>
+            )}
+            <Button type="submit" disabled={saving || hasErrors || !isDirty}>
+              <Save className="h-4 w-4" />
+              {saving ? (isAr ? 'جار الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
+            </Button>
+          </div>
         </div>
 
         <label className="flex items-center gap-2 text-sm font-medium">
@@ -251,33 +289,46 @@ export default function LoyaltyPage() {
         </label>
 
         {/* live preview */}
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm">
-          <p className="font-semibold text-emerald-900">
-            {isAr
-              ? `العميل يحصل على استرداد ${preview.percent}% — طلب بـ ${formatPrice(PREVIEW_ORDER)} = ${preview.points} نقطة (≈ ${formatPrice(preview.cash)})`
-              : `Customers get ${preview.percent}% back — a ${formatPrice(PREVIEW_ORDER)} order earns ${preview.points} points (≈ ${formatPrice(preview.cash)})`}
-          </p>
-          <p className="mt-1 text-emerald-800">
-            {isAr
-              ? `الاستبدال: كل ${preview.pointsPerEgp} نقطة = 1 ج.م · حتى ${rules.maxRedeemPercent || 0}% من قيمة الطلب`
-              : `Redemption: every ${preview.pointsPerEgp} points = EGP 1 · up to ${rules.maxRedeemPercent || 0}% of an order`}
-          </p>
-        </div>
+        {rules.enabled ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-sm">
+            <p className="font-semibold text-emerald-900">
+              {isAr
+                ? `العميل يحصل على استرداد ${preview.percent}% — طلب بـ ${formatPrice(PREVIEW_ORDER)} = ${preview.points} نقطة (≈ ${formatPrice(preview.cash)})`
+                : `Customers get ${preview.percent}% back — a ${formatPrice(PREVIEW_ORDER)} order earns ${preview.points} points (≈ ${formatPrice(preview.cash)})`}
+            </p>
+            <p className="mt-1 text-emerald-800">
+              {isAr
+                ? `الاستبدال: كل ${preview.pointsPerEgp} نقطة = 1 ج.م · حتى ${rules.maxRedeemPercent || 0}% من قيمة الطلب`
+                : `Redemption: every ${preview.pointsPerEgp} points = EGP 1 · up to ${rules.maxRedeemPercent || 0}% of an order`}
+            </p>
+            {Number(rules.maxRedeemPercent) >= 100 && (
+              <p className="mt-1 text-amber-700">
+                {isAr
+                  ? 'تنبيه: عند 100% يمكن للعميل دفع قيمة الطلب بالكامل من النقاط.'
+                  : 'Heads up: at 100% a customer can cover an entire order with points alone.'}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-surface p-4 text-sm text-text-muted">
+            {isAr ? 'نقاط الولاء معطّلة حالياً — لن يكتسب العملاء أو يستبدلون أي نقاط.' : 'Loyalty is currently disabled — customers will not earn or redeem points.'}
+          </div>
+        )}
 
-        <fieldset className="grid gap-4 md:grid-cols-2">
+        <fieldset className={`grid gap-4 md:grid-cols-2 ${rules.enabled ? '' : 'opacity-50'}`}>
           <legend className="mb-1 flex items-center gap-2 text-sm font-bold text-text"><Coins className="h-4 w-4 text-primary-700" />{isAr ? 'الاكتساب' : 'Earning'}</legend>
           {ruleField('earnPointsPerEGP', isAr ? 'نقاط لكل 1 ج.م' : 'Points per EGP spent', { min: '0', step: '0.01' })}
           {ruleField('minOrderToEarn', isAr ? 'الحد الأدنى للطلب لاكتساب النقاط' : 'Min order total to earn', { min: '0' })}
         </fieldset>
 
-        <fieldset className="grid gap-4 md:grid-cols-3">
+        <fieldset className={`grid gap-4 md:grid-cols-3 ${rules.enabled ? '' : 'opacity-50'}`}>
           <legend className="mb-1 flex items-center gap-2 text-sm font-bold text-text"><Wallet className="h-4 w-4 text-primary-700" />{isAr ? 'الاستبدال' : 'Redemption'}</legend>
           {ruleField('redemptionEGPPerPoint', isAr ? 'قيمة النقطة الواحدة (ج.م)' : 'EGP value per point', { min: '0', step: '0.01' })}
           {ruleField('minRedeemPoints', isAr ? 'أقل عدد نقاط للاستبدال' : 'Min points to redeem', { min: '0' })}
           {ruleField('maxRedeemPercent', isAr ? 'أقصى نسبة من الطلب %' : 'Max % of an order', { min: '0', max: '100' })}
         </fieldset>
 
-        <fieldset className="grid gap-4 md:grid-cols-2">
+        <fieldset className={`grid gap-4 md:grid-cols-2 ${rules.enabled ? '' : 'opacity-50'}`}>
           <legend className="mb-1 flex items-center gap-2 text-sm font-bold text-text"><Clock className="h-4 w-4 text-primary-700" />{isAr ? 'الصلاحية' : 'Expiry'}</legend>
           {ruleField('expiryDays', isAr ? 'مدة صلاحية النقاط (أيام، 0 = بلا انتهاء)' : 'Points valid for (days, 0 = never)', { min: '0' })}
         </fieldset>

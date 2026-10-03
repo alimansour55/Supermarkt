@@ -22,6 +22,7 @@ export default function NavigationVisualBuilder({
   navigation,
   onChange,
   storeSettings,
+  onChangeSettings,
   isAr,
   saving,
   isDirty,
@@ -218,12 +219,19 @@ export default function NavigationVisualBuilder({
     setSelection({ zone: 'footer-link', colIndex, linkIndex: links.length - 1 });
   };
 
-  const emptyColumn = () => ({
-    titleAr: '',
-    titleEn: '',
-    sortOrder: navigation.footerColumns?.length || 0,
-    links: [{ labelAr: '', labelEn: '', href: '/', sortOrder: 0, isExternal: false, isActive: true }],
-  });
+  const insertToolbar = useCallback((toolbarZone) => setSelection({ zone: 'toolbar-add', toolbarZone }), []);
+  const insertNav = useCallback(() => setSelection({ zone: 'nav-add' }), []);
+  const insertFooterColumn = useCallback(() => {
+    onChange({
+      ...navigation,
+      footerColumns: [...(navigation.footerColumns || []), {
+        titleAr: '',
+        titleEn: '',
+        sortOrder: navigation.footerColumns?.length || 0,
+        links: [{ labelAr: '', labelEn: '', href: '/', sortOrder: 0, isExternal: false, isActive: true }],
+      }],
+    });
+  }, [navigation, onChange]);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
@@ -309,14 +317,9 @@ export default function NavigationVisualBuilder({
                 toolbarItems={toolbarItems}
                 orderedNavRows={orderedNavRows}
                 onSelect={setSelection}
-                onInsertToolbar={(toolbarZone) => setSelection({ zone: 'toolbar-add', toolbarZone })}
-                onInsertNav={() => setSelection({ zone: 'nav-add' })}
-                onInsertFooterColumn={() => {
-                  onChange({
-                    ...navigation,
-                    footerColumns: [...(navigation.footerColumns || []), emptyColumn()],
-                  });
-                }}
+                onInsertToolbar={insertToolbar}
+                onInsertNav={insertNav}
+                onInsertFooterColumn={insertFooterColumn}
                 onToolbarMove={moveToolbar}
                 onToolbarToggleActive={toggleToolbarActive}
                 onToolbarDelete={(index) => {
@@ -369,9 +372,14 @@ export default function NavigationVisualBuilder({
               categories={categories}
               isAr={isAr}
               onChange={onChange}
+              storeSettings={storeSettings}
+              onChangeSettings={onChangeSettings}
               onClose={() => setSelection(null)}
               onDelete={handleDelete}
               onApplyContentPage={onApplyContentPage}
+              onInsertToolbar={insertToolbar}
+              onInsertNav={insertNav}
+              onInsertFooterColumn={insertFooterColumn}
             />
           </aside>
         </div>

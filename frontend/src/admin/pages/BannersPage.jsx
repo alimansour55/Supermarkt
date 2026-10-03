@@ -67,6 +67,7 @@ export default function BannersPage() {
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState('');
   const [placementFilter, setPlacementFilter] = useState('all');
+  const [imageErrors, setImageErrors] = useState({});
 
   const desktopPreview = useMemo(() => (
     files.desktopImage ? URL.createObjectURL(files.desktopImage) : form.desktopImage || form.image
@@ -338,7 +339,9 @@ export default function BannersPage() {
             const id = bannerId(banner);
             const status = campaignStatus(banner, isAr);
             const imageSrc = banner.desktopImage || banner.image || banner.mobileImage;
+            const showImage = imageSrc && !imageErrors[id];
             const isToggling = togglingId === id;
+            const title = (isAr ? banner.titleAr : banner.titleEn) || banner.titleAr || banner.titleEn || (isAr ? 'بدون عنوان' : 'Untitled banner');
 
             return (
               <article
@@ -351,11 +354,19 @@ export default function BannersPage() {
                   className="block w-full text-start"
                 >
                   <div className="relative h-44 bg-slate-100">
-                    {imageSrc ? (
-                      <img src={imageSrc} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]" />
+                    {showImage ? (
+                      <img
+                        src={imageSrc}
+                        alt=""
+                        className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
+                        onError={() => setImageErrors((prev) => (prev[id] ? prev : { ...prev, [id]: true }))}
+                      />
                     ) : (
-                      <div className="flex h-full items-center justify-center text-text-muted">
+                      <div className="flex h-full flex-col items-center justify-center gap-1 text-text-muted">
                         <Image className="h-10 w-10" />
+                        {imageSrc && (
+                          <span className="text-xs">{isAr ? 'تعذر تحميل الصورة' : 'Image failed to load'}</span>
+                        )}
                       </div>
                     )}
                     <span className={`absolute start-3 top-3 rounded-full px-2.5 py-1 text-xs font-bold ${status.className}`}>
@@ -368,7 +379,7 @@ export default function BannersPage() {
                     </span>
                   </div>
                   <div className="space-y-2 p-4">
-                    <p className="font-bold line-clamp-1">{isAr ? banner.titleAr : banner.titleEn}</p>
+                    <p className="font-bold line-clamp-1">{title}</p>
                     <p className="text-xs text-text-muted">
                       {banner.placement} · {banner.targetAudience || 'all'} · {banner.link}
                     </p>

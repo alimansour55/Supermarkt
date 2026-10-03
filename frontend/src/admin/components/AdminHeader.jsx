@@ -1,4 +1,4 @@
-import { Menu, Languages } from 'lucide-react';
+import { Menu, Globe } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import AdminBreadcrumbs from './AdminBreadcrumbs';
 import NotificationBell from './NotificationBell';
@@ -41,10 +41,10 @@ export default function AdminHeader({ title, breadcrumbs, onMenuClick, menuOpen 
           <button
             type="button"
             onClick={toggleLanguage}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-slate-50 hover:text-text"
+            className="flex shrink-0 items-center gap-1.5 rounded-full bg-primary-50/70 px-3.5 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-100"
             aria-label={isAr ? 'Switch to English' : 'التبديل إلى العربية'}
           >
-            <Languages className="h-4 w-4" />
+            <Globe className="h-4 w-4" />
             <span className="hidden sm:inline">{isAr ? 'English' : 'العربية'}</span>
           </button>
         </div>

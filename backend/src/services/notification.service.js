@@ -38,6 +38,23 @@ export async function notifyOrderCustomerMessage(order, preview) {
   });
 }
 
+export async function notifySupportConversationMessage(conversation, preview) {
+  const snippet = (preview || '').trim().slice(0, 120);
+  const customerName = conversation.user?.name || conversation.user?.phone || '';
+
+  return createNotification({
+    type: 'support_chat_message',
+    titleAr: 'رسالة دردشة جديدة',
+    titleEn: 'New live chat message',
+    messageAr: `${customerName || 'عميل'}${snippet ? `: ${snippet}` : ''}`,
+    messageEn: `${customerName || 'Customer'}${snippet ? `: ${snippet}` : ''}`,
+    link: `/admin/live-chat?conversation=${conversation._id}`,
+    data: {
+      conversationId: conversation._id,
+    },
+  });
+}
+
 export async function notifyLowStock(product, threshold) {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const existing = await Notification.findOne({

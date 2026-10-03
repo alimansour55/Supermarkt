@@ -92,11 +92,13 @@ export default function ContentPageEditorPanel({
               label={isAr ? 'عنوان SEO (عربي)' : 'SEO title (Arabic)'}
               value={form.seoTitleAr}
               onChange={(e) => updateField('seoTitleAr', e.target.value)}
+              placeholder={isAr ? 'اتركه فارغًا لاستخدام "عنوان الصفحة — اسم المتجر"' : 'Leave blank to use "Page title — Store name"'}
             />
             <Input
               label={isAr ? 'عنوان SEO (EN)' : 'SEO title (English)'}
               value={form.seoTitleEn}
               onChange={(e) => updateField('seoTitleEn', e.target.value)}
+              placeholder={isAr ? 'اتركه فارغًا لاستخدام "عنوان الصفحة — اسم المتجر"' : 'Leave blank to use "Page title — Store name"'}
             />
             <Textarea
               label={isAr ? 'وصف SEO (عربي)' : 'SEO description (Arabic)'}

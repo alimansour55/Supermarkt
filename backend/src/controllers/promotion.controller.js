@@ -377,7 +377,6 @@ function formatCatalogOffer(product) {
     promotionGetQty: product.promotionGetQty || null,
     promotionUnit: product.promotionUnit || 'pieces',
     category: product.category,
-    subCategory: product.subCategory,
   };
 }
 
@@ -392,7 +391,6 @@ export const listCatalogOffers = asyncHandler(async (req, res) => {
   const [products, total] = await Promise.all([
     Product.find(filter)
       .populate('category', 'slug nameAr nameEn')
-      .populate('subCategory', 'slug nameAr nameEn')
       .sort(sort)
       .skip(skip)
       .limit(limit),

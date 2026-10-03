@@ -6,6 +6,11 @@ const USER_NOTIFICATION_TYPES = [
   'order_tracking_live',
   'order_driver_location',
   'order_eta_update',
+  'wallet_topup_approved',
+  'wallet_topup_rejected',
+  'wallet_credit',
+  'wallet_debit',
+  'support_chat_reply',
 ];
 
 const userNotificationSchema = new mongoose.Schema(

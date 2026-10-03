@@ -1,5 +1,5 @@
 import StoreSettings from '../models/StoreSettings.js';
-import { DEFAULT_DRIVER_SETTINGS } from '../constants/storeDefaults.js';
+import { DEFAULT_DRIVER_SETTINGS, DEFAULT_LIVE_CHAT } from '../constants/storeDefaults.js';
 
 const SETTINGS_KEY = 'main';
 const CACHE_MS = 30_000;
@@ -10,6 +10,7 @@ function freshCache() {
     gpsDeliveryEnabled: true,
     aiChatEnabled: true,
     driverSettings: { ...DEFAULT_DRIVER_SETTINGS },
+    liveChat: { ...DEFAULT_LIVE_CHAT },
   };
 }
 
@@ -32,9 +33,14 @@ export function resolveDriverSettings(settings) {
   return { ...DEFAULT_DRIVER_SETTINGS, ...raw };
 }
 
+export function resolveLiveChatSettings(settings) {
+  const raw = settings?.liveChat?.toObject?.() || settings?.liveChat || {};
+  return { ...DEFAULT_LIVE_CHAT, ...raw };
+}
+
 async function refreshSettingsFlagsCache() {
   const settings = await StoreSettings.findOne({ key: SETTINGS_KEY })
-    .select('gpsDeliveryEnabled aiChatEnabled driverSettings')
+    .select('gpsDeliveryEnabled aiChatEnabled driverSettings liveChat')
     .lean();
 
   cache = {
@@ -42,6 +48,7 @@ async function refreshSettingsFlagsCache() {
     gpsDeliveryEnabled: isGpsDeliveryEnabledFromSettings(settings),
     aiChatEnabled: isAiChatEnabledFromSettings(settings),
     driverSettings: resolveDriverSettings(settings),
+    liveChat: resolveLiveChatSettings(settings),
   };
   return cache;
 }
@@ -63,4 +70,8 @@ export async function getAiChatEnabled() {
 
 export async function getDriverSettings() {
   return (await getCached()).driverSettings;
+}
+
+export async function getLiveChatSettings() {
+  return (await getCached()).liveChat;
 }

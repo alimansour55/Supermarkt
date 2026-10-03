@@ -24,10 +24,11 @@ import {
   RotateCcw,
   Navigation,
   Palette,
-  Globe2,
+  Radar,
   Radio,
   RefreshCw,
   Store,
+  Trash2,
   ClipboardList,
   LineChart,
   SlidersHorizontal,
@@ -37,6 +38,9 @@ import {
   Filter,
   Handshake,
   Wallet,
+  Receipt,
+  PhoneCall,
+  Headphones,
 } from 'lucide-react';
 
 export const ADMIN_NAV_GROUPS = [
@@ -100,6 +104,13 @@ export const ADMIN_NAV_GROUPS = [
         permission: 'orders:read',
       },
       {
+        path: '/admin/invoices',
+        labelAr: 'الفواتير',
+        labelEn: 'Invoices',
+        Icon: Receipt,
+        permission: 'orders:read',
+      },
+      {
         path: '/admin/live-deliveries',
         labelAr: 'التوصيل المباشر',
         labelEn: 'Live deliveries',
@@ -129,8 +140,32 @@ export const ADMIN_NAV_GROUPS = [
         badgeKey: 'pendingReturns',
         permission: 'orders:read',
       },
+      {
+        path: '/admin/callback-requests',
+        labelAr: 'طلبات الاتصال',
+        labelEn: 'Callback requests',
+        Icon: PhoneCall,
+        badgeKey: 'pendingCallbackRequests',
+        permission: 'orders:read',
+      },
+      {
+        path: '/admin/live-chat',
+        labelAr: 'الدردشة المباشرة',
+        labelEn: 'Live chat',
+        Icon: MessageCircle,
+        badgeKey: 'pendingLiveChats',
+        permission: 'support:chat',
+      },
+      { path: '/admin/coverage-area', labelAr: 'منطقة التغطية', labelEn: 'Coverage area', Icon: Radar, permission: 'delivery:write' },
       { path: '/admin/delivery', labelAr: 'مناطق التوصيل', labelEn: 'Delivery zones', Icon: Truck, permission: 'delivery:write' },
       { path: '/admin/fulfillment-locations', labelAr: 'مواقع الشحن', labelEn: 'Fulfillment locations', Icon: Warehouse, permission: 'delivery:write' },
+      {
+        path: '/admin/order-trash',
+        labelAr: 'سلة المحذوفات',
+        labelEn: 'Recycle bin',
+        Icon: Trash2,
+        permission: 'orders:delete',
+      },
     ],
   },
   {
@@ -157,7 +192,6 @@ export const ADMIN_NAV_GROUPS = [
       { path: '/admin/navigation', labelAr: 'Header & Footer CMS', labelEn: 'Header & Footer CMS', Icon: Navigation, permission: 'settings:write' },
       { path: '/admin/content', labelAr: 'صفحات المحتوى', labelEn: 'Content pages', Icon: FileText, permission: 'content:write' },
       { path: '/admin/appearance', labelAr: 'المظهر والألوان', labelEn: 'Appearance', Icon: Palette, permission: 'settings:write' },
-      { path: '/admin/seo', labelAr: 'SEO', labelEn: 'SEO', Icon: Globe2, permission: 'settings:write' },
     ],
   },
   {
@@ -201,6 +235,7 @@ export const ADMIN_NAV_GROUPS = [
     items: [
       { path: '/admin/settings', labelAr: 'إعدادات المتجر', labelEn: 'Store settings', Icon: Settings, permission: 'settings:write' },
       { path: '/admin/payments', labelAr: 'طرق الدفع', labelEn: 'Payment methods', Icon: CreditCard, permission: 'settings:write' },
+      { path: '/admin/customer-service', labelAr: 'خدمة العملاء', labelEn: 'Customer service', Icon: Headphones, permission: 'settings:write' },
       { path: '/admin/notifications', labelAr: 'قوالب الإشعارات', labelEn: 'Notification templates', Icon: Bell, permission: 'notifications:write' },
       { path: '/admin/audit-log', labelAr: 'سجل التدقيق', labelEn: 'Audit log', Icon: ScrollText, permission: 'audit:read' },
     ],

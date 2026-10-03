@@ -1,4 +1,4 @@
-import { MousePointerClick, X } from 'lucide-react';
+import { Columns3, MousePointerClick, PanelRight, Plus, X } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import Input from '../../../components/ui/Input';
 import {
@@ -8,11 +8,30 @@ import {
   normalizeToolbarItem,
 } from '../../../utils/headerToolbarConfig';
 import { DEFAULT_HOME_NAV } from '../../../utils/navBarConfig';
+import {
+  DEFAULT_FOOTER_LEGAL_LINKS,
+  DEFAULT_FOOTER_PAYMENT_METHODS,
+  FOOTER_PAYMENT_OPTIONS,
+} from '../../../utils/footerConfig';
 import { normalizeNavHref } from '../../utils/navigationHelpers';
 import HeaderToolbarIconPicker from '../HeaderToolbarIconPicker';
 import HeaderToolbarStylePicker from '../HeaderToolbarStylePicker';
 import LinkPresetSelect from '../LinkPresetSelect';
 import CategoryBrowsePicker from '../CategoryBrowsePicker';
+
+const PAYMENT_LABELS = {
+  visa: 'Visa', mastercard: 'Mastercard', meeza: 'Meeza', valu: 'valU',
+  fawry: 'Fawry', instapay: 'InstaPay', 'vodafone-cash': 'Vodafone Cash',
+};
+
+function CheckRow({ checked, onChange, children }) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      {children}
+    </label>
+  );
+}
 
 function PanelShell({ isAr, title, subtitle, onClose, children, footer }) {
   return (
@@ -40,7 +59,31 @@ function PanelShell({ isAr, title, subtitle, onClose, children, footer }) {
   );
 }
 
-function EmptyPanel({ isAr }) {
+function EmptyPanel({ isAr, onInsertToolbar, onInsertNav, onInsertFooterColumn }) {
+  const quickAdds = [
+    {
+      key: 'toolbar',
+      icon: PanelRight,
+      labelAr: 'عنصر هيدر',
+      labelEn: 'Header item',
+      onClick: () => onInsertToolbar?.('end'),
+    },
+    {
+      key: 'nav',
+      icon: MousePointerClick,
+      labelAr: 'عنصر قائمة',
+      labelEn: 'Menu item',
+      onClick: () => onInsertNav?.(),
+    },
+    {
+      key: 'footer',
+      icon: Columns3,
+      labelAr: 'عمود فوتر',
+      labelEn: 'Footer column',
+      onClick: () => onInsertFooterColumn?.(),
+    },
+  ];
+
   return (
     <div className="flex h-full min-h-[280px] flex-col items-center justify-center px-6 py-10 text-center xl:min-h-[calc(100vh-12rem)]">
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
@@ -68,6 +111,26 @@ function EmptyPanel({ isAr }) {
           {isAr ? 'فتح لوحة التعديل' : 'Open edit panel'}
         </li>
       </ul>
+
+      <div className="mt-6 w-full max-w-xs border-t border-border pt-5">
+        <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+          {isAr ? 'أو أضف عنصراً جديداً' : 'Or add something new'}
+        </p>
+        <div className="space-y-1.5">
+          {quickAdds.map(({ key, icon: Icon, labelAr, labelEn, onClick }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={onClick}
+              className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-sm font-semibold text-text-muted transition hover:border-primary-300 hover:bg-primary-50/50 hover:text-primary-700"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <Icon className="h-4 w-4 shrink-0" />
+              {isAr ? labelAr : labelEn}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -90,10 +153,28 @@ export default function NavigationEditPanel({
   onClose,
   onDelete,
   onApplyContentPage,
+  storeSettings,
+  onChangeSettings,
+  onInsertToolbar,
+  onInsertNav,
+  onInsertFooterColumn,
 }) {
-  if (!selection) return <EmptyPanel isAr={isAr} />;
+  if (!selection) {
+    return (
+      <EmptyPanel
+        isAr={isAr}
+        onInsertToolbar={onInsertToolbar}
+        onInsertNav={onInsertNav}
+        onInsertFooterColumn={onInsertFooterColumn}
+      />
+    );
+  }
 
   const { zone } = selection;
+  const settings = storeSettings || {};
+  const patchSettings = (patch) => onChangeSettings?.({ ...settings, ...patch });
+  const footer = navigation.footer || {};
+  const patchFooter = (patch) => onChange({ ...navigation, footer: { ...footer, ...patch } });
 
   if (zone === 'announcement') {
     return (
@@ -521,6 +602,232 @@ export default function NavigationEditPanel({
             <input type="checkbox" checked={link.isActive !== false} onChange={(e) => updateLink({ isActive: e.target.checked })} />
             {isAr ? 'نشط' : 'Active'}
           </label>
+        </div>
+      </PanelShell>
+    );
+  }
+
+  if (zone === 'topbar') {
+    return (
+      <PanelShell
+        isAr={isAr}
+        title={isAr ? 'الشريط العلوي' : 'Top utility bar'}
+        subtitle={isAr ? 'يظهر فوق الهيدر على سطح المكتب' : 'Above the header on desktop'}
+        onClose={onClose}
+      >
+        <div className="space-y-4">
+          <Input
+            label={isAr ? 'رابط الخدمة — نص عربي' : 'Service link — Arabic'}
+            value={navigation.topBarServiceLabelAr || ''}
+            placeholder={isAr ? 'خدمة العملاء' : 'خدمة العملاء'}
+            onChange={(e) => onChange({ ...navigation, topBarServiceLabelAr: e.target.value })}
+          />
+          <Input
+            label={isAr ? 'رابط الخدمة — نص EN' : 'Service link — English'}
+            value={navigation.topBarServiceLabelEn || ''}
+            placeholder="Customer service"
+            onChange={(e) => onChange({ ...navigation, topBarServiceLabelEn: e.target.value })}
+          />
+          <Input
+            label="URL"
+            value={navigation.topBarServiceHref || ''}
+            placeholder="/contact"
+            onChange={(e) => onChange({ ...navigation, topBarServiceHref: normalizeNavHref(e.target.value) })}
+          />
+          <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-text-muted">
+            {isAr
+              ? 'مبدّل اللغة واختيار الموقع عناصر تلقائية في هذا الشريط ولا يمكن حذفها.'
+              : 'The language switcher and location selector are automatic parts of this bar and cannot be removed.'}
+          </p>
+        </div>
+      </PanelShell>
+    );
+  }
+
+  if (zone === 'logo') {
+    return (
+      <PanelShell
+        isAr={isAr}
+        title={isAr ? 'الشعار' : 'Logo'}
+        subtitle={isAr ? 'صورة الشعار واسم المتجر' : 'Logo image & store name'}
+        onClose={onClose}
+      >
+        <div className="space-y-3 text-sm text-text-muted">
+          <p>
+            {isAr
+              ? 'صورة الشعار واسم المتجر يُداران من صفحة «معلومات المتجر» لضمان توحيدهما في كل مكان (الفواتير، البريد، التطبيق).'
+              : 'The logo image and store name are managed on the Store Info page so they stay consistent everywhere (invoices, email, app).'}
+          </p>
+        </div>
+      </PanelShell>
+    );
+  }
+
+  if (zone === 'footer-brand') {
+    return (
+      <PanelShell isAr={isAr} title={isAr ? 'العلامة والشعار النصي' : 'Brand & tagline'} onClose={onClose}>
+        <div className="space-y-4">
+          <Input
+            label={isAr ? 'الشعار النصي (عربي)' : 'Tagline (Arabic)'}
+            value={settings.taglineAr || ''}
+            onChange={(e) => patchSettings({ taglineAr: e.target.value })}
+          />
+          <Input
+            label={isAr ? 'الشعار النصي (EN)' : 'Tagline (English)'}
+            value={settings.taglineEn || ''}
+            onChange={(e) => patchSettings({ taglineEn: e.target.value })}
+          />
+        </div>
+      </PanelShell>
+    );
+  }
+
+  if (zone === 'footer-social') {
+    const links = settings.socialLinks || {};
+    const patchSocial = (key, value) => patchSettings({ socialLinks: { ...links, [key]: value } });
+    return (
+      <PanelShell isAr={isAr} title={isAr ? 'أيقونات التواصل' : 'Social icons'} onClose={onClose}>
+        <div className="space-y-4">
+          <CheckRow checked={footer.showSocial !== false} onChange={(v) => patchFooter({ showSocial: v })}>
+            {isAr ? 'إظهار في الفوتر' : 'Show in footer'}
+          </CheckRow>
+          {['facebook', 'instagram', 'x', 'youtube'].map((key) => (
+            <Input
+              key={key}
+              label={key === 'x' ? 'X (Twitter)' : key.charAt(0).toUpperCase() + key.slice(1)}
+              value={links[key] || ''}
+              placeholder="https://"
+              onChange={(e) => patchSocial(key, e.target.value)}
+            />
+          ))}
+          <p className="text-xs text-text-muted">
+            {isAr ? 'الأيقونة تظهر فقط عند إدخال رابط.' : 'Each icon only appears when a link is set.'}
+          </p>
+        </div>
+      </PanelShell>
+    );
+  }
+
+  if (zone === 'footer-contact') {
+    return (
+      <PanelShell isAr={isAr} title={isAr ? 'بيانات التواصل' : 'Contact info'} onClose={onClose}>
+        <div className="space-y-4">
+          <CheckRow checked={footer.showContact !== false} onChange={(v) => patchFooter({ showContact: v })}>
+            {isAr ? 'إظهار في الفوتر' : 'Show in footer'}
+          </CheckRow>
+          <Input
+            label={isAr ? 'هاتف الدعم' : 'Support phone'}
+            value={settings.supportPhone || ''}
+            onChange={(e) => patchSettings({ supportPhone: e.target.value })}
+          />
+          <Input
+            label={isAr ? 'بريد الدعم' : 'Support email'}
+            value={settings.supportEmail || ''}
+            onChange={(e) => patchSettings({ supportEmail: e.target.value })}
+          />
+        </div>
+      </PanelShell>
+    );
+  }
+
+  if (zone === 'footer-apps') {
+    const appLinks = settings.appLinks || {};
+    const patchApp = (key, value) => patchSettings({ appLinks: { ...appLinks, [key]: value } });
+    return (
+      <PanelShell isAr={isAr} title={isAr ? 'روابط التطبيق' : 'App store badges'} onClose={onClose}>
+        <div className="space-y-4">
+          <CheckRow checked={footer.showApps !== false} onChange={(v) => patchFooter({ showApps: v })}>
+            {isAr ? 'إظهار في الفوتر' : 'Show in footer'}
+          </CheckRow>
+          <Input label="App Store" value={appLinks.appStore || ''} placeholder="https://" onChange={(e) => patchApp('appStore', e.target.value)} />
+          <Input label="Google Play" value={appLinks.googlePlay || ''} placeholder="https://" onChange={(e) => patchApp('googlePlay', e.target.value)} />
+          <Input label="AppGallery" value={appLinks.appGallery || ''} placeholder="https://" onChange={(e) => patchApp('appGallery', e.target.value)} />
+        </div>
+      </PanelShell>
+    );
+  }
+
+  if (zone === 'footer-backtop') {
+    return (
+      <PanelShell isAr={isAr} title={isAr ? 'زر العودة للأعلى' : 'Back to top'} onClose={onClose}>
+        <CheckRow checked={footer.showBackToTop !== false} onChange={(v) => patchFooter({ showBackToTop: v })}>
+          {isAr ? 'إظهار زر العودة للأعلى' : 'Show the back-to-top button'}
+        </CheckRow>
+      </PanelShell>
+    );
+  }
+
+  if (zone === 'footer-payment') {
+    const selected = footer.paymentMethods?.length ? footer.paymentMethods : DEFAULT_FOOTER_PAYMENT_METHODS;
+    const toggle = (method) => {
+      const next = selected.includes(method)
+        ? selected.filter((m) => m !== method)
+        : [...selected, method];
+      patchFooter({ paymentMethods: next });
+    };
+    return (
+      <PanelShell isAr={isAr} title={isAr ? 'وسائل الدفع' : 'Payment icons'} onClose={onClose}>
+        <div className="space-y-3">
+          <CheckRow checked={footer.showPayment !== false} onChange={(v) => patchFooter({ showPayment: v })}>
+            {isAr ? 'إظهار في الفوتر' : 'Show in footer'}
+          </CheckRow>
+          <div className="space-y-1.5">
+            {FOOTER_PAYMENT_OPTIONS.map((method) => (
+              <label key={method} className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm">
+                <input type="checkbox" checked={selected.includes(method)} onChange={() => toggle(method)} />
+                {PAYMENT_LABELS[method] || method}
+              </label>
+            ))}
+          </div>
+        </div>
+      </PanelShell>
+    );
+  }
+
+  if (zone === 'footer-legal') {
+    const links = footer.legalLinks?.length ? footer.legalLinks : DEFAULT_FOOTER_LEGAL_LINKS;
+    const setLinks = (next) => patchFooter({ legalLinks: next });
+    const updateLink = (i, patch) => setLinks(links.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+    return (
+      <PanelShell
+        isAr={isAr}
+        title={isAr ? 'الروابط القانونية' : 'Legal links'}
+        subtitle={isAr ? 'في الشريط السفلي للفوتر' : 'Footer bottom bar'}
+        onClose={onClose}
+      >
+        <div className="space-y-4">
+          <CheckRow checked={footer.showLegal !== false} onChange={(v) => patchFooter({ showLegal: v })}>
+            {isAr ? 'إظهار في الفوتر' : 'Show in footer'}
+          </CheckRow>
+          {links.map((link, i) => (
+            <div key={i} className="space-y-2 rounded-xl border border-border p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-text-muted">#{i + 1}</span>
+                {links.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setLinks(links.filter((_, idx) => idx !== i))}
+                    className="text-xs font-semibold text-red-600 hover:underline"
+                  >
+                    {isAr ? 'حذف' : 'Remove'}
+                  </button>
+                )}
+              </div>
+              <Input label={isAr ? 'عربي' : 'Arabic'} value={link.labelAr || ''} onChange={(e) => updateLink(i, { labelAr: e.target.value })} />
+              <Input label="EN" value={link.labelEn || ''} onChange={(e) => updateLink(i, { labelEn: e.target.value })} />
+              <Input label="URL" value={link.href || ''} onChange={(e) => updateLink(i, { href: normalizeNavHref(e.target.value) })} />
+            </div>
+          ))}
+          {links.length < 12 && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setLinks([...links, { labelAr: '', labelEn: '', href: '/' }])}
+            >
+              {isAr ? 'إضافة رابط' : 'Add link'}
+            </Button>
+          )}
         </div>
       </PanelShell>
     );

@@ -84,7 +84,7 @@ export function compactProduct(product) {
 async function loadStoreSettings() {
   return StoreSettings.findOne({ key: SETTINGS_KEY })
     .select(
-      'storeNameAr storeNameEn supportPhone supportEmail whatsappUrl deliveryPromiseAr deliveryPromiseEn freeDeliveryThreshold freeDeliveryEnabled currency paymentMethods loyalty',
+      'storeNameAr storeNameEn supportPhone supportEmail whatsappUrl deliveryPromiseAr deliveryPromiseEn freeDeliveryThreshold freeDeliveryEnabled currency paymentMethods loyalty customerService',
     )
     .lean();
 }
@@ -277,6 +277,10 @@ export async function toolGetStoreInfo() {
     supportPhone: settings?.supportPhone || null,
     supportEmail: settings?.supportEmail || null,
     whatsappUrl: settings?.whatsappUrl || null,
+    supportChannels: (settings?.customerService?.enabled === false ? [] : settings?.customerService?.channels || [])
+      .filter((ch) => ch.enabled !== false)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+      .map((ch) => ({ type: ch.type, labelAr: ch.labelAr, labelEn: ch.labelEn })),
     paymentMethods: (settings?.paymentMethods || [])
       .filter((m) => m.isActive !== false)
       .map((m) => ({

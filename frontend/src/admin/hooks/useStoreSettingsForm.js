@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import { useAdminPanel } from '../context/AdminPanelContext';
@@ -17,6 +17,11 @@ export function useStoreSettingsForm() {
   const [logoFile, setLogoFile] = useState(null);
   const [faviconFile, setFaviconFile] = useState(null);
   const [stampFile, setStampFile] = useState(null);
+  // Top-level settings keys this form actually edited. Other admin tabs/pages
+  // can change unrelated sections (e.g. SEO) concurrently — on save we only
+  // send our own dirty fields and pull everything else fresh, so we never
+  // clobber someone else's change with a stale snapshot from page load.
+  const dirtyFieldsRef = useRef(new Set());
 
   useEffect(() => {
     let mounted = true;
@@ -35,18 +40,22 @@ export function useStoreSettingsForm() {
   }, []);
 
   const update = useCallback((field, value) => {
+    dirtyFieldsRef.current.add(field);
     setSettings((prev) => (prev ? { ...prev, [field]: value } : prev));
   }, []);
 
   const updateNested = useCallback((group, field, value) => {
+    dirtyFieldsRef.current.add(group);
     setSettings((prev) => (prev ? { ...prev, [group]: { ...prev[group], [field]: value } } : prev));
   }, []);
 
   const updateInvoice = useCallback((field, value) => {
+    dirtyFieldsRef.current.add('invoice');
     setSettings((prev) => (prev ? { ...prev, invoice: { ...prev.invoice, [field]: value } } : prev));
   }, []);
 
   const updateInvoiceLabel = useCallback((field, value) => {
+    dirtyFieldsRef.current.add('invoice');
     setSettings((prev) => (prev ? {
       ...prev,
       invoice: { ...prev.invoice, labels: { ...prev.invoice.labels, [field]: value } },
@@ -54,6 +63,7 @@ export function useStoreSettingsForm() {
   }, []);
 
   const updateInvoiceColumn = useCallback((field, value) => {
+    dirtyFieldsRef.current.add('invoice');
     setSettings((prev) => (prev ? {
       ...prev,
       invoice: { ...prev.invoice, columns: { ...prev.invoice.columns, [field]: value } },
@@ -61,6 +71,7 @@ export function useStoreSettingsForm() {
   }, []);
 
   const updateInvoiceRows = useCallback((rows) => {
+    dirtyFieldsRef.current.add('invoice');
     setSettings((prev) => (prev ? { ...prev, invoice: { ...prev.invoice, customRows: rows } } : prev));
   }, []);
 
@@ -69,7 +80,22 @@ export function useStoreSettingsForm() {
     if (!settings) return false;
     setSaving(true);
     try {
-      const payload = buildStoreSettingsSavePayload(settings);
+      // Merge our edited fields onto the latest server state, not the snapshot
+      // this page loaded with — another tab may have saved a different section
+      // (e.g. SEO) since then, and we must not send that stale copy back.
+      let base = settings;
+      try {
+        const { data } = await adminApi.getStoreSettings();
+        const freshSettings = normalizeStoreSettings(data.data);
+        base = { ...freshSettings };
+        dirtyFieldsRef.current.forEach((key) => {
+          base[key] = settings[key];
+        });
+      } catch {
+        // couldn't refresh — fall back to saving our local snapshot as-is
+      }
+
+      const payload = buildStoreSettingsSavePayload(base);
       let response;
 
       if (logoFile || faviconFile || stampFile) {
@@ -85,6 +111,7 @@ export function useStoreSettingsForm() {
 
       const saved = normalizeStoreSettings(response.data.data);
       setSettings(saved);
+      dirtyFieldsRef.current = new Set();
       setLogoFile(null);
       setFaviconFile(null);
       setStampFile(null);

@@ -35,7 +35,7 @@ export default function SettingsFormShell({
         to="/admin/settings"
         className="inline-flex items-center gap-1 text-sm font-medium text-primary-700 hover:text-primary-800"
       >
-        <ChevronLeft className="h-4 w-4" aria-hidden />
+        <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
         {backLabel || (isAr ? 'العودة لإعدادات المتجر' : 'Back to store settings')}
       </Link>
 

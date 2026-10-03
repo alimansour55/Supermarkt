@@ -1,5 +1,5 @@
 import { mergeFreeDeliveryBanner, parseFreeDeliveryMethodsFromApi } from '../../utils/freeDelivery';
-import { normalizeLocationGate, normalizeDriverSettings } from './storeSettingsDefaults';
+import { normalizeLocationGate, normalizeDriverSettings, normalizeCustomerService, normalizeLiveChatSettings } from './storeSettingsDefaults';
 
 /** Build a clean payload for store settings save (no Mongo metadata). */
 export function buildStoreSettingsSavePayload(settings) {
@@ -35,6 +35,8 @@ export function buildStoreSettingsSavePayload(settings) {
     aiChatEnabled: settings.aiChatEnabled !== false,
     locationGate: normalizeLocationGate(settings.locationGate),
     driverSettings: normalizeDriverSettings(settings.driverSettings),
+    customerService: normalizeCustomerService(settings.customerService),
+    liveChat: normalizeLiveChatSettings(settings.liveChat),
     freeDeliveryMethods: parseFreeDeliveryMethodsFromApi(settings.freeDeliveryMethods),
     freeDeliveryBanner: mergeFreeDeliveryBanner(settings.freeDeliveryBanner),
     scheduledMinLeadMinutes: Math.min(1440, Math.max(0, Math.round(Number(settings.scheduledMinLeadMinutes) || 120))),

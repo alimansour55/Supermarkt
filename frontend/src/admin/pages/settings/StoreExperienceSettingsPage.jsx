@@ -58,7 +58,13 @@ export default function StoreExperienceSettingsPage() {
           />
         </div>
 
-        <details className="mt-6 rounded-xl border border-amber-200 bg-amber-50/30 p-4">
+        <p className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50/40 px-4 py-3 text-sm text-emerald-900">
+          {isAr
+            ? 'إعدادات الدردشة المباشرة (الساعات، السعة، الفريق، المستهدفات) انتقلت إلى: لوحة التحكم ← الدردشة المباشرة ← الإعدادات.'
+            : 'Live chat options (hours, capacity, team, targets) now live in Admin → Live chat → Settings.'}
+        </p>
+
+        <details className="mt-4 rounded-xl border border-amber-200 bg-amber-50/30 p-4">
           <summary className="cursor-pointer text-sm font-semibold">
             {isAr ? 'تفاصيل تنبيه المخزون' : 'Low stock details'}
           </summary>

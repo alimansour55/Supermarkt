@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requirePermission, staffOnly } from '../middleware/auth.js';
 import { validate, createAdminUserValidation, bulkAdminUsersValidation } from '../middleware/validate.js';
 import { getAdminReturns } from '../controllers/orderReturn.controller.js';
-import { getDashboardStats } from '../controllers/admin.controller.js';
+import { getDashboardStats, getDashboardSalesTrend } from '../controllers/admin.controller.js';
 import { getReports } from '../controllers/reports.controller.js';
 import { getRevenueAnalytics, getRevenueDashboard } from '../controllers/revenue.controller.js';
 import {
@@ -11,6 +11,11 @@ import {
   updatePartnerRevenueSettingsHandler,
   searchPartnerRevenueProductsHandler,
   searchPartnerRevenueCustomersHandler,
+  simulatePartnerRevenueHandler,
+  getPartnerStatementHandler,
+  getPartnerLedgerHandler,
+  createPartnerLedgerEntryHandler,
+  deletePartnerLedgerEntryHandler,
 } from '../controllers/partnerRevenue.controller.js';
 import {
   getPartnerPayoutsHandler,
@@ -20,6 +25,7 @@ import {
   updatePartnerPayoutHandler,
   setPartnerPayoutStatusHandler,
   deletePartnerPayoutHandler,
+  exportPartnerPayoutsHandler,
 } from '../controllers/partnerPayout.controller.js';
 import { getAuditLogs } from '../controllers/auditLog.controller.js';
 import {
@@ -52,6 +58,7 @@ const router = Router();
 router.get('/order-returns', ...staffOnly, getAdminReturns);
 
 router.get('/dashboard/stats', ...requirePermission('dashboard:read'), getDashboardStats);
+router.get('/dashboard/sales-trend', ...requirePermission('dashboard:read'), getDashboardSalesTrend);
 router.get('/revenue', ...requirePermission('reports:read'), getRevenueDashboard);
 router.get('/revenue/analytics', ...requirePermission('reports:read'), getRevenueAnalytics);
 router.get('/reports', ...requirePermission('reports:read'), getReports);
@@ -60,8 +67,14 @@ router.get('/partner-revenue/settings', ...requirePermission('reports:read'), ge
 router.get('/partner-revenue/search-products', ...requirePermission('reports:read'), searchPartnerRevenueProductsHandler);
 router.get('/partner-revenue/search-customers', ...requirePermission('reports:read'), searchPartnerRevenueCustomersHandler);
 router.put('/partner-revenue/settings', ...requirePermission('settings:write'), updatePartnerRevenueSettingsHandler);
+router.post('/partner-revenue/simulate', ...requirePermission('reports:read'), simulatePartnerRevenueHandler);
+router.get('/partner-revenue/partners/:key/statement', ...requirePermission('reports:read'), getPartnerStatementHandler);
+router.get('/partner-revenue/partners/:key/ledger', ...requirePermission('reports:read'), getPartnerLedgerHandler);
+router.post('/partner-revenue/partners/:key/ledger', ...requirePermission('settings:write'), createPartnerLedgerEntryHandler);
+router.delete('/partner-revenue/ledger/:id', ...requirePermission('settings:write'), deletePartnerLedgerEntryHandler);
 router.get('/partner-revenue/payouts', ...requirePermission('reports:read'), getPartnerPayoutsHandler);
 router.get('/partner-revenue/payouts/summary', ...requirePermission('reports:read'), getPartnerPayoutSummaryHandler);
+router.get('/partner-revenue/payouts/export', ...requirePermission('reports:read'), exportPartnerPayoutsHandler);
 router.post('/partner-revenue/payouts/generate', ...requirePermission('settings:write'), generatePartnerPayoutsHandler);
 router.post('/partner-revenue/payouts', ...requirePermission('settings:write'), createPartnerPayoutHandler);
 router.patch('/partner-revenue/payouts/:id', ...requirePermission('settings:write'), updatePartnerPayoutHandler);

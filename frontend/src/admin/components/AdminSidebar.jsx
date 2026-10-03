@@ -5,6 +5,7 @@ import { ADMIN_NAV_GROUPS } from '../adminNavGroups';
 import { APP_NAME, APP_NAME_EN } from '../../utils/constants';
 import { useAdminStats } from '../context/AdminStatsContext';
 import { useAdminPanel } from '../context/AdminPanelContext';
+import { useStoreSettings } from '../../context/StoreSettingsContext';
 import { hasPermission, roleLabel } from '../adminPermissions';
 
 function resolveBadge(item, stats) {
@@ -13,6 +14,8 @@ function resolveBadge(item, stats) {
     pendingReviewsCount,
     ordersUnreadMessagesCount,
     pendingReturnsCount,
+    pendingCallbackRequestsCount,
+    pendingLiveChatsCount,
     outOfStockCount,
   } = stats;
 
@@ -27,6 +30,12 @@ function resolveBadge(item, stats) {
   }
   if (item.badgeKey === 'pendingReturns' && pendingReturnsCount > 0) {
     return { value: pendingReturnsCount, variant: 'message' };
+  }
+  if (item.badgeKey === 'pendingCallbackRequests' && pendingCallbackRequestsCount > 0) {
+    return { value: pendingCallbackRequestsCount, variant: 'message' };
+  }
+  if (item.badgeKey === 'pendingLiveChats' && pendingLiveChatsCount > 0) {
+    return { value: pendingLiveChatsCount, variant: 'message' };
   }
   if (item.badgeKey === 'pendingReviews' && pendingReviewsCount > 0) {
     return { value: pendingReviewsCount, variant: 'default' };
@@ -76,7 +85,12 @@ export default function AdminSidebar({
   const location = useLocation();
   const stats = useAdminStats();
   const { showRevenue } = useAdminPanel();
+  const { settings } = useStoreSettings();
   const { pendingReviewsCount } = stats;
+
+  const storeName = isAr
+    ? (settings?.storeNameAr || APP_NAME)
+    : (settings?.storeNameEn || APP_NAME_EN);
 
   const visibleGroups = useMemo(
     () => ADMIN_NAV_GROUPS.map((group) => ({
@@ -139,7 +153,7 @@ export default function AdminSidebar({
       >
         <div className="flex items-center justify-between border-b border-slate-700 px-5 py-5">
           <div>
-            <p className="text-lg font-bold text-primary-400">{isAr ? APP_NAME : APP_NAME_EN}</p>
+            <p className="text-lg font-bold text-primary-400">{storeName}</p>
             <p className="text-xs text-slate-400">{isAr ? 'لوحة الإدارة' : 'Admin Panel'}</p>
           </div>
           <button

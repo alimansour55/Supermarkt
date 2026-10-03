@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ChevronDown, ChevronUp, FileText, HelpCircle, LayoutTemplate, Link2, Menu, X,
+  AlertTriangle, ChevronDown, ChevronUp, FileText, HelpCircle, LayoutTemplate, Link2, Menu, RefreshCw, X,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import Loader from '../../components/ui/Loader';
+import Button from '../../components/ui/Button';
 import ContentPageEditorPanel from '../components/ContentPageEditorPanel';
 import NavigationVisualBuilder from '../components/navigation/NavigationVisualBuilder';
 import { useToast } from '../components';
@@ -54,6 +55,17 @@ function normalizeNavigation(nav) {
   };
 }
 
+/** Top-level store fields the Header & Footer CMS also edits (brand, socials, contact, apps). */
+const LINKED_SETTINGS_FIELDS = ['taglineAr', 'taglineEn', 'socialLinks', 'appLinks', 'supportPhone', 'supportEmail'];
+
+function pickLinkedSettings(settings = {}) {
+  const out = {};
+  LINKED_SETTINGS_FIELDS.forEach((key) => {
+    if (settings[key] !== undefined) out[key] = settings[key];
+  });
+  return out;
+}
+
 function navigationStats(nav) {
   const toolbar = parseHeaderToolbar(nav);
   const menuItems = 1 + (nav.headerLinks?.length || 0) + (nav.navCategories?.length || 0);
@@ -82,15 +94,18 @@ export default function NavigationPage() {
   const [contentPages, setContentPages] = useState({});
   const [expandedContentSlug, setExpandedContentSlug] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [savingNav, setSavingNav] = useState(false);
   const [savingContentSlug, setSavingContentSlug] = useState(null);
   const [savedSnapshot, setSavedSnapshot] = useState('');
+  const [savedSettingsSnapshot, setSavedSettingsSnapshot] = useState('');
   const [showHelp, setShowHelp] = useState(() => {
     try { return sessionStorage.getItem('nav-cms-help-dismissed') !== '1'; } catch { return true; }
   });
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [settingsRes, pagesRes] = await Promise.all([
         adminApi.getStoreSettings(),
@@ -102,14 +117,18 @@ export default function NavigationPage() {
       setStoreSettings(settings);
       setNavigation(normalized);
       setSavedSnapshot(JSON.stringify(normalized));
+      setSavedSettingsSnapshot(JSON.stringify(pickLinkedSettings(settings)));
 
       const map = {};
       (pagesRes.data.data || []).forEach((page) => {
         map[page.slug] = normalizePageForm(page);
       });
       setContentPages(map);
-    } catch {
-      toast.error(isAr ? 'تعذر التحميل' : 'Load failed');
+    } catch (error) {
+      const message = error.response?.data?.message
+        || (isAr ? 'تعذر تحميل بيانات الهيدر والفوتر — تحقق من الاتصال وحاول مجدداً' : 'Could not load header & footer data — check your connection and try again');
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -121,8 +140,9 @@ export default function NavigationPage() {
 
   const isDirty = useMemo(() => {
     if (loading) return false;
-    return JSON.stringify(normalizeNavigation(navigation)) !== savedSnapshot;
-  }, [navigation, savedSnapshot, loading]);
+    if (JSON.stringify(normalizeNavigation(navigation)) !== savedSnapshot) return true;
+    return JSON.stringify(pickLinkedSettings(storeSettings || {})) !== savedSettingsSnapshot;
+  }, [navigation, savedSnapshot, storeSettings, savedSettingsSnapshot, loading]);
 
   const stats = useMemo(() => navigationStats(navigation), [navigation]);
 
@@ -146,11 +166,13 @@ export default function NavigationPage() {
     setSavingNav(true);
     try {
       const payload = normalizeNavigation(navigation);
+      const linkedSettings = pickLinkedSettings(storeSettings || {});
       const form = new FormData();
-      form.append('settings', JSON.stringify({ navigation: payload }));
+      form.append('settings', JSON.stringify({ navigation: payload, ...linkedSettings }));
       await adminApi.updateStoreSettings(form);
       setNavigation(payload);
       setSavedSnapshot(JSON.stringify(payload));
+      setSavedSettingsSnapshot(JSON.stringify(linkedSettings));
       toast.success(isAr ? 'تم حفظ الهيدر والفوتر' : 'Header & footer saved');
     } catch (error) {
       toast.error(error.response?.data?.message || (isAr ? 'تعذر الحفظ' : 'Save failed'));
@@ -186,6 +208,24 @@ export default function NavigationPage() {
     return (
       <div className="flex min-h-[320px] items-center justify-center">
         <Loader size="lg" />
+      </div>
+    );
+  }
+
+  if (loadError && !storeSettings) {
+    return (
+      <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 rounded-2xl border border-red-200 bg-red-50/60 px-6 py-10 text-center">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-600">
+          <AlertTriangle className="h-6 w-6" />
+        </span>
+        <div>
+          <p className="font-bold text-red-900">{isAr ? 'تعذر تحميل الصفحة' : 'Couldn’t load this page'}</p>
+          <p className="mt-1 max-w-sm text-sm text-red-800/80">{loadError}</p>
+        </div>
+        <Button type="button" size="sm" onClick={load}>
+          <RefreshCw className="h-4 w-4" />
+          {isAr ? 'إعادة المحاولة' : 'Retry'}
+        </Button>
       </div>
     );
   }
@@ -255,6 +295,7 @@ export default function NavigationPage() {
         navigation={navigation}
         onChange={setNavigation}
         storeSettings={storeSettings}
+        onChangeSettings={setStoreSettings}
         isAr={isAr}
         saving={savingNav}
         isDirty={isDirty}

@@ -5,6 +5,9 @@ export const ALL_PERMISSIONS = [
   'dashboard:read',
   'orders:read',
   'orders:write',
+  'orders:delete',
+  'orders:reset',
+  'support:chat',
   'products:read',
   'products:write',
   'products:delete',
@@ -40,9 +43,11 @@ export const PERMISSION_GROUPS = [
     labelEn: 'Orders & delivery',
     labelAr: 'الطلبات والتوصيل',
     permissions: [
-      { key: 'orders:read', labelEn: 'View orders, chats & returns', labelAr: 'عرض الطلبات والمحادثات والمرتجعات' },
+      { key: 'orders:read', labelEn: 'View orders, invoices, chats & returns', labelAr: 'عرض الطلبات والفواتير والمحادثات والمرتجعات' },
       { key: 'orders:write', labelEn: 'Manage orders & fulfillment', labelAr: 'إدارة الطلبات والتنفيذ' },
+      { key: 'orders:delete', labelEn: 'Recycle bin & permanent delete', labelAr: 'سلة المحذوفات والحذف النهائي' },
       { key: 'delivery:write', labelEn: 'Delivery zones & fulfillment', labelAr: 'التوصيل ومواقع الشحن' },
+      { key: 'support:chat', labelEn: 'Live chat with customers', labelAr: 'الدردشة المباشرة مع العملاء' },
     ],
   },
   {
@@ -125,7 +130,10 @@ export function hasUserPermission(user, permission) {
   return resolveUserPermissions(user).includes(permission);
 }
 
+/** Permissions a super_admin can never delegate away, even via custom permission sets. */
+const NON_DELEGABLE_PERMISSIONS = ['users:write', 'orders:reset'];
+
 export function sanitizeAssignablePermissions(permissions) {
   if (!Array.isArray(permissions)) return [];
-  return [...new Set(permissions.filter((key) => ALL_PERMISSIONS.includes(key) && key !== 'users:write'))];
+  return [...new Set(permissions.filter((key) => ALL_PERMISSIONS.includes(key) && !NON_DELEGABLE_PERMISSIONS.includes(key)))];
 }
