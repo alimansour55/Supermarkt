@@ -2,7 +2,38 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Send } from 'lucide-react';
 import Button from '../ui/Button';
 
+const SYSTEM_TEXT = {
+  ack: {
+    ar: 'شكراً لتواصلك معنا — رسالتك هتتوصل لأحد موظفي الدعم.',
+    en: 'Thank you for contacting us — your message will be delivered to an agent.',
+  },
+  auto_closed: {
+    ar: 'تم إغلاق المحادثة لعدم الرد.',
+    en: 'This chat was closed because there was no reply.',
+  },
+  joined: {
+    ar: (name) => `أنت الآن تتحدث مع ${name}`,
+    en: (name) => `You are now chatting with ${name}`,
+  },
+};
+
+function systemLine(msg, isAr) {
+  const entry = SYSTEM_TEXT[msg.systemKey];
+  if (!entry) return msg.body;
+  const value = isAr ? entry.ar : entry.en;
+  return typeof value === 'function' ? value(msg.authorName || '') : value;
+}
+
 function MessageBubble({ msg, isAr, inbox }) {
+  if (msg.authorRole === 'system') {
+    return (
+      <div className="flex w-full justify-center">
+        <p className="max-w-[90%] rounded-full bg-slate-100 px-3 py-1.5 text-center text-xs font-medium text-text-muted">
+          {systemLine(msg, isAr)}
+        </p>
+      </div>
+    );
+  }
   const isStaff = msg.authorRole === 'staff';
   const label = msg.authorName
     || (isStaff ? (isAr ? 'الفريق' : 'Support') : (isAr ? 'العميل' : 'Customer'));
@@ -87,6 +118,8 @@ export default function OrderChat({
   variant = 'default',
   quickReplies = [],
   className = '',
+  composerDisabled = false,
+  composerDisabledMessage = '',
 }) {
   const [text, setText] = useState('');
   const [isInternal, setIsInternal] = useState(false);
@@ -150,6 +183,11 @@ export default function OrderChat({
         )}
       </div>
 
+      {composerDisabled ? (
+        <div className="shrink-0 border-t border-border bg-slate-50 px-4 py-3 text-center text-sm text-text-muted">
+          {composerDisabledMessage || (isAr ? 'المحادثة غير متاحة للرد الآن' : 'This chat is not available for replies right now')}
+        </div>
+      ) : (
       <form
         onSubmit={handleSubmit}
         className={[
@@ -219,6 +257,7 @@ export default function OrderChat({
           </p>
         )}
       </form>
+      )}
     </div>
   );
 }

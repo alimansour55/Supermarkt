@@ -63,6 +63,8 @@ import { formatOrderNumber } from '../../utils/orderNumber';
 import { formatPrice } from '../../utils/formatters';
 import { calculatePromotedLineTotal } from '../../utils/cartLinePricing';
 import AssistantMark from './AssistantMark';
+import CallbackRequestModal from './CallbackRequestModal';
+import HumanChatPanel from './HumanChatPanel';
 
 const HIDDEN_PREFIXES = [
   '/admin', '/payment', '/login', '/register',
@@ -1738,9 +1740,11 @@ export default function SupportChatWidget() {
     isOpen: open,
     setIsOpen: setOpen,
     consumeLaunchCheckoutAi,
+    consumeLaunchHumanChat,
   } = useSupportChat();
   const isAr = language === 'ar';
   const onCheckoutPage = pathname.startsWith('/checkout');
+  const onCartPage = pathname.startsWith('/cart');
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -1751,6 +1755,8 @@ export default function SupportChatWidget() {
   const [savingAddress, setSavingAddress] = useState(false);
   const [cartNotice, setCartNotice] = useState(null);
   const [mobileChat, setMobileChat] = useState(() => isMobileChatViewport());
+  const [callbackModalOpen, setCallbackModalOpen] = useState(false);
+  const [humanChatActive, setHumanChatActive] = useState(false);
 
   const listRef = useRef(null);
   const inputRef = useRef(null);
@@ -2166,6 +2172,15 @@ export default function SupportChatWidget() {
     runProcessor({ actionId: 'checkout_ai' });
   }, [open, consumeLaunchCheckoutAi, runProcessor]);
 
+  useEffect(() => {
+    if (!open || !consumeLaunchHumanChat()) return;
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: pathname } });
+      return;
+    }
+    setHumanChatActive(true);
+  }, [open, consumeLaunchHumanChat, isAuthenticated, navigate, pathname]);
+
   const handleSend = async (e) => {
     e?.preventDefault();
     const text = input.trim();
@@ -2289,6 +2304,19 @@ export default function SupportChatWidget() {
     if (actionId === 'start_over') {
       setChatState(createInitialChatState());
       setMessages(getWelcomeMessages(isAr, userName));
+      setHumanChatActive(false);
+      return;
+    }
+    if (actionId === 'contact_callback') {
+      setCallbackModalOpen(true);
+      return;
+    }
+    if (actionId === 'contact_human') {
+      if (!isAuthenticated) {
+        navigate('/login', { state: { from: pathname } });
+        return;
+      }
+      setHumanChatActive(true);
       return;
     }
     if (action?.href) {
@@ -2309,6 +2337,15 @@ export default function SupportChatWidget() {
 
   return (
     <>
+      {callbackModalOpen && (
+        <CallbackRequestModal
+          isAr={isAr}
+          user={user}
+          note={isAr ? settings?.customerService?.callback?.noteAr : settings?.customerService?.callback?.noteEn}
+          source="assistant"
+          onClose={() => setCallbackModalOpen(false)}
+        />
+      )}
       {open && (
         <div
           className={`pointer-events-none fixed inset-0 z-[59] bg-slate-900/20 transition-opacity ${isMobileOpen ? 'md:bg-slate-900/20' : ''}`}
@@ -2323,7 +2360,9 @@ export default function SupportChatWidget() {
           : `pointer-events-none fixed z-[60] flex flex-col items-end left-auto right-4 ${
               onCheckoutPage
                 ? 'bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-6'
-                : 'bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-6'
+                : onCartPage
+                  ? 'bottom-[calc(8.5rem+env(safe-area-inset-bottom,0px))] md:bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-6'
+                  : 'bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-6'
             }`
       }
     >
@@ -2379,6 +2418,14 @@ export default function SupportChatWidget() {
             </div>
           </div>
 
+          {humanChatActive ? (
+            <HumanChatPanel
+              isAr={isAr}
+              whatsappUrl={settings?.whatsappUrl}
+              onBack={() => setHumanChatActive(false)}
+            />
+          ) : (
+          <>
           <div
             ref={listRef}
             data-support-chat-scroll
@@ -2513,6 +2560,8 @@ export default function SupportChatWidget() {
               </button>
             </div>
           </form>
+          )}
+          </>
           )}
         </div>
       )}

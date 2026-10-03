@@ -1069,7 +1069,13 @@ export function buildAssistantUnavailableReply(isAr, settings = null, reason = '
 
 function buildContactReply(settings, isAr) {
   const rows = buildContactInfoRows(settings, isAr);
-  const quickActions = buildContactQuickActions(settings, isAr);
+  const quickActions = buildContactQuickActions(settings, isAr, { excludeTypes: ['chat'] });
+  const humanAction = {
+    id: 'contact_human',
+    label: isAr ? 'تحدث مع فريق الدعم' : 'Talk to our support team',
+    icon: 'contact',
+    variant: quickActions.length ? undefined : 'primary',
+  };
 
   return {
     messages: [
@@ -1083,6 +1089,7 @@ function buildContactReply(settings, isAr) {
           ? rows
           : [{ label: isAr ? 'الدعم' : 'Support', value: isAr ? 'تواصل معنا من إعدادات المتجر' : 'Configure contact details in store settings' }],
         actions: [
+          humanAction,
           ...quickActions,
           ...navActions(isAr, { showBack: false }),
         ],

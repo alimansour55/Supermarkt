@@ -10,12 +10,25 @@ export function SupportChatProvider({ children }) {
   const [isOpen, setIsOpen] = useState(false);
   const [checkoutPrompt, setCheckoutPrompt] = useState(null);
   const [launchCheckoutAi, setLaunchCheckoutAi] = useState(false);
+  const [launchHumanChat, setLaunchHumanChat] = useState(false);
 
   const openChat = useCallback(() => {
     if (!aiChatEnabled) return;
     setIsOpen(true);
   }, [aiChatEnabled]);
   const closeChat = useCallback(() => setIsOpen(false), []);
+
+  const openHumanChat = useCallback(() => {
+    if (!aiChatEnabled) return;
+    setLaunchHumanChat(true);
+    setIsOpen(true);
+  }, [aiChatEnabled]);
+
+  const consumeLaunchHumanChat = useCallback(() => {
+    if (!launchHumanChat) return false;
+    setLaunchHumanChat(false);
+    return true;
+  }, [launchHumanChat]);
 
   const promptCheckout = useCallback((options = {}) => {
     if (!aiChatEnabled) {
@@ -56,22 +69,26 @@ export function SupportChatProvider({ children }) {
     setIsOpen,
     openChat,
     closeChat,
+    openHumanChat,
     promptCheckout,
     chooseAiCheckout,
     chooseManualCheckout,
     cancelCheckoutPrompt,
     checkoutPrompt,
     consumeLaunchCheckoutAi,
+    consumeLaunchHumanChat,
   }), [
     isOpen,
     openChat,
     closeChat,
+    openHumanChat,
     promptCheckout,
     chooseAiCheckout,
     chooseManualCheckout,
     cancelCheckoutPrompt,
     checkoutPrompt,
     consumeLaunchCheckoutAi,
+    consumeLaunchHumanChat,
   ]);
 
   return (
