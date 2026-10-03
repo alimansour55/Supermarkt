@@ -13,6 +13,8 @@ export default defineConfig({
   timeout: 45_000,
   expect: { timeout: 15_000 },
   fullyParallel: true,
+  // The local API is a single Node process; too many parallel browsers just queue on it.
+  workers: 4,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {

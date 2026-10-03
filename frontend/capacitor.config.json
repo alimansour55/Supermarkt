@@ -1,7 +1,7 @@
 {
   "appId": "com.supermarket.app",
   "appName": "Supermarket",
-  "webDir": "dist",
+  "webDir": "build-spa/client",
   "server": {
     "androidScheme": "https"
   }

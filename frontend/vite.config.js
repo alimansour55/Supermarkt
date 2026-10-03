@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { reactRouter } from '@react-router/dev/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { formatLanUrls } from '../scripts/lan-address.mjs';
 
 const FRONTEND_PORT = 5173;
+const API_PROXY_TARGET = process.env.API_PROXY_TARGET || 'http://127.0.0.1:5001';
 
 function printMobileUrls() {
   return {
@@ -27,8 +28,34 @@ function printMobileUrls() {
   };
 }
 
+/**
+ * Only group node_modules into stable vendor chunks. Application code is left to
+ * split automatically along route-module boundaries (src/routes.js) and the
+ * lazy() admin pages — forcing it into single "admin"/"storefront" chunks merged
+ * ~220 admin files into one 2.2 MB download and defeated code-splitting.
+ */
+function manualChunks(id) {
+  if (!id.includes('node_modules')) return undefined;
+  if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/')) {
+    return 'vendor-react';
+  }
+  if (id.includes('lucide-react')) return 'vendor-icons';
+  if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
+  if (id.includes('leaflet')) return 'vendor-maps';
+  if (id.includes('@stripe')) return 'vendor-stripe';
+  return 'vendor';
+}
+
+const apiProxy = {
+  '/api': {
+    target: API_PROXY_TARGET,
+    changeOrigin: true,
+    secure: false,
+  },
+};
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), printMobileUrls()],
+  plugins: [tailwindcss(), reactRouter(), printMobileUrls()],
   // Pre-bundle the heavy libs that are only reached through lazy() admin routes.
   // Without this, Vite discovers them mid-session on first navigation, re-optimizes,
   // and the already-loaded page requests a now-stale dep hash -> 504 "Outdated
@@ -43,27 +70,9 @@ export default defineConfig({
       '@stripe/react-stripe-js',
     ],
   },
-  build: {
-    rollupOptions: {
-      output: {
-        // Only group node_modules into stable vendor chunks. Application code is
-        // left to split automatically along the lazy() / dynamic-import route
-        // boundaries defined in src/app/lazyRoutes.js and lazyAdminRoutes.js —
-        // forcing it into single "admin"/"storefront" chunks (as before) merged
-        // ~220 admin files into one 2.2 MB download and defeated code-splitting.
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
-          if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/')) {
-            return 'vendor-react';
-          }
-          if (id.includes('lucide-react')) return 'vendor-icons';
-          if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
-          if (id.includes('leaflet')) return 'vendor-maps';
-          if (id.includes('@stripe')) return 'vendor-stripe';
-          return 'vendor';
-        },
-      },
-    },
+  // Vendor chunking applies to the browser bundle only, not the SSR server build.
+  environments: {
+    client: { build: { rollupOptions: { output: { manualChunks } } } },
   },
   server: {
     host: '0.0.0.0',
@@ -71,23 +80,11 @@ export default defineConfig({
     strictPort: true,
     // No custom hmr.host — Vite uses the page hostname (192.168.x.x on phone).
     // A fixed hmr host was breaking mobile reload / page load.
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:5001',
-        changeOrigin: true,
-        secure: false,
-      },
-    },
+    proxy: apiProxy,
   },
   preview: {
     host: '0.0.0.0',
     port: FRONTEND_PORT,
-    proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:5001',
-        changeOrigin: true,
-        secure: false,
-      },
-    },
+    proxy: apiProxy,
   },
 });
