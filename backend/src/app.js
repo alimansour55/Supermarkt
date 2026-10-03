@@ -13,6 +13,11 @@ import { corsOptions } from './config/cors.js';
 
 const app = express();
 
+// Behind a reverse proxy (Caddy/Nginx, Docker network) req.ip must come from
+// X-Forwarded-For, otherwise every visitor shares the proxy's IP and the login
+// rate limiter locks everyone out together. Trusts private-network proxies by default.
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback, linklocal, uniquelocal');
+
 // This is a JSON-only API (the React app is served separately), so the HTML-oriented
 // CSP directives are unnecessary here and can be safely disabled.
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));

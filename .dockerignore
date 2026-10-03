@@ -1,0 +1,17 @@
+# Build context for frontend/Dockerfile (repository root)
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+frontend/build
+frontend/build-spa
+frontend/dist
+frontend/.react-router
+frontend/android
+frontend/ios
+backend/uploads
+test-results
+playwright-report
+.git
+.github
+.claude

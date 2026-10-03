@@ -1,0 +1,77 @@
+# Production stack for a single VPS:
+#   caddy (HTTPS, ports 80/443) ─┬─ /api/* → api  (Express, :5001)
+#                                └─ /*     → web  (React Router SSR, :3000)
+#
+#   cp deploy/.env.example .env            # domain + site URL
+#   cp backend/.env.example backend/.env   # API secrets (MONGODB_URI, JWT_SECRET, …)
+#   docker compose up -d --build
+#
+# MongoDB: use MongoDB Atlas (recommended) and set MONGODB_URI in backend/.env,
+# or run the bundled single-node replica set with:  docker compose --profile local-db up -d
+# (then MONGODB_URI=mongodb://mongo:27017/marketplus?replicaSet=rs0).
+# See docs/DEPLOYMENT.md.
+
+services:
+  api:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      CLIENT_URL: ${SITE_URL}
+    volumes:
+      - uploads:/app/uploads
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      SITE_URL: ${SITE_URL}
+      API_INTERNAL_URL: http://api:5001/api
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN}
+      REDIRECT_DOMAIN: ${REDIRECT_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    profiles: ["local-db"]
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      # Initiates the single-node replica set on first start (needed for transactions).
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }).ok }"]
+      interval: 10s
+      timeout: 10s
+      start_period: 20s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  uploads:
+  caddy_data:
+  caddy_config:
+  mongo_data:

@@ -19,7 +19,7 @@ const API_PROXY_TARGET = process.env.API_PROXY_TARGET?.trim();
 
 const app = express();
 app.disable('x-powered-by');
-app.set('trust proxy', true);
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback, linklocal, uniquelocal');
 
 if (API_PROXY_TARGET) {
   app.use(createProxyMiddleware({

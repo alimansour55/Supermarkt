@@ -7,7 +7,8 @@ Full-stack supermarket e-commerce platform with **Arabic RTL-first** design, ins
 | Area | Highlights |
 |------|------------|
 | **Storefront** | Hero slider, category rail, product grids, offers, search, cart drawer, checkout |
-| **RTL / i18n** | Arabic default (RTL) + English toggle, Cairo font |
+| **RTL / i18n** | Arabic default (RTL) at `/ar/...`, English at `/en/...`, Cairo font |
+| **SEO** | Server-rendered public pages, canonical + hreflang, JSON-LD, sitemap.xml, robots.txt |
 | **Responsive** | Mobile, tablet, and desktop layouts |
 | **Auth** | Register, login, JWT, email verification, password reset |
 | **Cart & checkout** | Scheduled/express delivery, coupons, COD + Stripe Checkout |
@@ -17,7 +18,8 @@ Full-stack supermarket e-commerce platform with **Arabic RTL-first** design, ins
 
 ## Tech Stack
 
-- **Frontend:** React 19, Vite, Tailwind CSS 4, React Router, Axios, Context API
+- **Frontend:** React 19, React Router 7 (framework mode, SSR), Vite, Tailwind CSS 4, Axios, Context API
+- **Mobile app:** Capacitor (static SPA build of the same code)
 - **Backend:** Node.js, Express 5, MongoDB, Mongoose
 - **Payments:** Stripe Checkout + webhooks
 - **Email:** Nodemailer (optional in dev)
@@ -26,15 +28,21 @@ Full-stack supermarket e-commerce platform with **Arabic RTL-first** design, ins
 
 ```
 Project supermarket/
-├── frontend/          # React SPA (RTL, Carrefour-style layout)
+├── frontend/          # React storefront + admin (React Router SSR, RTL)
+│   ├── src/routes.js  # Route config (/ar, /en storefront; /admin; /driver)
+│   ├── src/routes/    # SSR route modules: loaders, meta/SEO, sitemap, robots
+│   └── server.js      # Production SSR server
 ├── backend/           # Express REST API + seed data
-├── package.json       # Monorepo scripts (dev, install, seed)
-└── README.md
+├── e2e/               # Playwright smoke + SEO tests
+├── deploy/            # Caddyfile + env template for the VPS
+├── docs/DEPLOYMENT.md # Step-by-step VPS deployment + SEO launch checklist
+├── docker-compose.yml # Production stack (Caddy + web + api [+ mongo])
+└── package.json       # Monorepo scripts (dev, install, seed, tests)
 ```
 
 ## Prerequisites
 
-- **Node.js 18+**
+- **Node.js 22+** (24 recommended)
 - **MongoDB** running locally or MongoDB Atlas connection string
 
 Optional for full features:
@@ -78,7 +86,7 @@ CLIENT_URL=http://localhost:5173
 **Frontend `.env` (optional):**
 
 ```env
-# Uses Vite proxy to backend when omitted — /api → localhost:5000
+# Uses the dev-server proxy to the backend when omitted — /api → localhost:5001
 VITE_API_URL=/api
 ```
 
@@ -120,10 +128,11 @@ npm run dev
 
 | Service | URL |
 |---------|-----|
-| Storefront | http://localhost:5173 |
+| Storefront (Arabic) | http://localhost:5173/ar |
+| Storefront (English) | http://localhost:5173/en |
 | Admin panel | http://localhost:5173/admin/login |
-| API | http://localhost:5000 |
-| Health check | http://localhost:5000/api/health |
+| API | http://localhost:5001 |
+| Health check | http://localhost:5001/api/health |
 
 ---
 
@@ -163,17 +172,25 @@ Without Twilio, OTP codes are printed to the backend terminal in development.
 |---------|-------------|
 | `npm run install:all` | Install all dependencies |
 | `npm run dev` | Frontend + backend concurrently |
-| `npm run dev:frontend` | Vite only (port 5173) |
-| `npm run dev:backend` | API only (port 5000) |
-| `npm run seed` | Populate MongoDB with demo data |
-| `npm run build` | Production frontend build |
+| `npm run dev:frontend` | Storefront dev server only (port 5173, SSR) |
+| `npm run dev:backend` | API only (port 5001) |
+| `npm run seed` | Populate MongoDB with demo data (**wipes products/categories**) |
+| `npm run build` | Production storefront build (SSR) |
+| `npm start --prefix frontend` | Run the built storefront (port 3000) |
+| `npm run build:spa --prefix frontend` | Static build for the Capacitor app |
 | `npm start` | Start backend (production) |
+| `npm run test:e2e` | Playwright smoke + SEO tests (app must be running; set `E2E_BASE_URL` for another server) |
+
+## Deployment & SEO
+
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the VPS setup (Docker Compose + Caddy HTTPS),
+environment variables and the search-engine launch checklist.
 
 ---
 
 ## UI / UX notes
 
-- **RTL-first:** `index.html` defaults to `dir="rtl"` and `lang="ar"`. Language toggle switches LTR for English.
+- **RTL-first:** `/ar/...` pages render `dir="rtl" lang="ar"` on the server; the language toggle moves to the same page under `/en/...` (LTR).
 - **Carrefour-style layout:** Top delivery bar → logo + categories + search → nav tabs → hero → category chips → product sections — same *pattern*, original colors and branding.
 - **Responsive:** Sticky header, mobile search, horizontal category scroll, collapsible cart drawer.
 
@@ -188,7 +205,7 @@ Without Twilio, OTP codes are printed to the backend terminal in development.
    ```
 2. Local webhooks:
    ```bash
-   stripe listen --forward-to localhost:5000/api/payment/webhook
+   stripe listen --forward-to localhost:5001/api/payment/webhook
    ```
 3. Choose **Online Payment (Stripe)** at checkout.
 

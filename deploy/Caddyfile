@@ -1,0 +1,29 @@
+# Caddy reverse proxy with automatic HTTPS (Let's Encrypt).
+# SITE_DOMAIN is the canonical host (must match SITE_URL); REDIRECT_DOMAIN 301s to it.
+{
+	email {$ACME_EMAIL}
+}
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(self)"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy api:5001
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+{$REDIRECT_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}
