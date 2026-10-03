@@ -7,7 +7,18 @@ import {
   updatePartnerPayout,
   setPartnerPayoutStatus,
   deletePartnerPayout,
+  buildPayoutBatchRows,
 } from '../services/partnerPayout.service.js';
+
+function toCsv(rows) {
+  if (!rows.length) return '';
+  const headers = Object.keys(rows[0]);
+  const escape = (v) => {
+    const s = String(v ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join('\n');
+}
 
 export const getPartnerPayoutsHandler = asyncHandler(async (req, res) => {
   const data = await listPartnerPayouts(req.query);
@@ -42,4 +53,16 @@ export const setPartnerPayoutStatusHandler = asyncHandler(async (req, res) => {
 export const deletePartnerPayoutHandler = asyncHandler(async (req, res) => {
   const data = await deletePartnerPayout(req.params.id);
   res.json({ success: true, data });
+});
+
+export const exportPartnerPayoutsHandler = asyncHandler(async (req, res) => {
+  const rows = await buildPayoutBatchRows(req.query);
+  if (String(req.query.format || 'csv') === 'json') {
+    res.json({ success: true, data: rows });
+    return;
+  }
+  const csv = toCsv(rows);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="partner-payout-batch-${Date.now()}.csv"`);
+  res.send(`﻿${csv}`);
 });

@@ -195,7 +195,10 @@ export function fillRevenueByDay(rows, dayCount, startKeyOverride = null) {
 }
 
 export function pctChange(current, previous) {
-  if (!previous) return current > 0 ? 100 : 0;
+  // With no prior-period baseline, any percentage is a fabricated number
+  // (e.g. 2 vs 0 and 1000 vs 0 would both read as "+100%"). Report "no
+  // comparison available" instead of a misleading fixed value.
+  if (!previous) return current > 0 ? null : 0;
   return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 

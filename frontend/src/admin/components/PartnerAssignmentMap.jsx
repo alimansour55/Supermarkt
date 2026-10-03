@@ -45,7 +45,17 @@ export default function PartnerAssignmentMap({
   conflicts = [],
   catalog = {},
   isAr,
+  rules = [],
+  ruleWarnings = [],
 }) {
+  const partnerNameByKey = useMemo(() => {
+    const m = {};
+    for (const p of partners) {
+      const k = p.userId || p._id;
+      if (k) m[String(k)] = isAr ? (p.nameAr || p.nameEn) : (p.nameEn || p.nameAr);
+    }
+    return m;
+  }, [partners, isAr]);
   const assignments = useMemo(() => {
     const rows = [];
     for (let i = 0; i < partners.length; i += 1) {
@@ -88,7 +98,34 @@ export default function PartnerAssignmentMap({
     return map;
   }, [assignments]);
 
-  if (!assignments.length && !conflicts.length) {
+  const manualRules = (rules || []).filter((r) => r.source !== 'auto');
+
+  const RulesCoverage = manualRules.length > 0 || ruleWarnings.length > 0 ? (
+    <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+      <p className="mb-3 font-bold text-text">{isAr ? 'تغطية القواعد' : 'Rules coverage'}</p>
+      {ruleWarnings.map((w, i) => (
+        <p key={i} className={`mb-1.5 flex items-start gap-2 rounded-lg px-3 py-1.5 text-xs ${w.level === 'error' ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-900'}`}>
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {isAr ? w.messageAr : w.messageEn}
+        </p>
+      ))}
+      <ul className="mt-2 space-y-1.5">
+        {manualRules.map((r, i) => (
+          <li key={r._id || i} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+            <span className="font-medium">
+              {r.enabled === false && <span className="me-1 text-text-muted">({isAr ? 'معطّلة' : 'off'})</span>}
+              {r.name || (isAr ? 'قاعدة' : 'Rule')}
+            </span>
+            <span className="text-xs text-text-muted">
+              {(r.beneficiaries || []).map((b) => `${partnerNameByKey[b.partnerKey] || '?'} ${b.sharePercent}%`).join(' · ')}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ) : null;
+
+  if (!assignments.length && !conflicts.length && !RulesCoverage) {
     return (
       <div className="rounded-2xl border-2 border-dashed border-border bg-slate-50/50 px-6 py-12 text-center">
         <Map className="mx-auto h-10 w-10 text-text-muted/40" />
@@ -106,6 +143,7 @@ export default function PartnerAssignmentMap({
 
   return (
     <div className="space-y-5">
+      {RulesCoverage}
       {conflicts.length > 0 && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
           <p className="flex items-center gap-2 font-bold text-red-800">

@@ -374,7 +374,10 @@ export const getRevenueAnalytics = asyncHandler(async (req, res) => {
     seriesGroupBy: seriesGroupByInput = 'none',
     seriesLimit = '8',
     productId,
+    compare,
   } = req.query;
+
+  const wantsCompare = String(compare).toLowerCase() === 'true';
 
   const range = parseRevenueRangeQuery({ period: periodInput, start, end });
   const interval = pickRevenueInterval({ interval: intervalInput, days: range.days });
@@ -426,10 +429,13 @@ export const getRevenueAnalytics = asyncHandler(async (req, res) => {
       },
     };
 
-  const [totals, previousTotals, profitTotals, seriesRaw] = await Promise.all([
+  const wantsPreviousSeries = wantsCompare && interval === 'day';
+
+  const [totals, previousTotals, profitTotals, previousProfitTotals, seriesRaw, previousSeriesRaw, recentOrdersRaw] = await Promise.all([
     sumOrders(match),
     sumOrders(previousMatch),
     sumProfit(match),
+    wantsPreviousSeries ? sumProfit(previousMatch) : Promise.resolve({ itemRevenue: 0, itemCost: 0 }),
     Order.aggregate([
       { $match: match },
       {
@@ -441,12 +447,31 @@ export const getRevenueAnalytics = asyncHandler(async (req, res) => {
       },
       { $sort: { _id: 1 } },
     ]),
+    wantsPreviousSeries
+      ? Order.aggregate([
+        { $match: previousMatch },
+        {
+          $group: {
+            _id: bucketExpr,
+            revenue: { $sum: '$total' },
+            orders: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ])
+      : Promise.resolve([]),
+    Order.find(match)
+      .sort({ createdAt: -1 })
+      .limit(8)
+      .select('orderNumber total orderStatus paymentMethod createdAt')
+      .lean(),
   ]);
 
   const grossProfit = (profitTotals.itemRevenue || 0) - (profitTotals.itemCost || 0);
   const grossMarginPercent = profitTotals.itemRevenue > 0
     ? Math.round((grossProfit / profitTotals.itemRevenue) * 1000) / 10
     : 0;
+  const previousGrossProfit = (previousProfitTotals.itemRevenue || 0) - (previousProfitTotals.itemCost || 0);
 
   let series = seriesRaw.map((row) => ({
     bucket: row._id,
@@ -462,6 +487,29 @@ export const getRevenueAnalytics = asyncHandler(async (req, res) => {
       range.startKey,
     ).map((r) => ({ bucket: r.date, revenue: r.revenue, orders: r.orders }));
   }
+
+  let previousSeries = null;
+  if (wantsPreviousSeries) {
+    const prevStartKey = getStoreDateKey(prevStart);
+    const filled = fillRevenueByDay(
+      previousSeriesRaw.map((row) => ({ date: row._id, revenue: row.revenue, orders: row.orders })),
+      range.days,
+      prevStartKey,
+    );
+    // Align positionally with `series` (same length, offset by one full period)
+    // so the chart can plot "this period" against "last period" day-by-day.
+    previousSeries = filled.map((r, i) => ({
+      bucket: series[i]?.bucket || r.date,
+      previousBucket: r.date,
+      revenue: r.revenue,
+      orders: r.orders,
+    }));
+  }
+
+  const peakBucket = series.reduce(
+    (best, row) => ((row.revenue || 0) > (best?.revenue || 0) ? row : best),
+    null,
+  );
 
   // Breakdown (table + optional chart)
   let breakdown = { dimension: groupBy, rows: [], pageInfo: null };
@@ -962,13 +1010,37 @@ export const getRevenueAnalytics = asyncHandler(async (req, res) => {
         costOfGoods: profitTotals.itemCost || 0,
         grossProfit,
         grossMarginPercent,
+        avgDailyRevenue: range.days ? periodRevenue / range.days : 0,
         revenueChangePercent: pctChange(periodRevenue, previousTotals.revenue || 0),
         ordersChangePercent: pctChange(totals.orders || 0, previousTotals.orders || 0),
+        avgOrderChangePercent: pctChange(
+          totals.orders ? periodRevenue / totals.orders : 0,
+          previousTotals.orders ? (previousTotals.revenue || 0) / previousTotals.orders : 0,
+        ),
+        profitChangePercent: wantsPreviousSeries ? pctChange(grossProfit, previousGrossProfit) : null,
+        bestDayRevenue: peakBucket?.revenue || 0,
+        bestDayBucket: peakBucket?.bucket || null,
+        bestDayOrders: peakBucket?.orders || 0,
       },
+      previousSummary: wantsPreviousSeries ? {
+        revenue: previousTotals.revenue || 0,
+        orders: previousTotals.orders || 0,
+        avgOrderValue: previousTotals.orders ? (previousTotals.revenue || 0) / previousTotals.orders : 0,
+        grossProfit: previousGrossProfit,
+      } : null,
       series,
+      previousSeries,
       breakdown,
       seriesByDimension,
       productDetail,
+      recentOrders: recentOrdersRaw.map((order) => ({
+        id: order._id,
+        orderNumber: order.orderNumber,
+        total: order.total,
+        orderStatus: order.orderStatus,
+        paymentMethod: order.paymentMethod,
+        createdAt: order.createdAt,
+      })),
     },
   });
 });

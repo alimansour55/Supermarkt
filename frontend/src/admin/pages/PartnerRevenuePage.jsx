@@ -43,6 +43,8 @@ import PartnerScopeEditor from '../components/PartnerScopeEditor';
 import PartnerPercentageBar, { equalizePercentages, partnerColor, partnerColorHex } from '../components/PartnerPercentageBar';
 import PartnerAssignmentMap from '../components/PartnerAssignmentMap';
 import PartnerPayoutsPanel from '../components/PartnerPayoutsPanel';
+import PartnerRulesList from '../components/PartnerRulesList';
+import PartnerDetailPanel from '../components/PartnerDetailPanel';
 
 const PERIODS = [
   { value: '7d', labelEn: '7 days', labelAr: '7 أيام' },
@@ -54,8 +56,9 @@ const PERIODS = [
 
 const TABS = [
   { id: 'partners', labelAr: 'الشركاء والنسب', labelEn: 'Partners & shares', Icon: Users },
+  { id: 'rules', labelAr: 'قواعد الإيراد', labelEn: 'Attribution rules', Icon: Settings2 },
   { id: 'assignments', labelAr: 'خريطة التخصيص', labelEn: 'Assignment map', Icon: Map },
-  { id: 'rules', labelAr: 'قواعد التوزيع', labelEn: 'Distribution rules', Icon: Settings2 },
+  { id: 'engine', labelAr: 'إعدادات المحرك', labelEn: 'Engine settings', Icon: SlidersHorizontal },
   { id: 'report', labelAr: 'التقرير', labelEn: 'Report', Icon: BarChart3 },
   { id: 'payouts', labelAr: 'المستحقات والدفعات', labelEn: 'Payouts', Icon: Wallet },
 ];
@@ -121,8 +124,17 @@ const EMPTY_SCOPES = {
   fulfillmentLocations: [], deliveryZones: [], users: [], promotions: [],
 };
 
+/** Client-side ObjectId-shaped id so a new partner has a stable key before the first save. */
+function genPartnerId() {
+  const ts = Math.floor(Date.now() / 1000).toString(16).padStart(8, '0');
+  let rest = '';
+  for (let i = 0; i < 16; i += 1) rest += Math.floor(Math.random() * 16).toString(16);
+  return ts + rest;
+}
+
 function emptyPartner(sortOrder = 0) {
   return {
+    _id: genPartnerId(),
     userId: '',
     nameAr: '',
     nameEn: '',
@@ -137,6 +149,11 @@ function emptyPartner(sortOrder = 0) {
     scopes: { ...EMPTY_SCOPES },
     isActive: true,
     sortOrder,
+    status: 'active',
+    tags: [],
+    bank: {},
+    payoutCurrency: 'EGP',
+    minPayoutThreshold: 0,
   };
 }
 
@@ -151,6 +168,7 @@ function defaultSettings() {
     weights: { ...DEFAULT_WEIGHTS },
     factorEnabled: { ...DEFAULT_FACTOR_ENABLED },
     partners: [],
+    rules: [],
   };
 }
 
@@ -198,15 +216,20 @@ export default function PartnerRevenuePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [settings, setSettings] = useState(defaultSettings());
   const [conflicts, setConflicts] = useState([]);
+  const [ruleWarnings, setRuleWarnings] = useState([]);
   const [staffOptions, setStaffOptions] = useState([]);
   const [catalog, setCatalog] = useState({
     categories: [], brands: [], deliveryZones: [], fulfillmentLocations: [], promotions: [], products: [], users: [],
+    cities: [], governorates: [], couponCodes: [],
   });
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expandedPartner, setExpandedPartner] = useState(null);
   const [showAdvancedRules, setShowAdvancedRules] = useState(false);
   const [partnerSearch, setPartnerSearch] = useState('');
+  const [detailIndex, setDetailIndex] = useState(null);
+  const [simResult, setSimResult] = useState(null);
+  const [simulating, setSimulating] = useState(false);
 
   const loadReport = useCallback(async (showRefresh = false) => {
     if (!showRevenue) { setLoading(false); return; }
@@ -231,6 +254,7 @@ export default function PartnerRevenuePage() {
       setSettings(loaded);
       setStaffOptions(res.data?.candidates || []);
       setConflicts(res.data?.conflicts || []);
+      setRuleWarnings(res.data?.ruleWarnings || []);
       if (res.data?.catalog) {
         setCatalog({
           categories: res.data.catalog.categories || [],
@@ -240,6 +264,9 @@ export default function PartnerRevenuePage() {
           promotions: res.data.catalog.promotions || [],
           products: res.data.catalog.products || [],
           users: res.data.catalog.users || [],
+          cities: res.data.catalog.cities || [],
+          governorates: res.data.catalog.governorates || [],
+          couponCodes: res.data.catalog.couponCodes || [],
         });
         setCatalogLoaded(true);
       }
@@ -247,6 +274,7 @@ export default function PartnerRevenuePage() {
       setSettings(defaultSettings());
       setStaffOptions([]);
       setConflicts([]);
+      setRuleWarnings([]);
     } finally {
       setSettingsLoading(false);
     }
@@ -345,6 +373,23 @@ export default function PartnerRevenuePage() {
       return { ...prev, partners };
     });
   };
+
+  const handleSimulate = useCallback(async () => {
+    setSimulating(true);
+    try {
+      const params = period === 'custom' && customStart && customEnd
+        ? { start: customStart, end: customEnd }
+        : { period: period === 'custom' ? '30d' : period };
+      const { data: res } = await adminApi.simulatePartnerRevenue({ ...params, settings });
+      setSimResult(res.data);
+      setRuleWarnings(res.data?.ruleWarnings || []);
+      toast.success(isAr ? 'تمت المحاكاة — لم يُحفظ شيء' : 'Simulated — nothing saved');
+    } catch (err) {
+      toast.error(err.response?.data?.message || (isAr ? 'فشلت المحاكاة' : 'Simulation failed'));
+    } finally {
+      setSimulating(false);
+    }
+  }, [period, customStart, customEnd, settings, toast, isAr]);
 
   if (panelLoading || (loading && settingsLoading)) {
     return (
@@ -563,6 +608,13 @@ export default function PartnerRevenuePage() {
                       )}
                       <button
                         type="button"
+                        onClick={() => setDetailIndex(index)}
+                        className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted hover:bg-white"
+                      >
+                        {isAr ? 'التفاصيل' : 'Details'}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setExpandedPartner(isOpen ? null : pid)}
                         className="rounded-lg p-2 text-text-muted hover:bg-white"
                       >
@@ -732,6 +784,32 @@ export default function PartnerRevenuePage() {
         </div>
       )}
 
+      {/* ─── ATTRIBUTION RULES TAB ─── */}
+      {tab === 'rules' && (
+        <PartnerRulesList
+          rules={settings.rules || []}
+          onChange={(rules) => { setSettings((s) => ({ ...s, rules })); setSimResult(null); }}
+          isAr={isAr}
+          canEdit={canEdit}
+          partners={settings.partners || []}
+          catalog={catalog}
+          warnings={ruleWarnings}
+          onSimulate={handleSimulate}
+          simulating={simulating}
+          simResult={simResult}
+        />
+      )}
+
+      {tab === 'rules' && canEdit && (settings.partners || []).length > 0 && (
+        <div className="mt-4 flex justify-end">
+          <button type="button" onClick={handleSaveSettings} disabled={saving}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-60">
+            <Save className="h-4 w-4" />
+            {saving ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ القواعد' : 'Save rules')}
+          </button>
+        </div>
+      )}
+
       {/* ─── ASSIGNMENTS TAB ─── */}
       {tab === 'assignments' && (
         <div className="space-y-4">
@@ -748,15 +826,17 @@ export default function PartnerRevenuePage() {
             conflicts={conflicts}
             catalog={catalog}
             isAr={isAr}
+            rules={settings.rules || []}
+            ruleWarnings={ruleWarnings}
           />
         </div>
       )}
 
-      {/* ─── RULES TAB ─── */}
-      {tab === 'rules' && (
+      {/* ─── ENGINE SETTINGS TAB ─── */}
+      {tab === 'engine' && (
         <div className="space-y-6">
           <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-lg font-bold">{isAr ? 'قواعد التوزيع' : 'Distribution rules'}</h2>
+            <h2 className="mb-4 text-lg font-bold">{isAr ? 'إعدادات المحرك' : 'Engine settings'}</h2>
             <div className="grid gap-4 lg:grid-cols-2">
               <label className="block rounded-xl border border-border p-4">
                 <span className="mb-1 block text-xs font-medium text-text-muted">{isAr ? 'طريقة التقسيم' : 'Split method'}</span>
@@ -1081,6 +1161,47 @@ export default function PartnerRevenuePage() {
                   />
                 )}
               </section>
+
+              {report.ruleBreakdown?.length > 0 && (
+                <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+                  <h2 className="mb-4 text-lg font-bold">{isAr ? 'حسب القاعدة' : 'By rule'}</h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-text-muted">
+                        <tr>
+                          <th className="px-4 py-3 text-start">{isAr ? 'القاعدة' : 'Rule'}</th>
+                          <th className="px-4 py-3 text-start">{isAr ? 'طلبات مطابقة' : 'Matched orders'}</th>
+                          <th className="px-4 py-3 text-start">{isAr ? 'المبلغ' : 'Amount'}</th>
+                          <th className="px-4 py-3 text-start">{isAr ? 'المستفيدون' : 'Beneficiaries'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {report.ruleBreakdown.map((r) => (
+                          <tr key={r.ruleId} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 font-medium">
+                              {r.name}
+                              {r.source === 'auto' && (
+                                <span className="ms-1.5 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">
+                                  {isAr ? 'تلقائي' : 'auto'}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-text-muted">{r.matchedOrders}</td>
+                            <td className="px-4 py-3 font-bold text-emerald-700">{formatPrice(r.amount)}</td>
+                            <td className="px-4 py-3 text-xs text-text-muted">
+                              {Object.entries(r.byPartner || {}).map(([k, v]) => {
+                                const bp = report.partners.find((x) => String(x.userId || x.partnerId) === k);
+                                const nm = bp ? (isAr ? (bp.nameAr || bp.nameEn) : (bp.nameEn || bp.nameAr)) : k.slice(-6);
+                                return `${nm}: ${formatPrice(v)}`;
+                              }).join(' · ')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
             </>
           )}
         </div>
@@ -1093,6 +1214,19 @@ export default function PartnerRevenuePage() {
           canEdit={canEdit}
           partners={settings.partners || []}
           toast={toast}
+        />
+      )}
+
+      {detailIndex != null && settings.partners?.[detailIndex] && (
+        <PartnerDetailPanel
+          partner={settings.partners[detailIndex]}
+          partnerIndex={detailIndex}
+          isAr={isAr}
+          canEdit={canEdit}
+          catalog={catalog}
+          toast={toast}
+          onChange={(patch) => updatePartner(detailIndex, patch)}
+          onClose={() => setDetailIndex(null)}
         />
       )}
     </div>

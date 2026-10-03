@@ -16,9 +16,18 @@ import {
   normalizePartnerScopes,
   detectScopeConflicts,
   buildScopeOverview,
+  partnerKeyOf,
+  convertScopesToRules,
+  mergeAutoRules,
+  normalizeAttributionRules,
+  detectRuleWarnings,
 } from '../constants/partnerRevenueDefaults.js';
 import { getAllDescendantIds } from '../utils/categoryTree.js';
 import { parseRevenueRangeQuery, revenueOrderMatch } from '../utils/revenueReport.js';
+import { computeRuleAttribution } from './partnerRuleEngine.js';
+import { logAudit } from './auditLog.service.js';
+import PartnerLedgerEntry, { PARTNER_LEDGER_TYPES, PARTNER_LEDGER_SIGN } from '../models/PartnerLedgerEntry.js';
+import PartnerPayout from '../models/PartnerPayout.js';
 
 const SETTINGS_KEY = 'main';
 const PARTNER_CANDIDATE_ROLES = ['manager', 'admin', 'super_admin'];
@@ -91,21 +100,34 @@ async function loadAssignedScopeLabels(partners) {
   return { products, users };
 }
 
+async function loadOrderFacets() {
+  const [cities, governorates, coupons] = await Promise.all([
+    Order.distinct('shippingAddress.city'),
+    Order.distinct('shippingAddress.governorate'),
+    Order.distinct('couponCode'),
+  ]);
+  const clean = (list) => [...new Set(list.map((s) => String(s || '').trim()).filter(Boolean))].sort().slice(0, 300);
+  return { cities: clean(cities), governorates: clean(governorates), couponCodes: clean(coupons) };
+}
+
 export async function getPartnerRevenueSettings() {
-  const [settings, candidates, catalog] = await Promise.all([
+  const [settings, candidates, catalog, orderFacets] = await Promise.all([
     loadPartnerRevenueSettings(),
     loadPartnerCandidates(),
     loadPartnerRevenueCatalog(),
+    loadOrderFacets(),
   ]);
   const conflicts = detectScopeConflicts(settings.partners);
   const scopeOverview = buildScopeOverview(settings.partners);
+  const ruleWarnings = detectRuleWarnings(settings.rules || [], settings.partners || []);
   const { products, users } = await loadAssignedScopeLabels(settings.partners);
   return {
     settings,
     candidates,
     conflicts,
     scopeOverview,
-    catalog: { ...catalog, products, users },
+    ruleWarnings,
+    catalog: { ...catalog, ...orderFacets, products, users },
   };
 }
 
@@ -181,9 +203,33 @@ export async function searchPartnerRevenueCustomers(query = '', limit = 20) {
   return users;
 }
 
-export async function updatePartnerRevenueSettings(payload) {
+function reconcileRules(normalized) {
+  const validKeys = normalized.partners.map(partnerKeyOf).filter(Boolean);
+  const autoRules = convertScopesToRules(normalized.partners, normalized.attributionStreams);
+  const merged = mergeAutoRules(normalized.rules || [], autoRules);
+  return normalizeAttributionRules(merged, validKeys.length ? validKeys : null);
+}
+
+export async function updatePartnerRevenueSettings(payload, req = null) {
   let normalized = normalizePartnerRevenueSettings(payload);
+  normalized.rules = reconcileRules(normalized);
   const activePartners = normalized.partners.filter(isValidPartner);
+
+  for (const p of normalized.partners) {
+    if (p.contractStartKey && p.contractEndKey && p.contractEndKey < p.contractStartKey) {
+      const err = new Error(`Partner "${p.nameEn || p.nameAr}" contract end is before its start`);
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+  for (const rule of normalized.rules) {
+    const total = rule.beneficiaries.reduce((s, b) => s + (b.sharePercent || 0), 0);
+    if (total > 100.01) {
+      const err = new Error(`Rule "${rule.name || 'Untitled'}" beneficiary shares exceed 100%`);
+      err.statusCode = 400;
+      throw err;
+    }
+  }
 
   if (normalized.enabled && activePartners.length === 0) {
     const err = new Error('Add at least one active partner with a name or team account');
@@ -211,21 +257,38 @@ export async function updatePartnerRevenueSettings(payload) {
     }
   }
 
+  let saved;
   const doc = await StoreSettings.findOne({ key: SETTINGS_KEY });
   if (doc) {
     doc.partnerRevenue = normalized;
     doc.markModified('partnerRevenue');
     await doc.save();
-    return normalizePartnerRevenueSettings(doc.partnerRevenue?.toObject?.() || doc.partnerRevenue || normalized);
+    saved = normalizePartnerRevenueSettings(doc.partnerRevenue?.toObject?.() || doc.partnerRevenue || normalized);
+  } else {
+    const settings = await StoreSettings.findOneAndUpdate(
+      { key: SETTINGS_KEY },
+      { $set: { partnerRevenue: normalized } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    ).select('partnerRevenue').lean();
+    saved = normalizePartnerRevenueSettings(settings?.partnerRevenue || normalized);
   }
 
-  const settings = await StoreSettings.findOneAndUpdate(
-    { key: SETTINGS_KEY },
-    { $set: { partnerRevenue: normalized } },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
-  ).select('partnerRevenue').lean();
+  if (req) {
+    await logAudit({
+      req,
+      action: 'update',
+      entityType: 'store_settings',
+      entityLabel: 'Partner revenue distribution',
+      changes: {
+        enabled: saved.enabled,
+        mode: saved.mode,
+        partners: saved.partners.length,
+        rules: saved.rules.length,
+      },
+    });
+  }
 
-  return normalizePartnerRevenueSettings(settings?.partnerRevenue || normalized);
+  return saved;
 }
 
 function splitAmongPartners(amount, partnerKeys) {
@@ -369,7 +432,7 @@ async function computeScopedAttribution(revenueMatch, partners, { revenueBasis, 
       {
         $project: {
           productId: { $toString: '$prod._id' },
-          categoryId: { $toString: { $ifNull: ['$prod.category', '$prod.subCategory'] } },
+          categoryId: { $toString: '$prod.category' },
           brandId: { $toString: '$prod.brand' },
           linePrice: '$items.price',
           lineQty: '$items.quantity',
@@ -435,7 +498,7 @@ async function computeScopedAttribution(revenueMatch, partners, { revenueBasis, 
       {
         $project: {
           productId: { $toString: '$prod._id' },
-          categoryId: { $toString: { $ifNull: ['$prod.category', '$prod.subCategory'] } },
+          categoryId: { $toString: '$prod.category' },
           linePrice: '$items.price',
           lineQty: '$items.quantity',
           wholesalePrice: { $ifNull: ['$items.wholesalePrice', '$prod.wholesalePrice'] },
@@ -593,6 +656,7 @@ function distributeAttributionAmounts({
   totalAttributed,
   unassignedPolicy,
   contributions,
+  rulesMode = false,
 }) {
   const active = partners.filter(isValidPartner);
   if (!active.length) return [];
@@ -611,7 +675,8 @@ function distributeAttributionAmounts({
   const rows = active.map((partner) => {
     const key = partnerKey(partner);
     const role = partner.revenueRole || 'combined';
-    const assignPct = (Number(partner.assignmentSharePercent ?? 100)) / 100;
+    // Rules already bake the partner's share into each rule's rate, so don't re-apply it.
+    const assignPct = rulesMode ? 1 : (Number(partner.assignmentSharePercent ?? 100)) / 100;
     const rawAttr = (attribution[key]?.total || 0) * assignPct;
     const directAttr = Math.round(rawAttr * attrScale * 100) / 100;
 
@@ -955,8 +1020,11 @@ function distributeAmounts({ partners, mode, distributable, contributions }) {
   });
 }
 
-export async function computePartnerRevenueDistribution(query = {}) {
-  const settings = await loadPartnerRevenueSettings();
+export async function computePartnerRevenueDistribution(query = {}, { overrideSettings = null } = {}) {
+  const settings = overrideSettings
+    ? normalizePartnerRevenueSettings(overrideSettings)
+    : await loadPartnerRevenueSettings();
+  const rulesMode = settings.mode === 'attribution' && (settings.rules || []).length > 0;
   const range = parseRevenueRangeQuery(query);
   const revenueMatch = revenueOrderMatch({
     createdAt: { $gte: range.since, $lt: range.until },
@@ -1049,11 +1117,16 @@ export async function computePartnerRevenueDistribution(query = {}) {
     anyPartnerHasScopes
       ? aggregateScopedZoneStats(revenueMatch, activePartners)
       : Promise.resolve({ orders: {}, fees: {} }),
+    // eslint-disable-next-line no-nested-ternary
     settings.mode === 'attribution'
-      ? computeScopedAttribution(revenueMatch, activePartners, {
-        revenueBasis: settings.revenueBasis,
-        attributionStreams: settings.attributionStreams,
-      })
+      ? (rulesMode
+        ? computeRuleAttribution(revenueMatch, settings.rules, activePartners, {
+          revenueBasis: settings.revenueBasis,
+        }).then((r) => ({ ...r, hasScopes: r.hasRules }))
+        : computeScopedAttribution(revenueMatch, activePartners, {
+          revenueBasis: settings.revenueBasis,
+          attributionStreams: settings.attributionStreams,
+        }))
       : Promise.resolve({ attribution: {}, totalAttributed: 0, hasScopes: false }),
     linkedUserIds.length
       ? User.find({ _id: { $in: linkedUserIds } }).select('name username role').lean()
@@ -1145,6 +1218,14 @@ export async function computePartnerRevenueDistribution(query = {}) {
     }
   }
 
+  const byPartnerBreakdown = scopedAttributionResult.byPartnerBreakdown || {};
+  if (rulesMode) {
+    for (const partner of activePartners) {
+      const key = partnerKey(partner);
+      if (contributions[key]) contributions[key].scoped = byPartnerBreakdown[key] || null;
+    }
+  }
+
   let rows;
   if (settings.mode === 'attribution') {
     if (!scopedAttributionResult.hasScopes) {
@@ -1169,6 +1250,7 @@ export async function computePartnerRevenueDistribution(query = {}) {
         totalAttributed: scopedAttributionResult.totalAttributed,
         unassignedPolicy: settings.unassignedPolicy,
         contributions,
+        rulesMode,
       });
     }
   } else {
@@ -1203,7 +1285,9 @@ export async function computePartnerRevenueDistribution(query = {}) {
       attributedAmount: row.attributedAmount,
       poolAmount: row.poolAmount,
       unassignedBonus: row.unassignedBonus,
-      attributionDetail: row.attribution || row.contribution?.scoped || null,
+      attributionDetail: rulesMode
+        ? (byPartnerBreakdown[key] || null)
+        : (row.attribution || row.contribution?.scoped || null),
       baseAmount: row.baseAmount,
       weightedAmount: row.weightedAmount,
       score: row.score,
@@ -1230,7 +1314,177 @@ export async function computePartnerRevenueDistribution(query = {}) {
       totalAttributed: scopedAttributionResult.totalAttributed || 0,
       hasScopes: scopedAttributionResult.hasScopes,
       unassignedPolicy: settings.unassignedPolicy,
+      engine: rulesMode ? 'rules' : 'scopes',
+      ruleCount: (settings.rules || []).length,
+      ordersScanned: scopedAttributionResult.ordersScanned || 0,
     } : null,
+    rulesApplied: rulesMode,
+    ruleBreakdown: rulesMode ? (scopedAttributionResult.ruleBreakdown || []) : [],
+    byPartnerBreakdown: rulesMode ? byPartnerBreakdown : {},
+    rules: rulesMode ? settings.rules : [],
     partners,
   };
+}
+
+/** Run the full distribution against an unsaved settings payload (no DB write). */
+export async function simulatePartnerRevenue(payload = {}) {
+  const { settings: candidate, ...query } = payload;
+  const normalized = normalizePartnerRevenueSettings(candidate || {});
+  normalized.rules = reconcileRules(normalized);
+  const report = await computePartnerRevenueDistribution(query, { overrideSettings: normalized });
+  return {
+    ...report,
+    ruleWarnings: detectRuleWarnings(normalized.rules, normalized.partners),
+  };
+}
+
+function findPartnerByKey(settings, partnerKeyStr) {
+  const target = String(partnerKeyStr);
+  return (settings.partners || []).find((p) => partnerKeyOf(p) === target) || null;
+}
+
+async function ledgerTotalsFor(partnerKeyStr) {
+  const rows = await PartnerLedgerEntry.aggregate([
+    { $match: { partnerKey: String(partnerKeyStr) } },
+    { $group: { _id: '$type', amount: { $sum: '$amount' } } },
+  ]);
+  let net = 0;
+  const byType = {};
+  for (const row of rows) {
+    const signed = (PARTNER_LEDGER_SIGN[row._id] || 1) * (row.amount || 0);
+    byType[row._id] = signed;
+    net += signed;
+  }
+  return { net: Math.round(net * 100) / 100, byType };
+}
+
+/** Per-partner statement: period earnings breakdown + lifetime payouts/ledger balance. */
+export async function getPartnerStatement(partnerKeyStr, query = {}) {
+  const settings = await loadPartnerRevenueSettings();
+  const partner = findPartnerByKey(settings, partnerKeyStr);
+  if (!partner) {
+    const err = new Error('Partner not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  const key = partnerKeyOf(partner);
+
+  const report = await computePartnerRevenueDistribution(query);
+  const row = (report.partners || []).find((p) => String(p.userId || p.partnerId) === key
+    || String(p.partnerId) === key) || null;
+  const breakdown = report.byPartnerBreakdown?.[key] || null;
+
+  const [payouts, ledger, ledgerTotals, paidAgg] = await Promise.all([
+    PartnerPayout.find({ partnerKey: key }).sort({ createdAt: -1 }).limit(50).lean(),
+    PartnerLedgerEntry.find({ partnerKey: key }).sort({ dateKey: -1, createdAt: -1 }).limit(50).lean(),
+    ledgerTotalsFor(key),
+    PartnerPayout.aggregate([
+      { $match: { partnerKey: key, status: 'paid' } },
+      { $group: { _id: null, amount: { $sum: '$amount' } } },
+    ]),
+  ]);
+
+  const pendingAmount = payouts
+    .filter((p) => p.status === 'pending')
+    .reduce((s, p) => s + (p.amount || 0), 0);
+  const paidToDate = Math.round((paidAgg[0]?.amount || 0) * 100) / 100;
+  const earnedThisPeriod = row?.amount || 0;
+
+  return {
+    partner: {
+      partnerKey: key,
+      nameAr: partner.nameAr,
+      nameEn: partner.nameEn,
+      email: partner.email,
+      phone: partner.phone,
+      status: partner.status,
+      tags: partner.tags || [],
+      bank: partner.bank || {},
+      payoutMethod: partner.payoutMethod,
+      payoutCurrency: partner.payoutCurrency,
+      payoutScheduleDay: partner.payoutScheduleDay,
+      minPayoutThreshold: partner.minPayoutThreshold,
+      maxMonthlyPayout: partner.maxMonthlyPayout,
+      contractStartKey: partner.contractStartKey,
+      contractEndKey: partner.contractEndKey,
+      revenueRole: partner.revenueRole,
+    },
+    period: report.period,
+    earned: {
+      total: earnedThisPeriod,
+      attributedAmount: row?.attributedAmount ?? null,
+      poolAmount: row?.poolAmount ?? row?.unassignedBonus ?? null,
+      sharePercent: row?.sharePercent ?? 0,
+      byRule: breakdown?.byRule || {},
+      byZone: breakdown?.byZone || {},
+      byProduct: breakdown?.byProduct || {},
+      byCustomer: breakdown?.byCustomer || {},
+      byBasis: breakdown?.byBasis || {},
+    },
+    ruleBreakdown: (report.ruleBreakdown || []).filter((r) => r.byPartner?.[key]),
+    ledger,
+    ledgerTotals,
+    payouts,
+    balance: {
+      earnedThisPeriod,
+      paidToDate,
+      pendingAmount: Math.round(pendingAmount * 100) / 100,
+      adjustmentsToDate: ledgerTotals.net,
+      outstanding: Math.round((earnedThisPeriod + ledgerTotals.net - pendingAmount) * 100) / 100,
+    },
+  };
+}
+
+export async function listPartnerLedger(partnerKeyStr) {
+  return PartnerLedgerEntry.find({ partnerKey: String(partnerKeyStr) })
+    .sort({ dateKey: -1, createdAt: -1 })
+    .limit(200)
+    .populate('createdBy', 'name username')
+    .lean();
+}
+
+export async function createPartnerLedgerEntry(partnerKeyStr, payload = {}, actorUser = null) {
+  const settings = await loadPartnerRevenueSettings();
+  const partner = findPartnerByKey(settings, partnerKeyStr);
+
+  const type = PARTNER_LEDGER_TYPES.includes(payload.type) ? payload.type : null;
+  if (!type) {
+    const err = new Error('Invalid ledger entry type');
+    err.statusCode = 400;
+    throw err;
+  }
+  const amount = Math.abs(Number(payload.amount));
+  if (!(amount > 0)) {
+    const err = new Error('Amount must be greater than 0');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const doc = await PartnerLedgerEntry.create({
+    partnerKey: String(partnerKeyStr),
+    partnerUserId: partner?.userId || null,
+    partnerNameAr: partner?.nameAr || '',
+    partnerNameEn: partner?.nameEn || '',
+    type,
+    amount: Math.round(amount * 100) / 100,
+    currency: String(payload.currency || partner?.payoutCurrency || 'EGP').toUpperCase(),
+    dateKey: /^\d{4}-\d{2}-\d{2}$/.test(payload.dateKey) ? payload.dateKey : '',
+    periodStartKey: String(payload.periodStartKey || ''),
+    periodEndKey: String(payload.periodEndKey || ''),
+    note: String(payload.note || '').trim(),
+    createdBy: actorUser?._id || actorUser?.id || null,
+    createdByName: actorUser?.name || '',
+  });
+  return doc.toObject();
+}
+
+export async function deletePartnerLedgerEntry(id) {
+  const entry = await PartnerLedgerEntry.findById(id);
+  if (!entry) {
+    const err = new Error('Ledger entry not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  await entry.deleteOne();
+  return { deleted: true };
 }

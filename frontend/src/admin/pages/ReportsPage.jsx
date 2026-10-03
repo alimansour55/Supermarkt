@@ -80,6 +80,21 @@ export default function ReportsPage() {
     units: c.unitsSold,
   }));
 
+  const MAX_TICK_CHARS = 14;
+  const yAxisWidth = Math.min(
+    150,
+    Math.max(70, ...categoryData.map((c) => Math.min(c.name?.length || 0, MAX_TICK_CHARS) * 7 + 20)),
+  );
+  const CategoryTick = ({ x, y, payload }) => {
+    const label = payload.value || '';
+    const display = label.length > MAX_TICK_CHARS ? `${label.slice(0, MAX_TICK_CHARS - 1)}…` : label;
+    return (
+      <text x={x} y={y} dy={4} textAnchor={isAr ? 'start' : 'end'} fontSize={11} fill="#475569">
+        {display}
+      </text>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -145,10 +160,20 @@ export default function ReportsPage() {
           {categoryData.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryData} layout="vertical" margin={{ left: 8, right: 16 }}>
+                <BarChart
+                  data={categoryData}
+                  layout="vertical"
+                  margin={isAr ? { left: 16, right: 8 } : { left: 8, right: 16 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                  <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    orientation={isAr ? 'right' : 'left'}
+                    width={yAxisWidth}
+                    tick={CategoryTick}
+                  />
                   <Tooltip formatter={(v) => formatPrice(v)} />
                   <Bar dataKey="revenue" fill="#16a34a" radius={[0, 4, 4, 0]} />
                 </BarChart>

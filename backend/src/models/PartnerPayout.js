@@ -19,9 +19,17 @@ const partnerPayoutSchema = new mongoose.Schema(
     periodLabel: { type: String, trim: true, default: '' },
 
     amount: { type: Number, required: true, min: 0 },
+    /** Computed gross before ledger adjustments / threshold / cap were applied. */
+    grossAmount: { type: Number, default: null },
+    /** Net ledger adjustment (bonus − deduction …) folded into `amount`. */
+    ledgerAdjustment: { type: Number, default: 0 },
+    /** Amount above the partner's monthly cap that rolls to the next payout. */
+    carryForward: { type: Number, default: 0 },
     sharePercent: { type: Number, default: null },
     distributionMode: { type: String, trim: true, default: '' },
     currency: { type: String, trim: true, default: 'EGP' },
+    /** Snapshot of the partner's bank details at generation time. */
+    bankSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
 
     status: { type: String, enum: PARTNER_PAYOUT_STATUSES, default: 'pending', index: true },
     paymentMethod: { type: String, enum: [...PARTNER_PAYOUT_METHODS, ''], default: '' },

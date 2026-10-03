@@ -13,7 +13,7 @@ const EMPTY_SCOPES = {
   promotions: [],
 };
 
-function ScopeSection({ title, hint, icon: Icon, count, defaultOpen = false, children }) {
+export function ScopeSection({ title, hint, icon: Icon, count, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen || count > 0);
 
   return (
@@ -48,7 +48,7 @@ function ScopeSection({ title, hint, icon: Icon, count, defaultOpen = false, chi
   );
 }
 
-function MultiIdSelect({
+export function MultiIdSelect({
   options = [],
   value = [],
   onChange,
@@ -156,7 +156,7 @@ function MultiIdSelect({
   );
 }
 
-function SimpleProductPicker({ value = [], onChange, isAr, canEdit, maxItems = 48 }) {
+export function SimpleProductPicker({ value = [], onChange, isAr, canEdit, maxItems = 48 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [labels, setLabels] = useState({});
@@ -255,7 +255,7 @@ function SimpleProductPicker({ value = [], onChange, isAr, canEdit, maxItems = 4
   );
 }
 
-function UserScopePicker({ value = [], onChange, isAr, canEdit, maxItems = 24 }) {
+export function UserScopePicker({ value = [], onChange, isAr, canEdit, maxItems = 24 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [labels, setLabels] = useState({});

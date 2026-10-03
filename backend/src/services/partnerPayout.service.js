@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 import PartnerPayout, { PARTNER_PAYOUT_STATUSES, PARTNER_PAYOUT_METHODS } from '../models/PartnerPayout.js';
+import PartnerLedgerEntry, { PARTNER_LEDGER_SIGN } from '../models/PartnerLedgerEntry.js';
 import { AppError } from '../utils/AppError.js';
 import { computePartnerRevenueDistribution, getPartnerRevenueSettings } from './partnerRevenue.service.js';
+import { partnerKeyOf } from '../constants/partnerRevenueDefaults.js';
 
 function toObjectIdOrNull(id) {
   return id && mongoose.Types.ObjectId.isValid(id) ? id : null;
@@ -100,8 +102,13 @@ function buildPartnerSnapshot(partner) {
 }
 
 export async function generatePayoutsFromPeriod(payload = {}, actorUser) {
-  const { start, end, period, partnerKeys, skipExisting = true } = payload;
-  const report = await computePartnerRevenueDistribution({ start, end, period });
+  const {
+    start, end, period, partnerKeys, skipExisting = true, applyLedger = true, applyThresholds = true,
+  } = payload;
+  const [report, { settings }] = await Promise.all([
+    computePartnerRevenueDistribution({ start, end, period }),
+    getPartnerRevenueSettings(),
+  ]);
 
   if (!report.enabled) {
     throw new AppError('Partner revenue distribution is disabled', 400);
@@ -116,10 +123,33 @@ export async function generatePayoutsFromPeriod(payload = {}, actorUser) {
     ? new Set(partnerKeys.map(String))
     : null;
 
+  const partnerConfig = {};
+  for (const p of settings.partners || []) {
+    const key = partnerKeyOf(p);
+    if (key) partnerConfig[key] = p;
+  }
+
+  // In-period ledger net per partner.
+  let ledgerByPartner = {};
+  if (applyLedger && periodStartKey && periodEndKey) {
+    const rows = await PartnerLedgerEntry.aggregate([
+      {
+        $match: {
+          dateKey: { $gte: periodStartKey, $lte: periodEndKey },
+          partnerKey: { $in: report.partners.map(partnerRowKey).filter(Boolean) },
+        },
+      },
+      { $group: { _id: { partnerKey: '$partnerKey', type: '$type' }, amount: { $sum: '$amount' } } },
+    ]);
+    for (const row of rows) {
+      const signed = (PARTNER_LEDGER_SIGN[row._id.type] || 1) * (row.amount || 0);
+      ledgerByPartner[row._id.partnerKey] = (ledgerByPartner[row._id.partnerKey] || 0) + signed;
+    }
+  }
+
   const candidates = report.partners.filter((p) => {
-    if (!(p.amount > 0)) return false;
     if (selectedKeys && !selectedKeys.has(partnerRowKey(p))) return false;
-    return true;
+    return (p.amount || 0) > 0 || (ledgerByPartner[partnerRowKey(p)] || 0) !== 0;
   });
 
   if (!candidates.length) {
@@ -137,34 +167,96 @@ export async function generatePayoutsFromPeriod(payload = {}, actorUser) {
     existingKeys = new Set(existing.map((e) => e.partnerKey));
   }
 
-  const docs = candidates
-    .filter((p) => !existingKeys.has(partnerRowKey(p)))
-    .map((p) => ({
+  const skipped = [];
+  const docs = [];
+  for (const p of candidates) {
+    const key = partnerRowKey(p);
+    if (existingKeys.has(key)) {
+      skipped.push({ partnerKey: key, name: p.nameEn || p.nameAr, reason: 'already_generated' });
+      continue;
+    }
+    const cfg = partnerConfig[key] || {};
+    const gross = Math.round((p.amount || 0) * 100) / 100;
+    const ledgerAdjustment = applyLedger ? Math.round((ledgerByPartner[key] || 0) * 100) / 100 : 0;
+    let net = Math.round((gross + ledgerAdjustment) * 100) / 100;
+    let carryForward = 0;
+
+    if (applyThresholds && cfg.maxMonthlyPayout != null && net > cfg.maxMonthlyPayout) {
+      carryForward = Math.round((net - cfg.maxMonthlyPayout) * 100) / 100;
+      net = cfg.maxMonthlyPayout;
+    }
+    if (applyThresholds && cfg.minPayoutThreshold && net < cfg.minPayoutThreshold) {
+      skipped.push({
+        partnerKey: key, name: p.nameEn || p.nameAr, reason: 'below_threshold', net, threshold: cfg.minPayoutThreshold,
+      });
+      continue;
+    }
+    if (net <= 0) {
+      skipped.push({ partnerKey: key, name: p.nameEn || p.nameAr, reason: 'non_positive_net', net });
+      continue;
+    }
+
+    docs.push({
       ...buildPartnerSnapshot(p),
       periodStartKey,
       periodEndKey,
       periodLabel: report.period?.periodKey || '',
-      amount: Math.round((p.amount || 0) * 100) / 100,
+      amount: net,
+      grossAmount: gross,
+      ledgerAdjustment,
+      carryForward,
+      currency: cfg.payoutCurrency || 'EGP',
+      paymentMethod: cfg.payoutMethod || '',
       sharePercent: p.sharePercent ?? null,
       distributionMode: report.summary?.mode || '',
       status: 'pending',
       source: 'generated',
+      bankSnapshot: cfg.bank || null,
       reportSnapshot: {
         attributedAmount: p.attributedAmount ?? null,
         poolAmount: p.poolAmount ?? null,
         unassignedBonus: p.unassignedBonus ?? null,
         revenueRole: p.revenueRole || null,
+        engine: report.attributionSummary?.engine || null,
       },
+      notes: carryForward > 0
+        ? `Capped at monthly max; ${carryForward.toFixed(2)} carried forward.`
+        : '',
       createdBy: toObjectIdOrNull(actorUser?._id || actorUser?.id),
-    }));
+    });
+  }
 
   const created = docs.length ? await PartnerPayout.insertMany(docs) : [];
 
   return {
     created,
-    skippedCount: candidates.length - docs.length,
+    skipped,
+    skippedCount: skipped.length,
     period: { startKey: periodStartKey, endKey: periodEndKey },
   };
+}
+
+/** Rows for a bank-transfer batch file. */
+export async function buildPayoutBatchRows(query = {}) {
+  const filter = { status: query.status && PARTNER_PAYOUT_STATUSES.includes(query.status) ? query.status : 'pending' };
+  if (query.start && query.end) {
+    filter.periodStartKey = { $gte: String(query.start) };
+    filter.periodEndKey = { $lte: String(query.end) };
+  }
+  const items = await PartnerPayout.find(filter).sort({ createdAt: -1 }).limit(1000).lean();
+  return items.map((p) => ({
+    partner: p.partnerNameEn || p.partnerNameAr || p.partnerKey,
+    method: p.paymentMethod || '',
+    bankName: p.bankSnapshot?.bankName || '',
+    accountHolder: p.bankSnapshot?.accountHolder || '',
+    iban: p.bankSnapshot?.iban || '',
+    accountNumber: p.bankSnapshot?.accountNumber || '',
+    amount: p.amount,
+    currency: p.currency || 'EGP',
+    period: `${p.periodStartKey}..${p.periodEndKey}`,
+    reference: p.referenceNumber || String(p._id),
+    status: p.status,
+  }));
 }
 
 export async function createManualPartnerPayout(payload = {}, actorUser) {

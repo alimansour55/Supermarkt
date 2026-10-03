@@ -1,36 +1,54 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   ArrowUpRight,
   Banknote,
+  Calendar,
+  CalendarRange,
+  ChevronDown,
+  Download,
+  Gauge,
   Package,
+  Percent,
   RefreshCw,
   ShoppingBag,
+  SlidersHorizontal,
+  Sparkles,
+  Ticket,
   TrendingDown,
   TrendingUp,
+  Truck,
   Wallet,
+  X,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import { useAdminPanel } from '../context/AdminPanelContext';
-import { formatPrice } from '../../utils/formatters';
+import { formatCount, formatPrice, formatRelativeTime } from '../../utils/formatters';
+import { downloadBlob } from '../utils/downloadBlob';
 import RevenueTrendChart from '../components/dashboard/RevenueTrendChart';
 import PaymentMixChart from '../components/dashboard/PaymentMixChart';
 import { EmptyState } from '../components';
 import { Skeleton } from '../components/Skeleton';
+import StatusBadge from '../components/StatusBadge';
 
-const PERIODS = [
+const QUICK_PERIODS = [
   { value: 'today', labelEn: 'Today', labelAr: 'اليوم' },
   { value: '7d', labelEn: '7 days', labelAr: '7 أيام' },
   { value: '30d', labelEn: '30 days', labelAr: '30 يوماً' },
   { value: '90d', labelEn: '90 days', labelAr: '90 يوماً' },
   { value: 'mtd', labelEn: 'This month', labelAr: 'هذا الشهر' },
+];
+
+const LONG_PERIODS = [
   { value: '1y', labelEn: '1 year', labelAr: 'سنة' },
   { value: '3y', labelEn: '3 years', labelAr: '3 سنوات' },
   { value: '5y', labelEn: '5 years', labelAr: '5 سنوات' },
   { value: '10y', labelEn: '10 years', labelAr: '10 سنوات' },
-  { value: 'custom', labelEn: 'Custom', labelAr: 'مخصص' },
 ];
+
+const ALL_PERIODS = [...QUICK_PERIODS, ...LONG_PERIODS];
 
 function formatRange(startKey, endKey, isAr) {
   if (!startKey || !endKey) return '';
@@ -42,6 +60,15 @@ function formatRange(startKey, endKey, isAr) {
     return start.toLocaleDateString(locale, opts);
   }
   return `${start.toLocaleDateString(locale, opts)} — ${end.toLocaleDateString(locale, opts)}`;
+}
+
+function formatBucketDate(bucket, isAr) {
+  if (!bucket) return '';
+  const locale = isAr ? 'ar-EG' : 'en-GB';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(bucket)) {
+    return new Date(`${bucket}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  return bucket;
 }
 
 function toDateKey(date) {
@@ -78,6 +105,129 @@ const SERIES_GROUP_OPTIONS = [
   { value: 'category', labelEn: 'By section (top 8)', labelAr: 'حسب القسم (أعلى 8)' },
   { value: 'product', labelEn: 'By product (top 8)', labelAr: 'حسب المنتج (أعلى 8)' },
 ];
+
+function toCsvValue(value) {
+  const s = String(value ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function exportCsv(filename, headers, rows) {
+  const lines = [headers.map(toCsvValue).join(',')];
+  rows.forEach((row) => lines.push(row.map(toCsvValue).join(',')));
+  const csv = '\uFEFF' + lines.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  downloadBlob(blob, filename);
+}
+
+/** Small anchored popover panel, portaled to <body>, closes on outside click / scroll / resize. */
+function PopoverButton({ label, icon: Icon, badge, active, width = 320, align = 'end', children }) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState(null);
+  const buttonRef = useRef(null);
+  const panelRef = useRef(null);
+
+  const computePosition = useCallback(() => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const isRtl = document.documentElement.dir === 'rtl';
+    const anchorStart = align === 'start' ? !isRtl : isRtl;
+    setPosition({
+      top: rect.bottom + 8,
+      left: anchorStart ? rect.left : null,
+      right: anchorStart ? null : window.innerWidth - rect.right,
+    });
+  }, [align]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    computePosition();
+    const close = (e) => {
+      if (buttonRef.current?.contains(e.target)) return;
+      if (panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const reposition = () => computePosition();
+    document.addEventListener('mousedown', close);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open, computePosition]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={[
+          'relative inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors',
+          active
+            ? 'border-primary-200 bg-primary-50 text-primary-700'
+            : 'border-border bg-white text-text hover:bg-slate-50',
+        ].join(' ')}
+      >
+        <Icon className="h-4 w-4" />
+        {label}
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+        {badge > 0 && (
+          <span className="absolute -top-1.5 -end-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-600 px-1 text-[10px] font-bold text-white">
+            {badge}
+          </span>
+        )}
+      </button>
+      {open && position && createPortal(
+        <div
+          ref={panelRef}
+          style={{
+            position: 'fixed',
+            top: position.top,
+            left: position.left ?? undefined,
+            right: position.right ?? undefined,
+            width,
+          }}
+          className="z-50 rounded-2xl border border-border bg-white p-4 shadow-xl"
+        >
+          {children(() => setOpen(false))}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function FieldLabel({ children }) {
+  return <p className="mb-1.5 text-xs font-semibold text-text-muted">{children}</p>;
+}
+
+function Toggle({ checked, onChange, label, hint }) {
+  return (
+    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-xl border border-border p-3 hover:bg-slate-50">
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-text">{label}</span>
+        {hint && <span className="mt-0.5 block text-xs text-text-muted">{hint}</span>}
+      </span>
+      <span
+        onClick={() => onChange(!checked)}
+        className={[
+          'relative mt-0.5 inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors',
+          checked ? 'bg-primary-600' : 'bg-slate-300',
+        ].join(' ')}
+      >
+        <span
+          className={[
+            'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+            checked ? 'translate-x-4 rtl:-translate-x-4' : 'translate-x-0.5 rtl:-translate-x-0.5',
+          ].join(' ')}
+        />
+      </span>
+    </label>
+  );
+}
 
 function ChangePill({ value, isAr, compact = false }) {
   if (value == null || Number.isNaN(value)) return null;
@@ -134,6 +284,21 @@ function MetricCard({
         <div className={`shrink-0 rounded-2xl p-3 ${accent}`}>
           <Icon className="h-5 w-5" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function InsightChip({ icon: Icon, label, value, sub }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-white px-4 py-3 shadow-sm">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-text-muted">{label}</p>
+        <p className="truncate text-sm font-bold text-text">{value}</p>
+        {sub && <p className="truncate text-xs text-text-muted">{sub}</p>}
       </div>
     </div>
   );
@@ -211,8 +376,9 @@ export default function RevenuePage() {
   const [rangeStart, setRangeStart] = useState(() => addDays(toDateKey(new Date()), -29));
   const [rangeEnd, setRangeEnd] = useState(() => toDateKey(new Date()));
   const [interval, setInterval] = useState('auto');
-  const [groupBy, setGroupBy] = useState('none');
-  const [seriesGroupBy, setSeriesGroupBy] = useState('category');
+  const [groupBy, setGroupBy] = useState('paymentMethod');
+  const [seriesGroupBy, setSeriesGroupBy] = useState('none');
+  const [compareEnabled, setCompareEnabled] = useState(false);
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
@@ -282,6 +448,7 @@ export default function RevenuePage() {
         seriesGroupBy,
         seriesLimit: 8,
         productId: selectedProductId || undefined,
+        compare: compareEnabled ? 'true' : undefined,
       });
       setData(res.data);
     } catch {
@@ -290,7 +457,7 @@ export default function RevenuePage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [resolvedQuery, interval, groupBy, q, page, limit, sort, dir, seriesGroupBy, selectedProductId, showRevenue]);
+  }, [resolvedQuery, interval, groupBy, q, page, limit, sort, dir, seriesGroupBy, selectedProductId, compareEnabled, showRevenue]);
 
   useEffect(() => {
     loadData();
@@ -302,9 +469,38 @@ export default function RevenuePage() {
   const breakdownRows = data?.breakdown?.rows || [];
   const pageInfo = data?.breakdown?.pageInfo || null;
   const productDetail = data?.productDetail || null;
+  const recentOrders = data?.recentOrders || [];
 
-  const periodLabel = PERIODS.find((p) => p.value === period);
+  const periodLabel = ALL_PERIODS.find((p) => p.value === period);
   const rangeLabel = formatRange(data?.range?.startKey, data?.range?.endKey, isAr);
+  const isCustomPeriod = period === 'custom' || !ALL_PERIODS.some((p) => p.value === period);
+  const comparisonSupported = data?.interval === 'day';
+  const activeFiltersCount = [groupBy !== 'none', seriesGroupBy !== 'none', interval !== 'auto'].filter(Boolean).length;
+
+  const handleExportSeries = () => {
+    if (!data?.series?.length) return;
+    const rows = data.series.map((r) => [r.bucket, r.revenue, r.orders || 0]);
+    exportCsv(
+      `revenue-trend_${data.range.startKey}_${data.range.endKey}.csv`,
+      [isAr ? 'التاريخ' : 'Date', isAr ? 'الإيراد' : 'Revenue', isAr ? 'الطلبات' : 'Orders'],
+      rows,
+    );
+  };
+
+  const handleExportBreakdown = () => {
+    if (!breakdownRows.length) return;
+    const rows = breakdownRows.map((r) => [
+      isAr ? r.labelAr : r.labelEn,
+      r.revenue,
+      r.orders || 0,
+      r.sharePercent || 0,
+    ]);
+    exportCsv(
+      `revenue-breakdown-${groupBy}_${data.range.startKey}_${data.range.endKey}.csv`,
+      [isAr ? 'العنصر' : 'Item', isAr ? 'الإيراد' : 'Revenue', isAr ? 'الطلبات' : 'Orders', isAr ? 'الحصة %' : 'Share %'],
+      rows,
+    );
+  };
 
   if (panelLoading || loading) {
     return (
@@ -356,119 +552,229 @@ export default function RevenuePage() {
   return (
     <div className="space-y-6">
       {/* Toolbar */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text">{isAr ? 'الإيرادات' : 'Revenue'}</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            {rangeLabel}
-            {summary.orders > 0 && (
-              <> · {summary.orders} {isAr ? 'طلب في الفترة' : 'orders in period'}</>
-            )}
-          </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-text">{isAr ? 'الإيرادات' : 'Revenue'}</h1>
+            <p className="mt-1 text-sm text-text-muted">
+              {rangeLabel}
+              {summary.orders > 0 && (
+                <> · {formatCount(summary.orders)} {isAr ? 'طلب في الفترة' : 'orders in period'}</>
+              )}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => loadData(true)}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-semibold text-text hover:bg-slate-50 disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              {isAr ? 'تحديث' : 'Refresh'}
+            </button>
+
+            <PopoverButton label={isAr ? 'تصدير' : 'Export'} icon={Download} width={260}>
+              {(close) => (
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    disabled={!data?.series?.length}
+                    onClick={() => { handleExportSeries(); close(); }}
+                    className="block w-full rounded-lg px-3 py-2 text-start text-sm font-medium text-text hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    {isAr ? 'تصدير الاتجاه اليومي (CSV)' : 'Export daily trend (CSV)'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!breakdownRows.length}
+                    onClick={() => { handleExportBreakdown(); close(); }}
+                    className="block w-full rounded-lg px-3 py-2 text-start text-sm font-medium text-text hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    {isAr ? 'تصدير جدول التقسيم (CSV)' : 'Export breakdown table (CSV)'}
+                  </button>
+                </div>
+              )}
+            </PopoverButton>
+
+            <Link
+              to="/admin/reports"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 bg-primary-50 px-3.5 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-100"
+            >
+              {isAr ? 'تقرير مفصل' : 'Full report'}
+              <ArrowUpRight className="h-4 w-4" />
+            </Link>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {PERIODS.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => setPeriod(p.value)}
-              className={[
-                'rounded-xl px-3.5 py-2 text-sm font-semibold transition-all',
-                period === p.value
-                  ? 'bg-primary-600 text-white shadow-sm'
-                  : 'border border-border bg-white text-text-muted hover:bg-slate-50',
-              ].join(' ')}
-            >
-              {isAr ? p.labelAr : p.labelEn}
-            </button>
-          ))}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2">
-              <span className="text-xs font-semibold text-text-muted">{isAr ? 'من' : 'From'}</span>
-              <input
-                type="date"
-                value={rangeStart}
-                max={rangeEnd || undefined}
-                onChange={(e) => {
-                  setPeriod('custom');
-                  setRangeStart(e.target.value);
-                }}
-                className="bg-transparent text-sm font-semibold text-text outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2">
-              <span className="text-xs font-semibold text-text-muted">{isAr ? 'إلى' : 'To'}</span>
-              <input
-                type="date"
-                value={rangeEnd}
-                min={rangeStart || undefined}
-                onChange={(e) => {
-                  setPeriod('custom');
-                  setRangeEnd(e.target.value);
-                }}
-                className="bg-transparent text-sm font-semibold text-text outline-none"
-              />
-            </div>
+          <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-border bg-white p-1.5">
+            {QUICK_PERIODS.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => setPeriod(p.value)}
+                className={[
+                  'rounded-xl px-3 py-1.5 text-sm font-semibold transition-all',
+                  period === p.value
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'text-text-muted hover:bg-slate-50',
+                ].join(' ')}
+              >
+                {isAr ? p.labelAr : p.labelEn}
+              </button>
+            ))}
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-3.5 py-2">
-            <span className="text-xs font-semibold text-text-muted">{isAr ? 'تقسيم' : 'Breakdown'}</span>
-            <select
-              value={groupBy}
-              onChange={(e) => setGroupBy(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-text outline-none"
-            >
-              {GROUP_BY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {isAr ? opt.labelAr : opt.labelEn}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-3.5 py-2">
-            <span className="text-xs font-semibold text-text-muted">{isAr ? 'الاتجاه' : 'Trend'}</span>
-            <select
-              value={seriesGroupBy}
-              onChange={(e) => setSeriesGroupBy(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-text outline-none"
-            >
-              {SERIES_GROUP_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {isAr ? opt.labelAr : opt.labelEn}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-3.5 py-2">
-            <span className="text-xs font-semibold text-text-muted">{isAr ? 'الفاصل' : 'Interval'}</span>
-            <select
-              value={interval}
-              onChange={(e) => setInterval(e.target.value)}
-              className="bg-transparent text-sm font-semibold text-text outline-none"
-            >
-              <option value="auto">{isAr ? 'تلقائي' : 'Auto'}</option>
-              <option value="day">{isAr ? 'يومي' : 'Daily'}</option>
-              <option value="week">{isAr ? 'أسبوعي' : 'Weekly'}</option>
-              <option value="month">{isAr ? 'شهري' : 'Monthly'}</option>
-              <option value="year">{isAr ? 'سنوي' : 'Yearly'}</option>
-            </select>
-          </div>
-          <button
-            type="button"
-            onClick={() => loadData(true)}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-semibold text-text hover:bg-slate-50 disabled:opacity-60"
+
+          <PopoverButton
+            label={isCustomPeriod
+              ? (isAr ? 'نطاق مخصص' : 'Custom range')
+              : (LONG_PERIODS.some((p) => p.value === period) ? (isAr ? periodLabel?.labelAr : periodLabel?.labelEn) : (isAr ? 'المزيد' : 'More'))}
+            icon={isCustomPeriod ? CalendarRange : Calendar}
+            active={isCustomPeriod || LONG_PERIODS.some((p) => p.value === period)}
+            width={300}
           >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            {isAr ? 'تحديث' : 'Refresh'}
-          </button>
-          <Link
-            to="/admin/reports"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 bg-primary-50 px-3.5 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-100"
+            {() => (
+              <div className="space-y-4">
+                <div>
+                  <FieldLabel>{isAr ? 'فترات طويلة' : 'Long ranges'}</FieldLabel>
+                  <div className="flex flex-wrap gap-1.5">
+                    {LONG_PERIODS.map((p) => (
+                      <button
+                        key={p.value}
+                        type="button"
+                        onClick={() => setPeriod(p.value)}
+                        className={[
+                          'rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors',
+                          period === p.value
+                            ? 'bg-primary-600 text-white'
+                            : 'bg-slate-100 text-text hover:bg-slate-200',
+                        ].join(' ')}
+                      >
+                        {isAr ? p.labelAr : p.labelEn}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="border-t border-border pt-3">
+                  <FieldLabel>{isAr ? 'نطاق مخصص' : 'Custom range'}</FieldLabel>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={rangeStart}
+                      max={rangeEnd || undefined}
+                      onChange={(e) => {
+                        setPeriod('custom');
+                        setRangeStart(e.target.value);
+                      }}
+                      className="w-full rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm font-medium text-text outline-none focus:border-primary-400"
+                    />
+                    <span className="shrink-0 text-xs text-text-muted">{isAr ? 'إلى' : 'to'}</span>
+                    <input
+                      type="date"
+                      value={rangeEnd}
+                      min={rangeStart || undefined}
+                      onChange={(e) => {
+                        setPeriod('custom');
+                        setRangeEnd(e.target.value);
+                      }}
+                      className="w-full rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm font-medium text-text outline-none focus:border-primary-400"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </PopoverButton>
+
+          <PopoverButton
+            label={isAr ? 'فلاتر' : 'Filters'}
+            icon={SlidersHorizontal}
+            badge={activeFiltersCount}
+            width={300}
           >
-            {isAr ? 'تقرير مفصل' : 'Full report'}
-            <ArrowUpRight className="h-4 w-4" />
-          </Link>
+            {() => (
+              <div className="space-y-4">
+                <div>
+                  <FieldLabel>{isAr ? 'تقسيم' : 'Breakdown'}</FieldLabel>
+                  <select
+                    value={groupBy}
+                    onChange={(e) => { setGroupBy(e.target.value); setPage(1); }}
+                    className="w-full rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm font-medium text-text outline-none focus:border-primary-400"
+                  >
+                    {GROUP_BY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{isAr ? opt.labelAr : opt.labelEn}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <FieldLabel>{isAr ? 'خطوط الاتجاه' : 'Trend series'}</FieldLabel>
+                  <select
+                    value={seriesGroupBy}
+                    onChange={(e) => setSeriesGroupBy(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm font-medium text-text outline-none focus:border-primary-400"
+                  >
+                    {SERIES_GROUP_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{isAr ? opt.labelAr : opt.labelEn}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <FieldLabel>{isAr ? 'الفاصل الزمني' : 'Interval'}</FieldLabel>
+                  <select
+                    value={interval}
+                    onChange={(e) => setInterval(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm font-medium text-text outline-none focus:border-primary-400"
+                  >
+                    <option value="auto">{isAr ? 'تلقائي' : 'Auto'}</option>
+                    <option value="day">{isAr ? 'يومي' : 'Daily'}</option>
+                    <option value="week">{isAr ? 'أسبوعي' : 'Weekly'}</option>
+                    <option value="month">{isAr ? 'شهري' : 'Monthly'}</option>
+                    <option value="year">{isAr ? 'سنوي' : 'Yearly'}</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </PopoverButton>
+
+          <PopoverButton
+            label={isAr ? 'مقارنة' : 'Compare'}
+            icon={Gauge}
+            active={compareEnabled}
+            width={280}
+          >
+            {() => (
+              <div className="space-y-3">
+                <Toggle
+                  checked={compareEnabled}
+                  onChange={setCompareEnabled}
+                  label={isAr ? 'المقارنة بالفترة السابقة' : 'Compare with previous period'}
+                  hint={isAr
+                    ? 'يعرض خطاً منقطاً للفترة السابقة على نفس الرسم البياني'
+                    : 'Overlays a dashed line for the previous period on the trend chart'}
+                />
+                {compareEnabled && !comparisonSupported && (
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                    {isAr
+                      ? 'المقارنة متاحة فقط للفترات ذات الفاصل اليومي (حتى 120 يوماً).'
+                      : 'Comparison is only available for day-level intervals (up to 120 days).'}
+                  </p>
+                )}
+                {compareEnabled && comparisonSupported && data?.previousSummary && (
+                  <div className="space-y-1.5 rounded-lg border border-border bg-slate-50 px-3 py-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-text-muted">{isAr ? 'هذه الفترة' : 'This period'}</span>
+                      <span className="font-bold text-text">{formatPrice(summary.revenue)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-text-muted">{isAr ? 'الفترة السابقة' : 'Previous period'}</span>
+                      <span className="font-semibold text-slate-600">{formatPrice(data.previousSummary.revenue)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </PopoverButton>
         </div>
       </div>
 
@@ -478,7 +784,7 @@ export default function RevenuePage() {
           isAr={isAr}
           highlight
           icon={Wallet}
-          label={isAr ? `إيرادات ${periodLabel?.labelAr || ''}` : `${periodLabel?.labelEn || 'Period'} revenue`}
+          label={isAr ? `إيرادات ${periodLabel?.labelAr || (isAr ? 'الفترة' : '')}` : `${periodLabel?.labelEn || 'Period'} revenue`}
           value={formatPrice(summary.revenue)}
           hint={isAr ? 'إجمالي قيمة الطلبات (بدون الملغي والمرتجع)' : 'Order totals excluding cancelled & returned'}
           change={summary.revenueChangePercent}
@@ -488,7 +794,7 @@ export default function RevenuePage() {
           isAr={isAr}
           icon={ShoppingBag}
           label={isAr ? 'عدد الطلبات' : 'Orders'}
-          value={String(summary.orders || 0)}
+          value={formatCount(summary.orders || 0)}
           hint={`${formatPrice(summary.avgOrderValue)} ${isAr ? 'متوسط الطلب' : 'avg. order'}`}
           change={summary.ordersChangePercent}
           accent="bg-indigo-50 text-indigo-700"
@@ -499,6 +805,7 @@ export default function RevenuePage() {
           label={isAr ? 'الربح الإجمالي' : 'Gross profit'}
           value={formatPrice(summary.grossProfit)}
           hint={`${summary.grossMarginPercent ?? 0}% ${isAr ? 'هامش ربح' : 'margin'}`}
+          change={summary.profitChangePercent}
           accent="bg-emerald-50 text-emerald-700"
         />
         <MetricCard
@@ -507,7 +814,34 @@ export default function RevenuePage() {
           label={isAr ? 'متوسط الطلب' : 'Avg order'}
           value={formatPrice(summary.avgOrderValue)}
           hint={isAr ? 'متوسط قيمة الطلب خلال الفترة' : 'Average order value in range'}
+          change={summary.avgOrderChangePercent}
           accent="bg-green-50 text-green-700"
+        />
+      </div>
+
+      {/* Secondary insights */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <InsightChip
+          icon={Sparkles}
+          label={isAr ? 'أفضل يوم' : 'Best day'}
+          value={formatPrice(summary.bestDayRevenue || 0)}
+          sub={summary.bestDayBucket ? formatBucketDate(summary.bestDayBucket, isAr) : (isAr ? 'لا توجد بيانات' : 'No data')}
+        />
+        <InsightChip
+          icon={Gauge}
+          label={isAr ? 'متوسط الإيراد اليومي' : 'Avg daily revenue'}
+          value={formatPrice(summary.avgDailyRevenue || 0)}
+          sub={data?.range?.days ? `${isAr ? 'خلال' : 'over'} ${formatCount(data.range.days)} ${isAr ? 'يوم' : 'days'}` : undefined}
+        />
+        <InsightChip
+          icon={Truck}
+          label={isAr ? 'رسوم التوصيل' : 'Delivery fees'}
+          value={formatPrice(summary.deliveryFees || 0)}
+        />
+        <InsightChip
+          icon={Ticket}
+          label={isAr ? 'الخصومات الممنوحة' : 'Discounts given'}
+          value={formatPrice((summary.discounts || 0) + (summary.pointsDiscounts || 0))}
         />
       </div>
 
@@ -520,7 +854,7 @@ export default function RevenuePage() {
                 {isAr ? 'اتجاه الإيرادات' : 'Revenue trend'}
               </h2>
               <p className="text-sm text-text-muted">
-                {isAr ? 'المبيعات اليومية خلال الفترة المحددة' : 'Daily sales for the selected period'}
+                {isAr ? 'المبيعات خلال الفترة المحددة' : 'Sales for the selected period'}
               </p>
             </div>
           </div>
@@ -528,6 +862,7 @@ export default function RevenuePage() {
             <RevenueTrendChart
               data={data.series}
               seriesByDimension={data.seriesByDimension}
+              previousData={compareEnabled && comparisonSupported ? data.previousSeries : null}
               isAr={isAr}
               interval={data.interval}
             />
@@ -558,7 +893,10 @@ export default function RevenuePage() {
               sharePercent: r.sharePercent,
             }))} isAr={isAr} />
           ) : (
-            <EmptyState title={isAr ? 'لا توجد بيانات' : 'No data'} />
+            <EmptyState
+              title={isAr ? 'لا توجد بيانات' : 'No data'}
+              description={isAr ? 'اختر تقسيماً من الفلاتر لعرض التوزيع.' : 'Choose a breakdown from Filters to see the split.'}
+            />
           )}
         </section>
       </div>
@@ -576,9 +914,20 @@ export default function RevenuePage() {
         </section>
 
         <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-          <h2 className="mb-1 text-lg font-bold text-text">
-            {isAr ? 'تفاصيل التقسيم' : 'Breakdown details'}
-          </h2>
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-bold text-text">
+              {isAr ? 'تفاصيل التقسيم' : 'Breakdown details'}
+            </h2>
+            <button
+              type="button"
+              disabled={!breakdownRows.length}
+              onClick={handleExportBreakdown}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:underline disabled:opacity-40"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {isAr ? 'تصدير' : 'Export'}
+            </button>
+          </div>
           <p className="mb-4 text-sm text-text-muted">
             {isAr ? 'أعلى النتائج حسب الفلتر' : 'Top results for selected breakdown'}
           </p>
@@ -592,7 +941,7 @@ export default function RevenuePage() {
                   setPage(1);
                 }}
                 placeholder={isAr ? 'اسم / SKU' : 'Name / SKU'}
-                className="w-44 bg-transparent text-sm font-semibold text-text outline-none"
+                className="w-32 bg-transparent text-sm font-semibold text-text outline-none"
               />
             </div>
             <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2">
@@ -722,8 +1071,9 @@ export default function RevenuePage() {
                 setSelectedProductId('');
                 setSelectedProductLabel('');
               }}
-              className="rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-semibold text-text hover:bg-slate-50"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2 text-sm font-semibold text-text hover:bg-slate-50"
             >
+              <X className="h-4 w-4" />
               {isAr ? 'إغلاق' : 'Close'}
             </button>
           </div>
@@ -733,8 +1083,8 @@ export default function RevenuePage() {
               <div className="lg:col-span-1">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
                   <MiniStat isAr={isAr} label={isAr ? 'إيراد المنتج' : 'Product revenue'} value={formatPrice(productDetail.totals.revenue)} />
-                  <MiniStat isAr={isAr} label={isAr ? 'الوحدات' : 'Units sold'} value={String(productDetail.totals.unitsSold || 0)} />
-                  <MiniStat isAr={isAr} label={isAr ? 'الطلبات' : 'Orders'} value={String(productDetail.totals.orders || 0)} />
+                  <MiniStat isAr={isAr} label={isAr ? 'الوحدات' : 'Units sold'} value={formatCount(productDetail.totals.unitsSold || 0)} />
+                  <MiniStat isAr={isAr} label={isAr ? 'الطلبات' : 'Orders'} value={formatCount(productDetail.totals.orders || 0)} />
                   <MiniStat isAr={isAr} label={isAr ? 'الربح' : 'Profit'} value={formatPrice(productDetail.totals.profit)} sub={`${productDetail.totals.marginPercent || 0}% ${isAr ? 'هامش' : 'margin'}`} />
                 </div>
               </div>
@@ -791,7 +1141,11 @@ export default function RevenuePage() {
               ))}
             </ul>
           ) : (
-            <EmptyState title={isAr ? 'لا توجد بيانات' : 'No data'} icon={Package} />
+            <EmptyState
+              title={isAr ? 'لا توجد بيانات' : 'No data'}
+              description={isAr ? 'اختر «المنتج» في التقسيم لعرض أعلى المنتجات.' : 'Choose “Product” in Breakdown to see top products.'}
+              icon={Package}
+            />
           )}
         </section>
 
@@ -804,13 +1158,43 @@ export default function RevenuePage() {
               {isAr ? 'كل الطلبات' : 'All orders'}
             </Link>
           </div>
-          <EmptyState
-            title={isAr ? 'انتقل إلى الطلبات' : 'Go to orders'}
-            description={isAr ? 'تفاصيل أحدث الطلبات موجودة في صفحة الطلبات.' : 'Recent order details are available on the Orders page.'}
-          />
+          {recentOrders.length ? (
+            <ul className="divide-y divide-border">
+              {recentOrders.map((order) => (
+                <li key={order.id}>
+                  <Link
+                    to={`/admin/orders?order=${order.id}`}
+                    className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold text-primary-700">{order.orderNumber}</p>
+                      <p className="text-xs text-text-muted">{formatRelativeTime(order.createdAt, isAr)}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="text-sm font-bold text-text">{formatPrice(order.total)}</span>
+                      <StatusBadge status={order.orderStatus} language={language} compact />
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState
+              title={isAr ? 'لا توجد طلبات' : 'No orders yet'}
+              description={isAr ? 'ستظهر الطلبات الجديدة هنا' : 'New orders will show up here'}
+            />
+          )}
         </section>
       </div>
 
+      {compareEnabled && !comparisonSupported && (
+        <p className="flex items-center gap-2 text-xs text-text-muted">
+          <Percent className="h-3.5 w-3.5" />
+          {isAr
+            ? 'ملاحظة: المقارنة غير مفعّلة للفاصل الزمني الحالي. اختر فترة أقصر (حتى 120 يوماً) لعرض المقارنة.'
+            : 'Note: comparison is inactive for the current interval. Pick a shorter range (up to 120 days) to see it.'}
+        </p>
+      )}
     </div>
   );
 }

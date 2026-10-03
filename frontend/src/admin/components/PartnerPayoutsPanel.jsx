@@ -437,6 +437,20 @@ export default function PartnerPayoutsPanel({ isAr, canEdit, partners = [], toas
     }
   };
 
+  const handleBatchExport = async () => {
+    try {
+      const res = await adminApi.exportPartnerPayoutBatch({ status: statusFilter || 'pending' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8;' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `partner-payout-batch-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error(isAr ? 'فشل التصدير' : 'Export failed');
+    }
+  };
+
   const totals = summary?.totals || {};
 
   return (
@@ -478,6 +492,11 @@ export default function PartnerPayoutsPanel({ isAr, canEdit, partners = [], toas
               CSV
             </button>
           )}
+          <button type="button" onClick={handleBatchExport}
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50">
+            <Download className="h-4 w-4" />
+            {isAr ? 'دفعة بنكية' : 'Bank batch'}
+          </button>
           {canEdit && (
             <>
               <button type="button" onClick={() => setShowManual(true)}
