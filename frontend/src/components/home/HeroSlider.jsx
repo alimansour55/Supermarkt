@@ -5,6 +5,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { fetchHeroBanners } from '../../services/bannerApi';
 import { HERO_SLIDES } from '../../data/mockData';
 import { HeroSkeleton } from '../ui/Skeleton';
+import { cloudinarySrcSet, cloudinaryUrl } from '../../utils/cloudinaryImage';
 
 export default function HeroSlider({
   slides: managedSlides = null,
@@ -13,8 +14,13 @@ export default function HeroSlider({
 }) {
   const { language } = useLanguage();
   const isAr = language === 'ar';
-  const [slides, setSlides] = useState(HERO_SLIDES);
-  const [loading, setLoading] = useState(!managedSlides);
+  const isManaged = managedSlides !== null && managedSlides !== undefined;
+  // CMS-managed slides render straight away (they are in the server HTML) — the
+  // demo slides are only a fallback while the standalone slider fetches banners.
+  const [slides, setSlides] = useState(() => (
+    isManaged ? (Array.isArray(managedSlides) ? managedSlides : []) : HERO_SLIDES
+  ));
+  const [loading, setLoading] = useState(isManaged ? managedLoading : true);
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
@@ -72,14 +78,21 @@ export default function HeroSlider({
                   <div className="absolute inset-0 bg-surface-muted">
                     <picture className="block h-full w-full">
                       {slide.mobileImage && mobileSrc !== imageSrc && (
-                        <source media="(max-width: 640px)" srcSet={mobileSrc} />
+                        <source
+                          media="(max-width: 640px)"
+                          srcSet={cloudinarySrcSet(mobileSrc, { maxWidth: 1280 }) || mobileSrc}
+                          sizes="100vw"
+                        />
                       )}
                       <img
-                        src={imageSrc}
+                        src={cloudinaryUrl(imageSrc, { width: 1600 })}
+                        srcSet={cloudinarySrcSet(imageSrc)}
                         alt={title || ''}
                         className="h-full w-full min-h-full min-w-full object-cover object-center"
                         loading={index === 0 ? 'eager' : 'lazy'}
-                        decoding={index === 0 ? 'sync' : 'async'}
+                        fetchPriority={index === 0 ? 'high' : 'low'}
+                        decoding="async"
+                        sizes="(max-width: 1280px) 100vw, 1280px"
                       />
                     </picture>
                   </div>

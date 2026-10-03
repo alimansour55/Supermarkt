@@ -4,7 +4,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
 import { APP_NAME, APP_NAME_EN } from '../../utils/constants';
-import { isStaffRole } from '../../admin/adminPermissions';
+import { isStaffRole } from '../../utils/roles';
 import { scrollToTop } from '../../utils/scrollToTop';
 import { SOCIAL_PATHS, PAYMENT_META } from './regions/socialPaths';
 import {

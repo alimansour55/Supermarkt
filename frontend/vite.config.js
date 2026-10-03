@@ -29,21 +29,20 @@ function printMobileUrls() {
 }
 
 /**
- * Only group node_modules into stable vendor chunks. Application code is left to
- * split automatically along route-module boundaries (src/routes.js) and the
- * lazy() admin pages — forcing it into single "admin"/"storefront" chunks merged
- * ~220 admin files into one 2.2 MB download and defeated code-splitting.
+ * One stable vendor chunk for the React core (shared by every page, long-cached).
+ * Everything else — app code and the remaining npm packages — splits along
+ * route-module / lazy() boundaries, so each page downloads only what it renders.
+ *
+ * Don't add groups for libraries that depend on React (recharts, react-leaflet,
+ * @stripe/react-stripe-js…): Rolldown pulls a group's dependencies into it, so
+ * React itself would move into that chunk and every page would download it.
+ * A catch-all "vendor" chunk would likewise put admin-only libraries on every page.
  */
 function manualChunks(id) {
-  if (!id.includes('node_modules')) return undefined;
-  if (id.includes('react-router') || id.includes('react-dom') || id.includes('/react/')) {
+  if (/[\\/]node_modules[\\/](react|react-dom|react-router|scheduler|cookie|set-cookie-parser)[\\/]/.test(id)) {
     return 'vendor-react';
   }
-  if (id.includes('lucide-react')) return 'vendor-icons';
-  if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts';
-  if (id.includes('leaflet')) return 'vendor-maps';
-  if (id.includes('@stripe')) return 'vendor-stripe';
-  return 'vendor';
+  return undefined;
 }
 
 const apiProxy = {

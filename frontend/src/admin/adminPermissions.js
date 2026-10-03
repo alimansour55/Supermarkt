@@ -1,4 +1,6 @@
-export const STAFF_ROLES = ['manager', 'admin', 'super_admin'];
+import { STAFF_ROLES, isStaffRole } from '../utils/roles';
+
+export { STAFF_ROLES, isStaffRole };
 
 export const ROLE_LABELS = {
   user: { en: 'Customer', ar: 'عميل' },
@@ -247,10 +249,6 @@ export function resolveUserPermissions(user) {
     return user.effectivePermissions;
   }
   return permissionsForRole(user.role);
-}
-
-export function isStaffRole(role) {
-  return STAFF_ROLES.includes(role);
 }
 
 /** @param {string|{ role?: string, permissions?: string[], effectivePermissions?: string[] }} userOrRole */

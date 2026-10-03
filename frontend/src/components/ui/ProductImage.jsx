@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { isImageUrl, isEmojiImage } from '../../utils/imageHelpers';
+import { cloudinaryUrl, cloudinarySrcSet } from '../../utils/cloudinaryImage';
 
 function PlaceholderIcon({ className = 'h-10 w-10' }) {
   return (
@@ -26,7 +27,11 @@ export default function ProductImage({
   className = '',
   imgClassName = 'h-full w-full object-contain p-2',
   placeholderClassName = '',
-  sizes,
+  sizes = '(max-width: 640px) 50vw, 240px',
+  /** Above-the-fold image (e.g. product page main photo): load eagerly with high priority. */
+  priority = false,
+  /** Widest rendering of this image, caps the Cloudinary srcset. */
+  maxWidth = 960,
   onError,
 }) {
   const [failed, setFailed] = useState(false);
@@ -44,9 +49,11 @@ export default function ProductImage({
     >
       {validSrc ? (
         <img
-          src={validSrc}
+          src={cloudinaryUrl(validSrc, { width: maxWidth })}
+          srcSet={cloudinarySrcSet(validSrc, { maxWidth })}
           alt={alt}
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
+          fetchPriority={priority ? 'high' : undefined}
           decoding="async"
           sizes={sizes}
           onError={() => { setFailed(true); onError?.(); }}

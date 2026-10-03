@@ -175,6 +175,9 @@ export default function ProductDetailsPage() {
                 alt={name}
                 className="h-full w-full"
                 imgClassName="h-full w-full object-contain p-6"
+                priority
+                sizes="(max-width: 1024px) 100vw, 420px"
+                maxWidth={1280}
               />
             )}
             {promotion && (

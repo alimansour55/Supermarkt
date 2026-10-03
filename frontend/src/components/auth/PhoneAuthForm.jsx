@@ -6,7 +6,7 @@ import Button from '../ui/Button';
 import Loader from '../ui/Loader';
 import { localToEgyptPhone, formatLocalPhoneDisplay } from '../../utils/phoneHelpers';
 import { isMobileLanAccess, isLikelyMobileDevice } from '../../utils/mobileAccess';
-import { isStaffRole } from '../../admin/adminPermissions';
+import { isStaffRole } from '../../utils/roles';
 
 const RESEND_SECONDS = 60;
 const DEMO_ADMIN_LOCAL = '1012345678';

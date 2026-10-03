@@ -2,10 +2,8 @@ import { Outlet, useLocation as useRouterLocation } from '../../app/router';
 import Header from './Header';
 import Footer from './Footer';
 import BottomTabBar from './BottomTabBar';
-import CartDrawer from '../cart/CartDrawer';
-import SupportChatWidget from '../support/SupportChatWidget';
 import ScrollToTop from './ScrollToTop';
-import LocationGateModal from '../location/LocationGateModal';
+import DeferredWidgets from './DeferredWidgets';
 import { isLocationGateDismissedThisSession } from '../../utils/locationGate';
 import { SupportChatProvider } from '../../context/SupportChatContext';
 import { useLocation as useDeliveryLocation } from '../../context/LocationContext';
@@ -36,9 +34,7 @@ export default function Layout() {
         </main>
         <Footer className="hidden md:block" />
         <BottomTabBar />
-        <CartDrawer />
-        <SupportChatWidget />
-        <LocationGateModal open={showGate} />
+        <DeferredWidgets showLocationGate={showGate} />
       </div>
     </SupportChatProvider>
   );
