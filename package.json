@@ -14,9 +14,11 @@
     "start": "npm run start --prefix backend",
     "seed": "npm run seed --prefix backend",
     "install:all": "npm install && npm install --prefix frontend && npm install --prefix backend",
-    "postinstall": "npm install --prefix frontend && npm install --prefix backend"
+    "postinstall": "npm install --prefix frontend && npm install --prefix backend",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "concurrently": "^9.1.2",
     "local-ssl-proxy": "^2.0.5"
   },
