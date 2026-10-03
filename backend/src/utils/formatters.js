@@ -102,8 +102,9 @@ export const formatProduct = (product) => {
     categoryId: product.category?._id || product.category,
     mainCategory: product.mainCategory?._id || product.mainCategory,
     mainCategorySlug: product.mainCategory?.slug || product._mainCategorySlug || null,
-    subCategory: product.subCategory?._id || product.subCategory,
-    subCategorySlug: product.subCategory?.slug || product._subCategorySlug || null,
+    // kept as aliases of category/categorySlug for API backward compat
+    subCategory: product.category?._id || product.category,
+    subCategorySlug: categorySlug || null,
     categoryAncestors: Array.isArray(product.categoryAncestors)
       ? product.categoryAncestors.map((a) => (a && typeof a === 'object' && a._id ? a._id : a))
       : [],
@@ -132,6 +133,7 @@ export const formatProduct = (product) => {
     similarProducts: product.similarProducts?.map((p) =>
       (p?._id ? p._id : p),
     ) || [],
+    similarMode: product.similarMode || 'auto',
     relatedProducts: product._relatedProducts || [],
     frequentlyBoughtTogetherProducts: product._fbtProducts || [],
     unit: product.unit,

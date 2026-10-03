@@ -24,6 +24,9 @@ import promotionRoutes from './promotion.routes.js';
 import fulfillmentLocationRoutes from './fulfillmentLocation.routes.js';
 import userNotificationRoutes from './userNotification.routes.js';
 import assistantRoutes from './assistant.routes.js';
+import supportRoutes from './support.routes.js';
+import supportChatRoutes from './supportChat.routes.js';
+import whatsappRoutes from './whatsapp.routes.js';
 
 const router = Router();
 
@@ -53,5 +56,8 @@ router.use('/promotions', promotionRoutes);
 router.use('/fulfillment-locations', fulfillmentLocationRoutes);
 router.use('/my-notifications', userNotificationRoutes);
 router.use('/assistant', assistantRoutes);
+router.use('/support', supportRoutes);
+router.use('/support-chat', supportChatRoutes);
+router.use('/whatsapp', whatsappRoutes);
 
 export default router;

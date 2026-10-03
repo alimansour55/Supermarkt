@@ -69,6 +69,26 @@ export const assistantChatLimiter = rateLimit({
   message: jsonMessage('Too many assistant messages. Please try again later.'),
 });
 
+/** Customer "call me back" requests from the contact page / assistant */
+export const callbackRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?._id?.toString() || ipKeyGenerator(req.ip),
+  message: jsonMessage('Too many callback requests. Please try again later.'),
+});
+
+/** Customer human live-chat messages / close */
+export const supportChatMessageLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?._id?.toString() || ipKeyGenerator(req.ip),
+  message: jsonMessage('Too many messages. Please try again later.'),
+});
+
 /** Admin manual tracking test updates */
 export const adminTrackingUpdateLimiter = rateLimit({
   windowMs: 60 * 1000,

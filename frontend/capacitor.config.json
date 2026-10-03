@@ -1,0 +1,8 @@
+{
+  "appId": "com.supermarket.app",
+  "appName": "Supermarket",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

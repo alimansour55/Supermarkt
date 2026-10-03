@@ -12,6 +12,7 @@
     "sync-ratings": "node src/scripts/syncProductRatings.js",
     "repair:categories": "node scripts/repair-category-links.js",
     "migrate:category-tree": "node scripts/migrate-category-tree.js",
+    "migrate:drop-subcategory": "node scripts/migrate-drop-product-subcategory.js",
     "repair:brands": "node scripts/repair-product-brands.js",
     "repair:superadmin": "node scripts/repair-superadmin-login.js",
     "repair:user-indexes": "node scripts/repair-user-indexes.js",
