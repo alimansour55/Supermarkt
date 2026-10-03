@@ -9,5 +9,6 @@ export async function fetchStoreSettings() {
     aiChatEnabled: settings.aiChatEnabled !== false,
     gpsDeliveryEnabled: settings.gpsDeliveryEnabled !== false,
     freeDeliveryEnabled: settings.freeDeliveryEnabled !== false,
+    liveChat: { enabled: true, available: true, nextAvailableAt: null, ...(settings.liveChat || {}) },
   };
 }

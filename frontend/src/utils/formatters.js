@@ -39,6 +39,35 @@ export function formatCount(value) {
   return latinizeDigits(new Intl.NumberFormat('en-US').format(Number(value) || 0));
 }
 
+/**
+ * Group a YYMMDD+sequence order number as "YYMMDD-XXXXXX" for readability.
+ * Matches both the current 6-digit atomic-sequence suffix and older orders'
+ * shorter random suffix (any length works — only the leading 6-digit date is
+ * fixed). Legacy "MP-YYYYMMDD-XXXX" orders already have their own separators
+ * and pass through as-is.
+ */
+export function formatOrderNumber(orderNumber) {
+  const raw = String(orderNumber ?? '');
+  if (/^\d{10,}$/.test(raw)) {
+    return `${raw.slice(0, 6)}-${raw.slice(6)}`;
+  }
+  return raw;
+}
+
+/**
+ * Short, scannable order reference: the sequence part only (e.g. "004521"),
+ * dropping the YYMMDD prefix that's redundant in list rows next to a relative
+ * timestamp. Use formatOrderNumber for the full, unambiguous value (detail
+ * views, copy actions, search).
+ */
+export function formatOrderNumberShort(orderNumber) {
+  const raw = String(orderNumber ?? '');
+  if (/^\d{10,}$/.test(raw)) {
+    return raw.slice(6);
+  }
+  return raw.slice(-4) || raw;
+}
+
 export function formatRelativeTime(date, isAr = false) {
   const then = new Date(date).getTime();
   const diffSec = Math.floor((Date.now() - then) / 1000);

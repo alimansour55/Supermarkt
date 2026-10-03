@@ -51,8 +51,14 @@ export const orderService = {
   getDriverConfig: () => api.get('/orders/driver/config'),
   setDriverAvailability: (available) => api.put('/orders/driver/availability', { available }),
   getDriverDeliveries: () => api.get('/orders/driver/deliveries'),
+  getDriverHistory: () => api.get('/orders/driver/deliveries/history'),
   getDriverDelivery: (id) => api.get(`/orders/driver/deliveries/${id}`),
-  completeDriverDelivery: (id) => api.post(`/orders/driver/deliveries/${id}/complete`),
+  completeDriverDelivery: (id, photoFile) => {
+    if (!photoFile) return api.post(`/orders/driver/deliveries/${id}/complete`);
+    const form = new FormData();
+    form.append('proofPhoto', photoFile);
+    return api.post(`/orders/driver/deliveries/${id}/complete`, form);
+  },
   failDriverDelivery: (id, data) => api.post(`/orders/driver/deliveries/${id}/fail`, data),
   updateDriverLocation: (id, data) => api.put(`/orders/${id}/tracking/location`, data),
   getRecurringDeliveries: () => api.get('/orders/recurring-deliveries'),

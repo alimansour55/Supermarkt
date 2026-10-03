@@ -106,10 +106,11 @@ export function StoreSettingsProvider({ children }) {
   }, [settings?.siteFont]);
 
   useEffect(() => {
-    if (!settings?.seo) return;
+    if (!settings) return;
     const isAr = language === 'ar';
-    const title = isAr ? settings.seo.defaultTitleAr : settings.seo.defaultTitleEn;
-    const description = isAr ? settings.seo.defaultDescriptionAr : settings.seo.defaultDescriptionEn;
+    const title = (isAr ? settings.seo?.defaultTitleAr : settings.seo?.defaultTitleEn)
+      || (isAr ? settings.storeNameAr : settings.storeNameEn);
+    const description = isAr ? settings.seo?.defaultDescriptionAr : settings.seo?.defaultDescriptionEn;
     if (title) document.title = title;
     if (description) {
       let meta = document.querySelector('meta[name="description"]');

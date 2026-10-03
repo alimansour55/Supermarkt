@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { CheckCircle2, Sparkles, Truck } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
 import { useLocation } from '../../context/LocationContext';
@@ -7,10 +8,24 @@ import { getFreeDeliveryBannerContent, resolveFreeDeliveryMethods } from '../../
 import { DELIVERY_METHODS } from '../../constants/deliveryOptions';
 
 const VARIANT_STYLES = {
-  progress: 'border-primary-100 bg-gradient-to-r from-primary-50 to-emerald-50',
-  success: 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50',
-  switch: 'border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50',
-  coupon: 'border-violet-200 bg-gradient-to-r from-violet-50 to-purple-50',
+  progress: 'bg-primary-50',
+  success: 'bg-emerald-50',
+  switch: 'bg-amber-50',
+  coupon: 'bg-violet-50',
+};
+
+const VARIANT_ICON_BADGE = {
+  progress: 'bg-primary-600 text-white',
+  success: 'bg-emerald-600 text-white',
+  switch: 'bg-amber-500 text-white',
+  coupon: 'bg-violet-600 text-white',
+};
+
+const VARIANT_ICON = {
+  progress: Truck,
+  success: CheckCircle2,
+  switch: Truck,
+  coupon: Sparkles,
 };
 
 export default function FreeDeliveryProgress({ showWhenEmpty = false, linkToCart = false, dense = false, className = '' }) {
@@ -63,16 +78,38 @@ export default function FreeDeliveryProgress({ showWhenEmpty = false, linkToCart
       suggestMethods: [],
     };
 
+  const Icon = VARIANT_ICON[banner.variant] || Truck;
+  const showBar = !dense || (banner.variant === 'progress' && !banner.currentFree);
+
   const content = (
-    <div className={`rounded-xl border ${dense ? 'px-3 py-2' : 'px-3 py-2.5'} ${VARIANT_STYLES[banner.variant] || VARIANT_STYLES.progress} ${className}`}>
-      <div className="flex items-start justify-between gap-2">
+    <div className={`rounded-2xl ${dense ? 'px-3 py-2.5' : 'px-4 py-3'} ${VARIANT_STYLES[banner.variant] || VARIANT_STYLES.progress} ${className}`}>
+      <div className="flex items-center gap-2.5">
+        <span
+          className={`flex shrink-0 items-center justify-center rounded-full ${dense ? 'h-8 w-8' : 'h-9 w-9'} ${VARIANT_ICON_BADGE[banner.variant] || VARIANT_ICON_BADGE.progress}`}
+        >
+          <Icon className={dense ? 'h-4 w-4' : 'h-4.5 w-4.5'} strokeWidth={2.25} aria-hidden />
+        </span>
+
         <div className="min-w-0 flex-1">
-          <p className={`font-bold leading-tight ${dense ? 'text-xs' : 'text-sm'} ${banner.variant === 'switch' ? 'text-amber-950' : 'text-primary-900'}`}>
-            {banner.title}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <p className={`font-bold leading-tight ${dense ? 'text-xs' : 'text-sm'} ${banner.variant === 'switch' ? 'text-amber-950' : 'text-primary-900'}`}>
+              {banner.title}
+            </p>
+            {linkToCart && hasItems && (
+              <button
+                type="button"
+                onClick={openDrawer}
+                className="shrink-0 text-[11px] font-bold text-primary-700 hover:underline"
+              >
+                {isAr ? 'السلة' : 'Cart'}
+              </button>
+            )}
+          </div>
+
           {banner.subtitle && !dense && (
             <p className="mt-0.5 text-xs leading-snug text-text-muted">{banner.subtitle}</p>
           )}
+
           {banner.variant === 'switch' && banner.suggestMethods?.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {banner.suggestMethods.map((method) => (
@@ -89,32 +126,16 @@ export default function FreeDeliveryProgress({ showWhenEmpty = false, linkToCart
               ))}
             </div>
           )}
-          {!dense && (
-            <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/70">
+
+          {showBar && (
+            <div className={`overflow-hidden rounded-full bg-white/70 ${dense ? 'mt-1.5 h-1.5' : 'mt-2 h-1.5'}`}>
               <div
                 className={`h-full rounded-full transition-all duration-500 ${banner.currentFree ? 'bg-emerald-600' : 'bg-primary-600'}`}
                 style={{ width: `${banner.progress}%` }}
               />
             </div>
           )}
-          {dense && banner.variant === 'progress' && !banner.currentFree && (
-            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/70">
-              <div
-                className="h-full rounded-full bg-primary-600 transition-all duration-500"
-                style={{ width: `${banner.progress}%` }}
-              />
-            </div>
-          )}
         </div>
-        {linkToCart && hasItems && (
-          <button
-            type="button"
-            onClick={openDrawer}
-            className="shrink-0 text-[11px] font-bold text-primary-700 hover:underline"
-          >
-            {isAr ? 'السلة' : 'Cart'}
-          </button>
-        )}
       </div>
     </div>
   );

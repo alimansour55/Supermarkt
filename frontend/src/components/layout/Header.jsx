@@ -24,6 +24,12 @@ export default function Header() {
     ? (settings?.storeNameAr || APP_NAME)
     : (settings?.storeNameEn || APP_NAME_EN);
 
+  const nav = settings?.navigation || {};
+  const serviceLabel = language === 'ar'
+    ? (nav.topBarServiceLabelAr || t.nav.customerService)
+    : (nav.topBarServiceLabelEn || t.nav.customerService);
+  const serviceHref = nav.topBarServiceHref || '/contact';
+
   const renderLogo = ({ compact = false } = {}) => (
     <Link
       to="/"
@@ -34,26 +40,24 @@ export default function Header() {
         <img
           src={settings.logoUrl}
           alt={storeName}
-          className={`w-auto max-w-full object-contain ${compact ? 'h-9' : 'h-11'}`}
+          className={`w-auto max-w-full shrink-0 object-contain ${compact ? 'h-9' : 'h-11'}`}
         />
       ) : (
-        <>
-          <span
-            className={`flex shrink-0 items-center justify-center rounded-2xl bg-primary-600 text-white shadow-sm ${
-              compact ? 'h-9 w-9' : 'h-11 w-11'
-            }`}
-          >
-            <ShoppingBag className={compact ? 'h-5 w-5' : 'h-6 w-6'} aria-hidden />
-          </span>
-          <span
-            className={`min-w-0 truncate py-0.5 font-black leading-[1.75] tracking-tight text-primary-700 ${
-              compact ? 'text-lg' : 'text-[26px]'
-            }`}
-          >
-            {storeName}
-          </span>
-        </>
+        <span
+          className={`flex shrink-0 items-center justify-center rounded-2xl bg-primary-600 text-white shadow-sm ${
+            compact ? 'h-9 w-9' : 'h-11 w-11'
+          }`}
+        >
+          <ShoppingBag className={compact ? 'h-5 w-5' : 'h-6 w-6'} aria-hidden />
+        </span>
       )}
+      <span
+        className={`min-w-0 truncate py-0.5 font-black leading-[1.75] tracking-tight text-primary-700 ${
+          compact ? 'text-lg' : 'text-[26px]'
+        }`}
+      >
+        {storeName}
+      </span>
     </Link>
   );
 
@@ -64,8 +68,8 @@ export default function Header() {
         <div className="container-app flex h-9 items-center justify-between text-xs">
           <LocationSelector />
           <div className="flex items-center gap-3">
-            <Link to="/contact" className="text-white/85 transition-colors hover:text-white">
-              {t.nav.customerService}
+            <Link to={serviceHref} className="text-white/85 transition-colors hover:text-white">
+              {serviceLabel}
             </Link>
             <span className="h-3.5 w-px bg-white/25" aria-hidden />
             <button

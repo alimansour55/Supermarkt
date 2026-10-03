@@ -68,16 +68,19 @@ function AllProductsTile({ isAr, section, link }) {
 
       <div className="hidden min-h-0 flex-1 flex-col p-2.5 sm:p-3 md:flex">
         <BrowseHubHeader to={link} icon={ShoppingBag} title={copy.title} isAr={isAr} iconClassName="bg-primary-600 text-white" />
-        <Link to={link} className="group flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-gradient-to-br from-primary-50/80 via-white to-white transition-colors hover:from-primary-50 hover:ring-2 hover:ring-primary-100" aria-label={copy.title}>
-          <div className="relative flex min-h-[5.5rem] flex-1 flex-col overflow-hidden rounded-xl bg-primary-50/70 p-2.5 ring-1 ring-primary-100/90 sm:min-h-[6rem] sm:p-3">
-            <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-2 text-center">
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-600 text-white shadow-[0_5px_14px_-3px_rgba(5,150,105,0.45)]">
-                <ShoppingBag className="h-5 w-5" strokeWidth={2.25} aria-hidden />
-              </span>
-              <p className="text-[11px] font-extrabold leading-snug text-primary-900 sm:text-xs">{copy.headline}</p>
-              <p className="line-clamp-2 px-0.5 text-[10px] leading-snug text-text-muted">{copy.detail}</p>
-              <span className="mt-0.5 inline-flex items-center rounded-full bg-primary-600 px-2.5 py-1 text-[10px] font-bold text-white">{copy.cta}</span>
-            </div>
+        <Link to={link} className="group relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-gradient-to-br from-primary-50 via-white to-emerald-50/50 ring-1 ring-primary-100/80 transition-all duration-200 hover:shadow-md hover:ring-primary-200" aria-label={copy.title}>
+          <span className="pointer-events-none absolute -end-6 -top-8 h-24 w-24 rounded-full bg-primary-200/40 blur-2xl transition-opacity duration-200 group-hover:opacity-80" aria-hidden />
+          <span className="pointer-events-none absolute -start-8 -bottom-10 h-28 w-28 rounded-full bg-emerald-200/30 blur-2xl" aria-hidden />
+          <div className="relative z-10 flex min-h-[5.5rem] flex-1 flex-col items-center justify-center gap-2 p-2.5 text-center sm:min-h-[6rem] sm:p-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-600 text-white shadow-[0_6px_16px_-4px_rgba(5,150,105,0.5)] transition-transform duration-200 group-hover:-rotate-3 group-hover:scale-105">
+              <ShoppingBag className="h-5 w-5" strokeWidth={2.25} aria-hidden />
+            </span>
+            <p className="text-[11px] font-extrabold leading-snug text-primary-900 sm:text-xs">{copy.headline}</p>
+            <p className="line-clamp-2 px-0.5 text-[10px] leading-snug text-text-muted">{copy.detail}</p>
+            <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-primary-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm transition-all duration-200 group-hover:gap-1.5 group-hover:bg-primary-700">
+              {copy.cta}
+              <NavChevron isAr={isAr} className="h-2.5 w-2.5 text-white/90" />
+            </span>
           </div>
         </Link>
       </div>
@@ -87,11 +90,15 @@ function AllProductsTile({ isAr, section, link }) {
 
 function SubcategoryOrb({ sub, isAr, categories }) {
   return (
-    <Link to={categoryHref(sub, null, null, categories)} className="flex w-[3.25rem] shrink-0 flex-col items-center gap-1 transition-transform active:scale-95 md:w-16 md:gap-1.5">
-      <span className="rounded-full p-0.5 ring-2 ring-transparent transition-all hover:ring-primary-200">
-        <CategoryImage category={sub} size="xs" className="!h-10 !w-10 !rounded-full shadow-sm ring-1 ring-black/[0.04] md:!h-12 md:!w-12" />
+    <Link
+      to={categoryHref(sub, null, null, categories)}
+      className="group flex w-[3.25rem] shrink-0 flex-col items-center gap-1 transition-transform active:scale-95 md:w-16 md:gap-1.5"
+      title={filterSubcategoryLabel(sub, isAr)}
+    >
+      <span className="rounded-full p-0.5 ring-2 ring-transparent transition-all group-hover:ring-primary-200">
+        <CategoryImage category={sub} size="xs" className="!h-10 !w-10 !rounded-full shadow-sm ring-1 ring-black/[0.04] transition-transform duration-200 group-hover:scale-105 md:!h-12 md:!w-12" />
       </span>
-      <span className="line-clamp-2 w-full text-center text-[9px] font-semibold leading-tight text-text md:text-[10px]">
+      <span className="w-full truncate text-center text-[9px] font-semibold leading-tight text-text md:text-[10px]">
         {filterSubcategoryLabel(sub, isAr)}
       </span>
     </Link>
@@ -103,7 +110,7 @@ function SubcategoriesTile({ isAr, loading, preview, hasMore, categories, link, 
   return (
     <div className="flex min-h-0 min-w-0 flex-col p-2.5 sm:p-3 md:h-full">
       <BrowseHubHeader to={link} icon={LayoutGrid} title={title} isAr={isAr} />
-      <div className="flex min-h-[5.5rem] flex-1 items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin sm:min-h-[6rem]" aria-label={title}>
+      <div className="flex min-h-[5.5rem] flex-1 items-start gap-2 overflow-x-auto pt-1 pb-0.5 scrollbar-thin sm:min-h-[6rem]" aria-label={title}>
         {loading ? (
           Array.from({ length: 5 }, (_, i) => (
             <div key={i} className="flex w-[3.25rem] shrink-0 flex-col items-center gap-1 md:w-14" aria-hidden>

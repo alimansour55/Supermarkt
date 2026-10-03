@@ -19,12 +19,16 @@ export default function NavMenu() {
   const [open, setOpen] = useState(false);
   const [megaScope, setMegaScope] = useState('all');
   const [activeCategory, setActiveCategory] = useState(null);
-  const { cancelClose, scheduleClose, markOpen } = useHoverMenu({ closeDelay: 450 });
+  // Short delay — just enough to bridge the gap while moving the pointer from the
+  // trigger into the panel below; longer than this reads as a stuck-open menu.
+  const { cancelClose, scheduleClose, markOpen } = useHoverMenu({ closeDelay: 120 });
 
   const navItems = useMemo(
     // Cap the bar so an over-filled admin config can't break the header layout.
+    // Home is dropped here — the logo already links to "/", so a text link would duplicate it.
     () => clampStoreNavItems(
-      buildStoreNavItems(settings?.navigation, categories, getChildren),
+      buildStoreNavItems(settings?.navigation, categories, getChildren)
+        .filter((item) => item.type !== 'home'),
     ),
     [settings?.navigation, categories, getChildren],
   );
@@ -76,6 +80,19 @@ export default function NavMenu() {
   useEffect(() => {
     closeMega();
   }, [pathname, closeMega]);
+
+  // Scrolling doesn't move the mouse, so the hover-leave timer never fires — the
+  // panel would otherwise sit open (stale, over newly-scrolled content) until the
+  // user happens to move the pointer. Close it the instant the page scrolls.
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleScroll = () => {
+      cancelClose();
+      closeMega();
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [open, cancelClose, closeMega]);
 
   useEffect(() => {
     if (open && !activeCategory && defaultRoot && megaScope === 'all') {

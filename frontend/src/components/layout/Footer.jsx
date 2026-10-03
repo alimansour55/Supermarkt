@@ -6,6 +6,12 @@ import { useStoreSettings } from '../../context/StoreSettingsContext';
 import { APP_NAME, APP_NAME_EN } from '../../utils/constants';
 import { isStaffRole } from '../../admin/adminPermissions';
 import { scrollToTop } from '../../utils/scrollToTop';
+import { SOCIAL_PATHS, PAYMENT_META } from './regions/socialPaths';
+import {
+  DEFAULT_FOOTER_LEGAL_LINKS,
+  DEFAULT_FOOTER_PAYMENT_METHODS,
+  footerSectionEnabled,
+} from '../../utils/footerConfig';
 
 function BrandIcon({ path, className }) {
   return (
@@ -15,15 +21,27 @@ function BrandIcon({ path, className }) {
   );
 }
 
-const SOCIAL_PATHS = {
-  facebook: 'M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.5V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z',
-  instagram: 'M12 2.2c3.2 0 3.6 0 4.9.1 3.2.1 4.8 1.7 4.9 4.9.1 1.3.1 1.6.1 4.8s0 3.6-.1 4.8c-.1 3.2-1.7 4.8-4.9 4.9-1.3.1-1.6.1-4.9.1s-3.6 0-4.8-.1c-3.3-.1-4.8-1.7-4.9-4.9-.1-1.3-.1-1.6-.1-4.8s0-3.6.1-4.8C2.4 4 4 2.4 7.2 2.3 8.4 2.2 8.8 2.2 12 2.2Zm0 3.1A6.7 6.7 0 1 0 12 18.7 6.7 6.7 0 0 0 12 5.3Zm0 11a4.3 4.3 0 1 1 0-8.6 4.3 4.3 0 0 1 0 8.6Zm6.9-11.3a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2Z',
-  x: 'M18.9 2H22l-7.6 8.7L23 22h-6.8l-5.3-6.9L4.8 22H1.7l8.1-9.3L1 2h7l4.8 6.3L18.9 2Zm-1.2 18h1.9L7.4 3.9H5.4L17.7 20Z',
-  twitter: 'M18.9 2H22l-7.6 8.7L23 22h-6.8l-5.3-6.9L4.8 22H1.7l8.1-9.3L1 2h7l4.8 6.3L18.9 2Zm-1.2 18h1.9L7.4 3.9H5.4L17.7 20Z',
-  youtube: 'M23.5 6.5a3 3 0 0 0-2.1-2.1C19.5 3.9 12 3.9 12 3.9s-7.5 0-9.4.5A3 3 0 0 0 .5 6.5 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.5 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.5ZM9.6 15.6V8.4l6.2 3.6-6.2 3.6Z',
-  linkedin: 'M20.5 2h-17A1.5 1.5 0 0 0 2 3.5v17A1.5 1.5 0 0 0 3.5 22h17a1.5 1.5 0 0 0 1.5-1.5v-17A1.5 1.5 0 0 0 20.5 2ZM8 19H5V9h3v10ZM6.5 7.7a1.8 1.8 0 1 1 0-3.6 1.8 1.8 0 0 1 0 3.6ZM19 19h-3v-5.3c0-1.3 0-3-1.8-3s-2.1 1.4-2.1 2.9V19h-3V9h2.9v1.4h.04a3.2 3.2 0 0 1 2.9-1.6c3.1 0 3.7 2 3.7 4.7V19Z',
-  tiktok: 'M16.5 3c.3 2.3 1.6 3.7 3.8 3.8v2.6c-1.3.1-2.5-.3-3.8-1v6.9c0 4.4-4.8 7.1-8.5 4.9-2.4-1.4-3.2-4.5-1.9-6.9 1.1-2.1 3.5-3.2 5.9-2.7v2.7c-.4-.1-.9-.2-1.3-.2-1.4 0-2.6 1.2-2.6 2.6s1.2 2.6 2.6 2.6c1.5 0 2.7-1.1 2.7-2.6V3h2.8Z',
-};
+/** A payment badge — Visa / Mastercard keep their bespoke glyphs, the rest are
+ *  neutral white chips so an admin can add more without a design change. */
+function PaymentBadge({ method, isAr }) {
+  if (method === 'visa') {
+    return <span className="flex h-8 items-center rounded-lg bg-white px-2.5 text-sm font-black italic tracking-tight text-[#1a1f71] shadow-sm">VISA</span>;
+  }
+  if (method === 'mastercard') {
+    return (
+      <span className="flex h-8 items-center gap-1 rounded-lg bg-white px-2.5 shadow-sm">
+        <span className="h-4 w-4 rounded-full bg-[#eb001b]" />
+        <span className="-ms-2.5 h-4 w-4 rounded-full bg-[#f79e1b] mix-blend-multiply" />
+      </span>
+    );
+  }
+  const meta = PAYMENT_META[method] || { labelEn: method, labelAr: method };
+  return (
+    <span className="flex h-8 items-center rounded-lg bg-white px-2.5 text-xs font-bold text-slate-700 shadow-sm">
+      {isAr ? meta.labelAr : meta.labelEn}
+    </span>
+  );
+}
 
 export default function Footer({ className = '' }) {
   const { t, language } = useLanguage();
@@ -36,6 +54,9 @@ export default function Footer({ className = '' }) {
   const storeName = isAr ? (settings?.storeNameAr || APP_NAME) : (settings?.storeNameEn || APP_NAME_EN);
   const storeSubtitle = isAr ? (settings?.storeNameEn || APP_NAME_EN) : (settings?.storeNameAr || APP_NAME);
   const tagline = isAr ? (settings?.taglineAr || t.footer.tagline) : (settings?.taglineEn || t.footer.tagline);
+
+  const footerCfg = settings?.navigation?.footer || {};
+  const on = (section) => footerSectionEnabled(footerCfg, section);
 
   const footerColumns = (settings?.navigation?.footerColumns || [])
     .slice()
@@ -69,11 +90,8 @@ export default function Footer({ className = '' }) {
   const appStore = settings?.appLinks?.appStore;
   const googlePlay = settings?.appLinks?.googlePlay;
 
-  const legalLinks = [
-    { labelAr: 'سياسة الإرجاع', labelEn: 'Return Policy', href: '/returns' },
-    { labelAr: 'سياسة الخصوصية', labelEn: 'Privacy Policy', href: '/privacy' },
-    { labelAr: 'الشروط والأحكام', labelEn: 'Terms & Conditions', href: '/terms' },
-  ];
+  const legalLinks = footerCfg.legalLinks?.length ? footerCfg.legalLinks : DEFAULT_FOOTER_LEGAL_LINKS;
+  const paymentMethods = footerCfg.paymentMethods?.length ? footerCfg.paymentMethods : DEFAULT_FOOTER_PAYMENT_METHODS;
 
   return (
     <footer className={`mt-auto ${className}`}>
@@ -83,16 +101,18 @@ export default function Footer({ className = '' }) {
         <div aria-hidden className="pointer-events-none absolute -bottom-32 end-0 h-72 w-72 rounded-full bg-primary-400/20 blur-3xl" />
 
         {/* back to top */}
-        <div className="relative flex justify-center pt-8">
-          <button
-            type="button"
-            onClick={() => scrollToTop('smooth')}
-            className="group inline-flex items-center gap-2 rounded-full bg-white/10 px-6 py-3 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/20"
-          >
-            <ChevronUp className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" aria-hidden />
-            {isAr ? 'العودة إلى الأعلى' : 'Back to top'}
-          </button>
-        </div>
+        {on('backToTop') && (
+          <div className="relative flex justify-center pt-8">
+            <button
+              type="button"
+              onClick={() => scrollToTop('smooth')}
+              className="group inline-flex items-center gap-2 rounded-full bg-white/10 px-6 py-3 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/20"
+            >
+              <ChevronUp className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" aria-hidden />
+              {isAr ? 'العودة إلى الأعلى' : 'Back to top'}
+            </button>
+          </div>
+        )}
 
         <div className="container-app relative pb-14 pt-12">
           <div className="grid gap-12 lg:grid-cols-12">
@@ -105,7 +125,7 @@ export default function Footer({ className = '' }) {
               <h2 className="mt-4 max-w-sm text-2xl font-extrabold leading-snug sm:text-[1.75rem] lg:text-[2rem] lg:leading-tight">
                 {tagline}
               </h2>
-              {socialEntries.length > 0 && (
+              {on('social') && socialEntries.length > 0 && (
                 <div className="mt-7 flex flex-wrap gap-2.5">
                   {socialEntries.map(([key, href]) => {
                     const path = SOCIAL_PATHS[key] || SOCIAL_PATHS.linkedin;
@@ -153,66 +173,80 @@ export default function Footer({ className = '' }) {
             </div>
 
             {/* contact + apps */}
-            <div className="lg:col-span-3">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-white/60">
-                {isAr ? 'تواصل معنا' : 'Get in Touch'}
-              </h3>
-              <ul className="mt-4 space-y-3 text-sm text-white/80">
-                <li className="flex items-center gap-2.5">
-                  <Phone className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
-                  <span dir="ltr">{settings?.supportPhone || '16XXX'}</span>
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <Mail className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
-                  {settings?.supportEmail || 'support@marketplus.com'}
-                </li>
-                <li className="flex items-center gap-2.5">
-                  <Clock className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
-                  {isAr ? 'دعم على مدار الساعة 24/7' : '24/7 Support'}
-                </li>
-              </ul>
+            {(on('contact') || on('apps')) && (
+              <div className="lg:col-span-3">
+                {on('contact') && (
+                  <>
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-white/60">
+                      {isAr ? 'تواصل معنا' : 'Get in Touch'}
+                    </h3>
+                    <ul className="mt-4 space-y-3 text-sm text-white/80">
+                      <li className="flex items-center gap-2.5">
+                        <Phone className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
+                        <span dir="ltr">{settings?.supportPhone || '16XXX'}</span>
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Mail className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
+                        {settings?.supportEmail || 'support@marketplus.com'}
+                      </li>
+                      <li className="flex items-center gap-2.5">
+                        <Clock className="h-4 w-4 shrink-0 text-white/50" aria-hidden />
+                        {isAr ? 'دعم على مدار الساعة 24/7' : '24/7 Support'}
+                      </li>
+                    </ul>
+                  </>
+                )}
 
-              {(appStore || googlePlay) && (
-                <div className="mt-6">
-                  <p className="text-sm font-bold uppercase tracking-wide text-white/60">
-                    {isAr ? 'حمّل التطبيق' : 'Get the App'}
-                  </p>
-                  <div className="mt-3 flex flex-col gap-2.5 sm:flex-row lg:flex-col">
-                    {appStore && (
-                      <a href={appStore} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold ring-1 ring-white/15 transition hover:bg-white hover:text-primary-700">
-                        <Apple className="h-4 w-4" aria-hidden />
-                        App Store
-                      </a>
-                    )}
-                    {googlePlay && (
-                      <a href={googlePlay} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold ring-1 ring-white/15 transition hover:bg-white hover:text-primary-700">
-                        <Play className="h-4 w-4" aria-hidden />
-                        Google Play
-                      </a>
-                    )}
+                {on('apps') && (appStore || googlePlay) && (
+                  <div className="mt-6">
+                    <p className="text-sm font-bold uppercase tracking-wide text-white/60">
+                      {isAr ? 'حمّل التطبيق' : 'Get the App'}
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2.5 sm:flex-row lg:flex-col">
+                      {appStore && (
+                        <a href={appStore} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold ring-1 ring-white/15 transition hover:bg-white hover:text-primary-700">
+                          <Apple className="h-4 w-4" aria-hidden />
+                          App Store
+                        </a>
+                      )}
+                      {googlePlay && (
+                        <a href={googlePlay} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold ring-1 ring-white/15 transition hover:bg-white hover:text-primary-700">
+                          <Play className="h-4 w-4" aria-hidden />
+                          Google Play
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* bottom bar */}
           <div className="mt-14 flex flex-col gap-6 border-t border-white/10 pt-8 lg:flex-row-reverse lg:items-center lg:justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-8 items-center rounded-lg bg-white px-2.5 text-sm font-black italic tracking-tight text-[#1a1f71] shadow-sm">VISA</span>
-              <span className="flex h-8 items-center gap-1 rounded-lg bg-white px-2.5 shadow-sm">
-                <span className="h-4 w-4 rounded-full bg-[#eb001b]" />
-                <span className="-ms-2.5 h-4 w-4 rounded-full bg-[#f79e1b] mix-blend-multiply" />
-              </span>
-            </div>
+            {on('payment') && (
+              <div className="flex flex-wrap items-center gap-2.5">
+                {paymentMethods.map((method) => (
+                  <PaymentBadge key={method} method={method} isAr={isAr} />
+                ))}
+              </div>
+            )}
 
-            <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-white/70">
-              {legalLinks.map((link) => (
-                <Link key={link.href} to={link.href} className="transition hover:text-white">
-                  {isAr ? link.labelAr : link.labelEn}
-                </Link>
-              ))}
-            </nav>
+            {on('legal') && (
+              <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-white/70">
+                {legalLinks.map((link, i) => (
+                  link.isExternal ? (
+                    <a key={link.href || i} href={link.href} target="_blank" rel="noreferrer" className="transition hover:text-white">
+                      {isAr ? (link.labelAr || link.labelEn) : (link.labelEn || link.labelAr)}
+                    </a>
+                  ) : (
+                    <Link key={link.href || i} to={link.href || '/'} className="transition hover:text-white">
+                      {isAr ? (link.labelAr || link.labelEn) : (link.labelEn || link.labelAr)}
+                    </Link>
+                  )
+                ))}
+              </nav>
+            )}
 
             <p className="text-sm text-white/60">
               © {year} {storeName} — {t.footer.rights}

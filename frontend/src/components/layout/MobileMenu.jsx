@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  X, Truck, User, ClipboardList, Globe, RefreshCw, Gift,
+  X, Truck, User, ClipboardList, Globe, RefreshCw, Gift, Headphones,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import LocationSelector from './LocationSelector';
@@ -22,6 +22,12 @@ export default function MobileMenu({ open, onClose }) {
   const deliveryBanner = announcement || (isAr
     ? `توصيل سريع · مجاني فوق ${freeThreshold} ج.م`
     : `Fast delivery · Free over ${freeThreshold} EGP`);
+
+  const nav = settings?.navigation || {};
+  const serviceLabel = isAr
+    ? (nav.topBarServiceLabelAr || 'خدمة العملاء')
+    : (nav.topBarServiceLabelEn || 'Customer service');
+  const serviceHref = nav.topBarServiceHref || '/contact';
 
   const accountLinks = isAuthenticated
     ? [
@@ -106,6 +112,24 @@ export default function MobileMenu({ open, onClose }) {
 
           <section className="mb-6">
             <LocationSelector variant="menu" onSelected={onClose} />
+          </section>
+
+          <section className="mb-6">
+            <h3 className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-text-muted">
+              {isAr ? 'الدعم' : 'Support'}
+            </h3>
+            <nav className="space-y-0.5">
+              <Link
+                to={serviceHref}
+                onClick={onClose}
+                className="flex items-center gap-3 rounded-xl px-3 py-3 text-base font-semibold text-text transition-colors hover:bg-surface"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface text-primary-700">
+                  <Headphones className="h-5 w-5" aria-hidden />
+                </span>
+                {serviceLabel}
+              </Link>
+            </nav>
           </section>
         </div>
 

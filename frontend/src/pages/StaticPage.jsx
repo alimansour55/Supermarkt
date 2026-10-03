@@ -66,10 +66,30 @@ export default function StaticPage() {
 
   useEffect(() => {
     if (!page) return;
-    const seoTitle = isAr ? (page.seoTitleAr || page.titleAr) : (page.seoTitleEn || page.titleEn);
+    const pageTitle = isAr ? page.titleAr : page.titleEn;
+    const seoTitleOverride = isAr ? page.seoTitleAr : page.seoTitleEn;
+    const storeName = isAr ? settings?.storeNameAr : settings?.storeNameEn;
+    const seoTitle = seoTitleOverride || (storeName ? `${pageTitle} — ${storeName}` : pageTitle);
     const seoDescription = isAr ? page.seoDescriptionAr : page.seoDescriptionEn;
     setPageMeta({ title: seoTitle, description: seoDescription });
-  }, [page, isAr]);
+
+    // Leaving this static page: restore the site-wide default title/description
+    // (store name, or the admin's custom SEO override) so it doesn't linger on other routes.
+    return () => {
+      const defaultTitle = (isAr ? settings?.seo?.defaultTitleAr : settings?.seo?.defaultTitleEn) || storeName;
+      const defaultDescription = isAr ? settings?.seo?.defaultDescriptionAr : settings?.seo?.defaultDescriptionEn;
+      setPageMeta({ title: defaultTitle, description: defaultDescription });
+    };
+  }, [
+    page,
+    isAr,
+    settings?.storeNameAr,
+    settings?.storeNameEn,
+    settings?.seo?.defaultTitleAr,
+    settings?.seo?.defaultTitleEn,
+    settings?.seo?.defaultDescriptionAr,
+    settings?.seo?.defaultDescriptionEn,
+  ]);
 
   if (loading) return <PageContentSkeleton />;
 
@@ -89,9 +109,9 @@ export default function StaticPage() {
   );
 
   return (
-    <div className="container-app py-8 max-w-3xl">
-      <h1 className="mb-8 text-2xl font-bold md:text-3xl">{title}</h1>
-      <div className="space-y-8">
+    <div className={`container-app py-4 sm:py-8 ${isContactPage ? 'max-w-5xl' : 'max-w-3xl'}`}>
+      {!isContactPage && <h1 className="mb-8 text-2xl font-bold md:text-3xl">{title}</h1>}
+      <div className="space-y-4 sm:space-y-8">
         {isContactPage && (
           <ContactInfoCard settings={settings} isAr={isAr} />
         )}
