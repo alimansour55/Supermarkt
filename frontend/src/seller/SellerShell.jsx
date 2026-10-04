@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from '../app/router';
-import { LayoutDashboard, LogOut, Package, Store, AlertTriangle, Clock } from 'lucide-react';
+import { LayoutDashboard, LogOut, Package, Store, AlertTriangle, Clock, ClipboardList } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import Loader from '../components/ui/Loader';
@@ -12,6 +12,7 @@ const SELLER_ROLES = ['seller_owner', 'seller_staff'];
 
 const NAV = [
   { to: '/seller-center', end: true, ar: 'الرئيسية', en: 'Dashboard', Icon: LayoutDashboard },
+  { to: '/seller-center/orders', ar: 'الطلبات', en: 'Orders', Icon: ClipboardList },
   { to: '/seller-center/products', ar: 'منتجاتي', en: 'Products', Icon: Package },
   { to: '/seller-center/store', ar: 'بيانات المتجر', en: 'Store profile', Icon: Store },
 ];

@@ -72,6 +72,8 @@ function normalizeItem(product, quantity = 1) {
     promotionCartSubtextAr: product.promotionCartSubtextAr ?? null,
     promotionCartSubtextEn: product.promotionCartSubtextEn ?? null,
     promotionSecondPercentOff: product.promotionSecondPercentOff ?? null,
+    soldBy: product.soldBy ?? null,
+    fulfilledBy: product.fulfilledBy || 'store',
     quantity: clampQuantityToStock(quantity, availableStock) || quantity,
   };
 }
@@ -179,8 +181,9 @@ export function CartProvider({ children }) {
         freeDeliveryEnabled: settings?.freeDeliveryEnabled !== false,
         freeDeliveryMethods: settings?.freeDeliveryMethods,
       },
+      sellerShipmentFee: settings?.marketplace?.sellerShipmentDeliveryFee ?? 0,
     }),
-    [items, deliveryMethod, discountCode, location, appliedCoupon, settings?.freeDeliveryEnabled, settings?.freeDeliveryMethods],
+    [items, deliveryMethod, discountCode, location, appliedCoupon, settings?.freeDeliveryEnabled, settings?.freeDeliveryMethods, settings?.marketplace?.sellerShipmentDeliveryFee],
   );
 
   const persistToServer = useCallback(async (nextItems, nextDiscount, nextDelivery) => {
@@ -557,6 +560,9 @@ export function CartProvider({ children }) {
       cartPromoSummary,
       subtotal: totals.subtotal,
       deliveryFee: totals.deliveryFee,
+      storeDeliveryFee: totals.storeDeliveryFee,
+      sellerShippingFee: totals.sellerShippingFee,
+      sellerShipmentCount: totals.sellerShipmentCount,
       discountAmount: totals.discountAmount,
       total: totals.total,
       appliedCoupon,

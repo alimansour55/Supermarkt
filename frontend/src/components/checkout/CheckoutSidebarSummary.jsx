@@ -223,6 +223,7 @@ export default function CheckoutSidebarSummary({
     total,
     appliedCoupon,
     discountCode,
+    sellerShippingFee,
     updateQuantity,
     removeItem,
     setDeliveryMethod,
@@ -358,6 +359,7 @@ export default function CheckoutSidebarSummary({
           total={displayTotal}
           coupon={displayCoupon}
           discountCode={displayDiscountCode}
+          sellerShippingFee={checkoutQuote?.sellerShippingFee ?? sellerShippingFee}
           extraRows={extraRows}
         />
       </div>

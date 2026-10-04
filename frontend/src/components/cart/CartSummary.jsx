@@ -31,6 +31,7 @@ export default function CartSummary({
     appliedCoupon,
     discountCode,
     cartPromoSummary,
+    sellerShippingFee,
   } = useCart();
 
   const displaySubtotal = totalsOverride?.subtotal ?? subtotal;
@@ -56,6 +57,13 @@ export default function CartSummary({
             formatPrice(displayDeliveryFee)
           )}
         </span>
+        {sellerShippingFee > 0 && (
+          <span className={`col-span-2 -mt-1.5 text-xs text-text-muted ${isAr ? 'text-right' : 'text-left'}`}>
+            {isAr
+              ? `منها ${formatPrice(sellerShippingFee)} لشحنات البائعين`
+              : `incl. ${formatPrice(sellerShippingFee)} for seller shipments`}
+          </span>
+        )}
 
         {displayCoupon && (
           <>

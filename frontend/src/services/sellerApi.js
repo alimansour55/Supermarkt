@@ -23,6 +23,10 @@ export const sellerApi = {
 
   getDashboard: () => api.get('/seller/dashboard'),
 
+  listShipments: (params) => api.get('/seller/shipments', { params }),
+  getShipment: (id) => api.get(`/seller/shipments/${id}`),
+  updateShipmentStatus: (id, data) => api.post(`/seller/shipments/${id}/status`, data),
+
   listProducts: (params) => api.get('/seller/products', { params }),
   getProduct: (id) => api.get(`/seller/products/${id}`),
   createProduct: (data) => api.post('/seller/products', data),

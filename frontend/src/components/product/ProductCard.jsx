@@ -11,6 +11,7 @@ import { formatPrice } from '../../utils/formatters';
 import { pickProductImage, pickProductEmoji } from '../../utils/imageHelpers';
 import { prefetchProduct } from '../../services/productApi';
 import ProductImage from '../ui/ProductImage';
+import SoldByLine from './SoldByLine';
 import { calculateSecondPiecePrice } from '../../utils/promotionDisplay';
 
 function formatMoneyNumber(amount, locale) {
@@ -516,6 +517,7 @@ export default function ProductCard({ product, compact = false }) {
               <span className="line-clamp-1 min-w-0">{deliveryTime}</span>
             </p>
           )}
+          {!compact && <SoldByLine product={product} isAr={isAr} variant="compact" />}
 
         </div>
       </div>

@@ -7,11 +7,30 @@ import CartSummary from '../components/cart/CartSummary';
 import FreeDeliveryProgress from '../components/cart/FreeDeliveryProgress';
 import Button from '../components/ui/Button';
 import { formatPrice } from '../utils/formatters';
+import { useStoreSettings } from '../context/StoreSettingsContext';
+
+/** Cart lines grouped by who ships them — one group per seller shipment, plus the store's own. */
+function groupCartBySeller(items) {
+  const groups = new Map();
+  for (const item of items) {
+    const seller = item.soldBy;
+    const shipsItself = seller && item.fulfilledBy !== 'store';
+    const key = seller ? `${seller._id}:${shipsItself ? 'seller' : 'store'}` : 'store';
+    if (!groups.has(key)) groups.set(key, { key, seller: seller || null, shipsItself, items: [] });
+    groups.get(key).items.push(item);
+  }
+  // Store-delivered first, then seller shipments.
+  return [...groups.values()].sort((a, b) => Number(a.shipsItself) - Number(b.shipsItself));
+}
 
 export default function CartPage() {
   const { t, language } = useLanguage();
   const isAr = language === 'ar';
   const { items, totalItems, total, updateQuantity, removeItem, clearCart } = useCart();
+  const { settings } = useStoreSettings() || {};
+  const storeName = (isAr ? settings?.storeNameAr : settings?.storeNameEn) || (isAr ? 'المتجر' : 'the store');
+  const hasSellerItems = items.some((item) => item.soldBy);
+  const groups = hasSellerItems ? groupCartBySeller(items) : [{ key: 'all', items }];
   const BackArrow = isAr ? ArrowLeft : ArrowRight;
 
   if (items.length === 0) {
@@ -74,17 +93,34 @@ export default function CartPage() {
             </div>
           </div>
 
-          <div className="divide-y divide-slate-100">
-            {items.map((item) => (
-              <CartItemRow
-                key={item.cartKey || item.productId}
-                item={item}
-                onUpdateQuantity={updateQuantity}
-                onRemove={removeItem}
-                bare
-              />
-            ))}
-          </div>
+          {groups.map((group) => (
+            <section key={group.key} className="border-b border-slate-100 last:border-b-0">
+              {hasSellerItems && (
+                <p className="bg-slate-50/80 px-4 py-2 text-xs font-semibold text-slate-600 sm:px-5">
+                  {!group.seller
+                    ? (isAr ? `يشحنه ${storeName}` : `Shipped by ${storeName}`)
+                    : group.shipsItself
+                      ? (isAr
+                        ? `شحنة منفصلة — يبيعها ويشحنها ${group.seller.nameAr || group.seller.nameEn}`
+                        : `Separate shipment — sold and shipped by ${group.seller.nameEn || group.seller.nameAr}`)
+                      : (isAr
+                        ? `يبيعه ${group.seller.nameAr || group.seller.nameEn} · يشحنه ${storeName}`
+                        : `Sold by ${group.seller.nameEn || group.seller.nameAr} · shipped by ${storeName}`)}
+                </p>
+              )}
+              <div className="divide-y divide-slate-100">
+                {group.items.map((item) => (
+                  <CartItemRow
+                    key={item.cartKey || item.productId}
+                    item={item}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeItem}
+                    bare
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
 
         <div className="lg:sticky lg:top-28">

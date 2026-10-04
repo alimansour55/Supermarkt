@@ -94,6 +94,7 @@ export function calculateCartTotals({
   deliveryZone = null,
   appliedCoupon: cachedCoupon = null,
   storeFreeDeliverySettings = null,
+  sellerShipmentFee = 0,
 }) {
   const listSubtotal = items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
   const subtotal = calculateItemsSubtotal(items);
@@ -115,22 +116,35 @@ export function calculateCartTotals({
     }
   }
 
-  const deliveryFee = resolveDeliveryFee({
-    deliveryMethod,
-    subtotal,
-    threshold: freeDeliveryThreshold,
-    freeDeliveryMethods,
-    freeDeliveryFromCoupon,
-    scheduledFee: deliveryZone?.scheduledFee ?? SCHEDULED_DELIVERY_FEE,
-    expressFee: deliveryZone?.expressFee ?? EXPRESS_DELIVERY_FEE,
-  });
+  // Marketplace (mirrors the server): the store fee and free-delivery threshold cover only lines
+  // the store delivers; each seller-shipped shipment adds a flat fee.
+  const isStoreLine = (item) => !item.soldBy || item.fulfilledBy === 'store';
+  const storeItems = items.filter(isStoreLine);
+  const hasSellerItems = items.some((item) => item.soldBy);
+  const storeSubtotal = hasSellerItems ? calculateItemsSubtotal(storeItems) : subtotal;
+  const sellerShipmentCount = new Set(
+    items.filter((item) => item.soldBy && item.fulfilledBy !== 'store').map((item) => String(item.soldBy._id)),
+  ).size;
+  const storeDeliveryFee = storeItems.length || !items.length
+    ? resolveDeliveryFee({
+      deliveryMethod,
+      subtotal: storeSubtotal,
+      threshold: freeDeliveryThreshold,
+      freeDeliveryMethods,
+      freeDeliveryFromCoupon,
+      scheduledFee: deliveryZone?.scheduledFee ?? SCHEDULED_DELIVERY_FEE,
+      expressFee: deliveryZone?.expressFee ?? EXPRESS_DELIVERY_FEE,
+    })
+    : 0;
+  const sellerShippingFee = Math.round(sellerShipmentCount * Number(sellerShipmentFee || 0) * 100) / 100;
+  const deliveryFee = Math.round((storeDeliveryFee + sellerShippingFee) * 100) / 100;
 
   const total = Math.max(0, subtotal + deliveryFee - discountAmount);
-  const freeDeliveryRemaining = Math.max(0, freeDeliveryThreshold - subtotal);
-  const thresholdMet = isThresholdMet(subtotal, freeDeliveryThreshold, freeDeliveryFromCoupon);
+  const freeDeliveryRemaining = Math.max(0, freeDeliveryThreshold - storeSubtotal);
+  const thresholdMet = isThresholdMet(storeSubtotal, freeDeliveryThreshold, freeDeliveryFromCoupon);
   const freeDeliveryForCurrentMethod = isFreeDeliveryForMethod({
     deliveryMethod,
-    subtotal,
+    subtotal: storeSubtotal,
     threshold: freeDeliveryThreshold,
     freeDeliveryMethods,
     freeDeliveryFromCoupon,
@@ -141,6 +155,9 @@ export function calculateCartTotals({
     listSubtotal: Math.round(listSubtotal * 100) / 100,
     promotionSavings,
     deliveryFee,
+    storeDeliveryFee,
+    sellerShippingFee,
+    sellerShipmentCount,
     discountAmount,
     total,
     appliedCoupon: coupon,

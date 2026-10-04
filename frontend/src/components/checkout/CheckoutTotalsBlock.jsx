@@ -22,6 +22,7 @@ export default function CheckoutTotalsBlock({
   total,
   coupon,
   discountCode,
+  sellerShippingFee = 0,
   extraRows = [],
 }) {
   const isAr = language === 'ar';
@@ -41,6 +42,13 @@ export default function CheckoutTotalsBlock({
             : formatPrice(deliveryFee)}
           muted
         />
+        {sellerShippingFee > 0 && (
+          <p className="-mt-1.5 text-xs text-text-muted">
+            {isAr
+              ? `منها ${formatPrice(sellerShippingFee)} لشحنات البائعين`
+              : `incl. ${formatPrice(sellerShippingFee)} for seller shipments`}
+          </p>
+        )}
         {coupon && (
           <TotalRow
             label={`${isAr ? 'الخصم' : 'Discount'} (${discountCode})`}

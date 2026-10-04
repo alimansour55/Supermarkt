@@ -9,6 +9,7 @@ import { getDiscountPercent, getPromotionHighlight, getProductAvailableStock } f
 import { formatPrice } from '../utils/formatters';
 import ProductGrid from '../components/product/ProductGrid';
 import ProductVariantPicker, { getSelectedVariantLine, buildCartProduct } from '../components/product/ProductVariantPicker';
+import SoldByLine from '../components/product/SoldByLine';
 import Button from '../components/ui/Button';
 import ProductImage from '../components/ui/ProductImage';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -242,6 +243,7 @@ export default function ProductDetailsPage() {
         <div>
           <h1 className="text-2xl font-bold md:text-3xl">{name}</h1>
           <p className="mt-1 text-sm text-text-muted">{getUnitLabel(product, isAr)}</p>
+          <SoldByLine product={product} isAr={isAr} />
           {product.reviewCount > 0 && product.rating > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
               <div className="flex items-center gap-1 text-amber-500">

@@ -21,6 +21,7 @@ import { downloadBlob } from '../admin/utils/downloadBlob';
 import { useAuth } from '../context/AuthContext';
 import OrderEditPanel from '../components/order/OrderEditPanel';
 import OrderTrackingPanel from '../components/order/OrderTrackingPanel';
+import OrderShipmentsSection from '../components/order/OrderShipmentsSection';
 import { canTrackOrder } from '../utils/orderTracking';
 import { useStoreSettings } from '../context/StoreSettingsContext';
 import { canCustomerEditOrder, getOrderEditBlockReason } from '../utils/orderEditHelpers';
@@ -341,6 +342,8 @@ export default function OrderDetailPage() {
         />
       </div>
 
+      <OrderShipmentsSection order={order} isAr={isAr} />
+
       <section className="mt-6 rounded-2xl border border-border bg-white p-6">
         <h2 className="mb-4 text-lg font-bold">{isAr ? 'رسائل الطلب' : 'Order messages'}</h2>
         <OrderChat
@@ -392,6 +395,15 @@ export default function OrderDetailPage() {
                     {formatPrice(item.price)} × {item.quantity}
                     {item.unit ? ` · ${item.unit}` : ''}
                   </p>
+                  {item.seller && (
+                    <p className="text-xs text-text-muted">
+                      {isAr ? 'يبيعه ' : 'Sold by '}
+                      <span className="font-semibold">{isAr ? item.sellerNameAr || item.sellerNameEn : item.sellerNameEn || item.sellerNameAr}</span>
+                      {item.fulfilledBy === 'seller'
+                        ? (isAr ? ' · يشحنه البائع' : ' · shipped by the seller')
+                        : (isAr ? ' · يشحنه المتجر' : ' · shipped by the store')}
+                    </p>
+                  )}
                 </div>
                 <p className="font-semibold text-primary-700 shrink-0">
                   {formatPrice(item.price * item.quantity)}

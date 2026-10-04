@@ -16,6 +16,16 @@ export const LISTING_STATUS = {
   paused: { ar: 'متوقف مؤقتاً', en: 'Paused', tone: 'bg-slate-200 text-slate-700' },
 };
 
+export const SHIPMENT_STATUS = {
+  pending: { ar: 'جديد — بانتظار التأكيد', en: 'New — to confirm', tone: 'bg-amber-100 text-amber-900' },
+  confirmed: { ar: 'مؤكد', en: 'Confirmed', tone: 'bg-sky-100 text-sky-800' },
+  packed: { ar: 'جاهز للشحن', en: 'Packed', tone: 'bg-sky-100 text-sky-800' },
+  shipped: { ar: 'تم الشحن', en: 'Shipped', tone: 'bg-violet-100 text-violet-800' },
+  delivered: { ar: 'تم التسليم', en: 'Delivered', tone: 'bg-emerald-100 text-emerald-800' },
+  cancelled: { ar: 'ملغي', en: 'Cancelled', tone: 'bg-red-100 text-red-800' },
+  returned: { ar: 'مرتجع', en: 'Returned', tone: 'bg-slate-200 text-slate-700' },
+};
+
 export const FULFILLMENT = {
   seller: { ar: 'يشحنه البائع', en: 'Shipped by seller' },
   store: { ar: 'يشحنه المتجر', en: 'Shipped by store' },
