@@ -29,6 +29,9 @@ import assistantRoutes from './assistant.routes.js';
 import supportRoutes from './support.routes.js';
 import supportChatRoutes from './supportChat.routes.js';
 import whatsappRoutes from './whatsapp.routes.js';
+import sellerRoutes from './seller.routes.js';
+import sellersRoutes from './sellers.routes.js';
+import marketplaceAdminRoutes from './marketplaceAdmin.routes.js';
 
 const router = Router();
 
@@ -41,6 +44,7 @@ router.use('/categories', categoryRoutes);
 router.use('/products', productRoutes);
 router.use('/payment', paymentRoutes);
 router.use('/payments', paymentRoutes);
+router.use('/admin/marketplace', marketplaceAdminRoutes);
 router.use('/admin', adminRoutes);
 router.use('/banners', bannerRoutes);
 router.use('/store-settings', storeSettingsRoutes);
@@ -63,5 +67,7 @@ router.use('/assistant', assistantRoutes);
 router.use('/support', supportRoutes);
 router.use('/support-chat', supportChatRoutes);
 router.use('/whatsapp', whatsappRoutes);
+router.use('/seller', sellerRoutes);
+router.use('/sellers', sellersRoutes);
 
 export default router;

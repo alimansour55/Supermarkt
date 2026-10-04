@@ -13,6 +13,8 @@ export const ROLE_LABELS = {
   admin: { en: 'Admin', ar: 'مسؤول' },
   super_admin: { en: 'Super Admin', ar: 'مسؤول أعلى' },
   driver: { en: 'Delivery driver', ar: 'مندوب توصيل' },
+  seller_owner: { en: 'Seller (owner)', ar: 'بائع (مالك)' },
+  seller_staff: { en: 'Seller (staff)', ar: 'بائع (موظف)' },
 };
 
 /** Permission -> roles allowed. */
@@ -42,6 +44,8 @@ export const ROLE_PERMISSIONS = {
   'notifications:write': ['admin', 'super_admin'],
   'users:read': ['super_admin'],
   'users:write': ['super_admin'],
+  'sellers:read': STAFF_ROLES,
+  'sellers:write': ['admin', 'super_admin'],
 };
 
 export function isStaffRole(role) {

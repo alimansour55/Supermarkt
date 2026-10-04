@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { STAFF_ROLES } from '../constants/roles.js';
 import { ALL_PERMISSIONS } from '../constants/permissions.js';
+import { SELLER_ROLES } from '../constants/marketplace.js';
 import geoFields from '../schemas/geoFields.js';
 
 const addressSchema = new mongoose.Schema(
@@ -92,7 +93,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['user', 'manager', 'admin', 'super_admin', 'driver'],
+      enum: ['user', 'manager', 'admin', 'super_admin', 'driver', ...SELLER_ROLES],
       default: 'user',
     },
     permissions: {
@@ -101,6 +102,13 @@ const userSchema = new mongoose.Schema(
         enum: ALL_PERMISSIONS,
       }],
       default: [],
+    },
+    /** Marketplace seller accounts only — the seller business this user belongs to. */
+    seller: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Seller',
+      default: null,
+      index: true,
     },
     isActive: {
       type: Boolean,
@@ -210,7 +218,10 @@ const userSchema = new mongoose.Schema(
 
 userSchema.pre('validate', function requirePhoneForCustomers(next) {
   const isStaffWithUsername = STAFF_ROLES.includes(this.role) && this.username;
-  if (!isStaffWithUsername && !this.phone) {
+  // Seller accounts sign in with email + password; their phone lives on the Seller doc,
+  // so a seller can also keep a separate customer account on the same phone number.
+  const isSellerWithEmail = SELLER_ROLES.includes(this.role) && this.email;
+  if (!isStaffWithUsername && !isSellerWithEmail && !this.phone) {
     this.invalidate('phone', 'Phone number is required');
   }
   next();

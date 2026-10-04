@@ -61,6 +61,11 @@ export const driverLoginValidation = [
   body('password').trim().notEmpty().withMessage('Password is required'),
 ];
 
+export const sellerLoginValidation = [
+  body('email').trim().isEmail().withMessage('A valid email is required'),
+  body('password').trim().notEmpty().withMessage('Password is required'),
+];
+
 export const updateProfileValidation = [
   body('name').optional().trim().isLength({ min: 2, max: 100 }).withMessage('Name must be 2–100 characters'),
   body('email').optional().trim().custom((value) => {

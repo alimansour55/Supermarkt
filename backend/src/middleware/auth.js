@@ -3,6 +3,8 @@ import User from '../models/User.js';
 import { AppError } from '../utils/AppError.js';
 import { STAFF_ROLES } from '../constants/roles.js';
 import { hasUserPermission } from '../constants/permissions.js';
+import { SELLER_ROLES } from '../constants/marketplace.js';
+import Seller from '../models/Seller.js';
 
 export const protect = async (req, res, next) => {
   try {
@@ -73,6 +75,42 @@ export const staffOnly = [protect, restrictTo(...STAFF_ROLES)];
 
 /** Delivery drivers sharing live location */
 export const driverOnly = [protect, restrictTo('driver')];
+
+/**
+ * Marketplace seller portal. Loads the caller's Seller into `req.seller`; every seller
+ * controller must scope its queries by `req.seller._id` — never by an id from the request.
+ */
+const loadSeller = async (req, res, next) => {
+  try {
+    if (!req.user.seller || req.user.isActive === false) {
+      throw new AppError('Seller account is not available', 403);
+    }
+    const seller = await Seller.findById(req.user.seller);
+    if (!seller) throw new AppError('Seller account is not available', 403);
+    req.seller = seller;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const sellerOnly = [protect, restrictTo(...SELLER_ROLES), loadSeller];
+
+/** Seller writes that change the catalog — blocked once suspended or rejected. */
+export const sellerCanEditCatalog = (req, res, next) => {
+  if (['suspended', 'rejected'].includes(req.seller?.status)) {
+    return next(new AppError('Your seller account cannot make changes right now', 403));
+  }
+  next();
+};
+
+/** Only the seller owner (not seller staff) — bank details, team. */
+export const sellerOwnerOnly = (req, res, next) => {
+  if (req.user?.role !== 'seller_owner') {
+    return next(new AppError('Only the store owner can do this', 403));
+  }
+  next();
+};
 
 /** Backward-compatible alias — all admin panel routes accept staff roles */
 export const adminOnly = staffOnly;

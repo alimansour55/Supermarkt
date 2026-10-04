@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { VARIANT_TYPES } from '../constants/productCatalog.js';
+import { FULFILLMENT_MODES, LISTING_STATUSES } from '../constants/marketplace.js';
 import { resolveProductCategoryFields } from '../utils/productCategorySync.js';
 import {
   SEARCH_INDEXED_FIELDS,
@@ -368,10 +369,41 @@ const productSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    /** Public visibility. For seller products this is derived — see enforceSellerListingVisibility. */
     isActive: {
       type: Boolean,
       default: true,
     },
+
+    // ── Marketplace ──
+    /** Third-party seller that owns this listing; null = sold by the store itself. */
+    seller: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Seller',
+      default: null,
+      index: true,
+    },
+    /** Who packs and delivers it: the store's fulfillment, or the seller. */
+    fulfilledBy: {
+      type: String,
+      enum: FULFILLMENT_MODES,
+      default: 'store',
+    },
+    listingStatus: {
+      type: String,
+      enum: LISTING_STATUSES,
+      default: 'approved',
+      index: true,
+    },
+    /** Mirror of the seller's suspension, so visibility needs no join. */
+    sellerSuspended: { type: Boolean, default: false },
+    reviewNote: { type: String, trim: true, default: '' },
+    submittedAt: { type: Date, default: null },
+    reviewedAt: { type: Date, default: null },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    /** Seller content edits to a live listing, waiting for staff approval. */
+    pendingChanges: { type: mongoose.Schema.Types.Mixed, default: null },
+    pendingChangesAt: { type: Date, default: null },
     soldCount: {
       type: Number,
       default: 0,
@@ -407,6 +439,19 @@ productSchema.pre('validate', async function enforceCategoryIntegrity() {
   await syncProductCategoryFields(this);
 });
 
+/**
+ * A seller listing is public only while approved and its seller isn't suspended — whatever
+ * a caller wrote to `isActive`. Store-owned products keep their manual `isActive` toggle.
+ */
+export function sellerListingIsVisible(doc) {
+  return doc.listingStatus === 'approved' && !doc.sellerSuspended;
+}
+
+productSchema.pre('validate', function enforceSellerListingVisibility(next) {
+  if (this.seller) this.isActive = sellerListingIsVisible(this);
+  next();
+});
+
 productSchema.pre('save', function computeDiscount(next) {
   if (this.oldPrice && this.oldPrice > this.price) {
     this.discount = Math.round(((this.oldPrice - this.price) / this.oldPrice) * 100);
@@ -440,6 +485,9 @@ productSchema.index({ isActive: 1, category: 1 });
 productSchema.index({ isOffer: 1, isFeatured: 1, isBestSeller: 1 });
 productSchema.index({ activePromotionId: 1 });
 productSchema.index({ discount: -1 });
+productSchema.index({ seller: 1, listingStatus: 1, updatedAt: -1 });
+productSchema.index({ listingStatus: 1, submittedAt: 1 });
+productSchema.index({ pendingChangesAt: 1 }, { partialFilterExpression: { pendingChangesAt: { $type: 'date' } } });
 
 async function syncCategoryFieldsOnQueryUpdate(next) {
   const update = this.getUpdate();

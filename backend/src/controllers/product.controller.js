@@ -980,7 +980,8 @@ export const bulkAdminProducts = asyncHandler(async (req, res) => {
   const filter = { _id: { $in: ids } };
 
   if (action === 'activate') {
-    await Product.updateMany(filter, { isActive: true });
+    // Seller listings go live only through listing approval, never a bulk toggle.
+    await Product.updateMany({ ...filter, seller: null }, { isActive: true });
   } else if (action === 'deactivate') {
     await Product.updateMany(filter, { isActive: false });
   } else if (action === 'delete') {

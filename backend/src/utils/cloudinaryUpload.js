@@ -11,6 +11,9 @@ export const CLOUDINARY_FOLDERS = {
   paymentProofs: 'marketplus/payment-proofs',
   walletTopUps: 'marketplus/wallet-topups',
   deliveryProofs: 'marketplus/delivery-proofs',
+  sellers: 'marketplus/sellers',
+  sellerProducts: 'marketplus/seller-products',
+  sellerDocuments: 'marketplus/seller-documents',
 };
 
 let cloudinaryReady = false;

@@ -21,7 +21,7 @@ export const loginLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   keyGenerator: (req) => {
-    const username = String(req.body?.username || '').trim().toLowerCase();
+    const username = String(req.body?.username || req.body?.email || '').trim().toLowerCase();
     return `login:${ipKeyGenerator(req.ip)}:${username}`;
   },
   message: jsonMessage('Too many failed login attempts. Please try again in 15 minutes.'),
@@ -97,4 +97,14 @@ export const adminTrackingUpdateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => req.user?._id?.toString() || ipKeyGenerator(req.ip),
   message: jsonMessage('Too many tracking updates. Please slow down.'),
+});
+
+/** Public seller applications — a handful per IP per hour. */
+export const sellerApplyLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: isProd ? 5 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+  message: jsonMessage('Too many applications. Please try again later.'),
 });
