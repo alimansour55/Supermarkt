@@ -86,6 +86,7 @@ export const authService = {
   resendOtp: (data) => api.post('/auth/resend-otp', data),
   adminLogin: (data) => api.post('/auth/admin-login', data),
   driverLogin: (data) => api.post('/auth/driver-login', data),
+  sellerLogin: (data) => api.post('/auth/seller-login', data),
   logout: () => api.post('/auth/logout'),
   getMe: () => api.get('/auth/me'),
   updateProfile: (data) => api.patch('/auth/me', data),

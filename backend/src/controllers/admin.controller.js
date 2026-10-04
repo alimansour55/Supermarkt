@@ -1,5 +1,6 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import Seller from '../models/Seller.js';
 import User from '../models/User.js';
 import { countPendingReviews } from '../utils/productRating.js';
 import { countOrdersWithUnreadCustomerMessages } from '../utils/orderMessages.js';
@@ -150,6 +151,14 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
     count: statusMap[s.value] || 0,
   }));
 
+  const [pendingSellersCount, pendingListingsCount] = await Promise.all([
+    Seller.countDocuments({ status: { $in: ['applied', 'under_review'] } }),
+    Product.countDocuments({
+      seller: { $ne: null },
+      $or: [{ listingStatus: 'pending_review' }, { pendingChangesAt: { $type: 'date' } }],
+    }),
+  ]);
+
   const avg7d = current7d.orders ? current7d.revenue / current7d.orders : 0;
   const avgPrev7d = previous7d.orders ? previous7d.revenue / previous7d.orders : 0;
 
@@ -166,6 +175,8 @@ export const getDashboardStats = asyncHandler(async (_req, res) => {
       pendingReturnsCount,
       pendingCallbackRequestsCount,
       pendingLiveChatsCount,
+      pendingSellersCount,
+      pendingListingsCount,
       todayOrders: todayStats.orders,
       todayRevenue: todayStats.revenue,
       todayOrdersChange: pctChange(todayStats.orders, yesterdayStats.orders),

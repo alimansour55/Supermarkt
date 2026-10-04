@@ -42,6 +42,8 @@ import {
   Receipt,
   PhoneCall,
   Headphones,
+  Building2,
+  ClipboardCheck,
 } from 'lucide-react';
 
 export const ADMIN_NAV_GROUPS = [
@@ -167,6 +169,17 @@ export const ADMIN_NAV_GROUPS = [
         Icon: Trash2,
         permission: 'orders:delete',
       },
+    ],
+  },
+  {
+    id: 'marketplace',
+    labelAr: 'البائعون',
+    labelEn: 'Marketplace',
+    Icon: Building2,
+    items: [
+      { path: '/admin/sellers', labelAr: 'البائعون', labelEn: 'Sellers', Icon: Building2, badgeKey: 'pendingSellers', permission: 'sellers:read' },
+      { path: '/admin/listing-review', labelAr: 'مراجعة المنتجات', labelEn: 'Listing review', Icon: ClipboardCheck, badgeKey: 'pendingListings', permission: 'sellers:read' },
+      { path: '/admin/marketplace-settings', labelAr: 'إعدادات السوق', labelEn: 'Marketplace settings', Icon: SlidersHorizontal, permission: 'settings:write' },
     ],
   },
   {

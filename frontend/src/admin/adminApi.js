@@ -280,6 +280,19 @@ export const adminApi = {
   getNotificationTemplate: (key) => api.get(`/notification-templates/admin/${key}`),
   updateNotificationTemplate: (key, data) => api.put(`/notification-templates/admin/${key}`, data),
   seedNotificationTemplates: () => api.post('/notification-templates/admin/seed'),
+
+  // Marketplace (third-party sellers)
+  getMarketplaceSettings: () => api.get('/admin/marketplace/settings'),
+  updateMarketplaceSettings: (data) => api.put('/admin/marketplace/settings', data),
+  listSellers: (params) => api.get('/admin/marketplace/sellers', { params }),
+  getSeller: (id) => api.get(`/admin/marketplace/sellers/${id}`),
+  createSeller: (data) => api.post('/admin/marketplace/sellers', data),
+  updateSeller: (id, data) => api.put(`/admin/marketplace/sellers/${id}`, data),
+  setSellerStatus: (id, data) => api.post(`/admin/marketplace/sellers/${id}/status`, data),
+  reviewSellerDocument: (id, docId, data) => api.put(`/admin/marketplace/sellers/${id}/documents/${docId}`, data),
+  listListingQueue: (params) => api.get('/admin/marketplace/listings', { params }),
+  approveListing: (id, data) => api.post(`/admin/marketplace/listings/${id}/approve`, data || {}),
+  rejectListing: (id, data) => api.post(`/admin/marketplace/listings/${id}/reject`, data),
 };
 
 export default adminApi;

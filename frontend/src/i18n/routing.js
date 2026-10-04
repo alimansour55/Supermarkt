@@ -1,11 +1,11 @@
 /**
  * Language-prefixed URLs: every storefront page lives under /ar/... (default) or /en/...
- * Admin, driver and API paths are not localized.
+ * Admin, driver, seller-center and API paths are not localized.
  */
 export const SUPPORTED_LANGS = ['ar', 'en'];
 export const DEFAULT_LANG = 'ar';
 
-const UNLOCALIZED_PREFIXES = ['/admin', '/driver', '/api', '/uploads', '/assets'];
+const UNLOCALIZED_PREFIXES = ['/admin', '/driver', '/seller-center', '/api', '/uploads', '/assets'];
 const UNLOCALIZED_FILES = /^\/[^/]+\.(xml|txt|ico|svg|png|webmanifest|json)$/i;
 
 export function isSupportedLang(value) {

@@ -142,6 +142,8 @@ export const ROLE_PERMISSIONS = {
   'notifications:write': ['admin', 'super_admin'],
   'users:read': ['super_admin'],
   'users:write': ['super_admin'],
+  'sellers:read': STAFF_ROLES,
+  'sellers:write': ['admin', 'super_admin'],
 };
 
 export const ALL_PERMISSIONS = Object.keys(ROLE_PERMISSIONS);
@@ -181,6 +183,15 @@ export const PERMISSION_GROUPS = [
       { key: 'coupons:write', labelEn: 'Coupons', labelAr: 'الكوبونات' },
       { key: 'promotions:write', labelEn: 'Offers & promotions', labelAr: 'العروض والتخفيضات' },
       { key: 'banners:write', labelEn: 'Banners & campaigns', labelAr: 'البانرات والحملات' },
+    ],
+  },
+  {
+    id: 'marketplace',
+    labelEn: 'Marketplace sellers',
+    labelAr: 'البائعون (السوق)',
+    permissions: [
+      { key: 'sellers:read', labelEn: 'View sellers & listing queue', labelAr: 'عرض البائعين وطابور المراجعة' },
+      { key: 'sellers:write', labelEn: 'Approve sellers, listings & payouts', labelAr: 'اعتماد البائعين والمنتجات والمدفوعات' },
     ],
   },
   {

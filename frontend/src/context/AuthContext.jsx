@@ -92,6 +92,24 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const sellerLogin = async (email, password) => {
+    setError(null);
+    const { data } = await authService.sellerLogin({ email, password });
+    skipNextFetch.current = true;
+    setToken(data.token);
+    setUser(data.user);
+    setLoading(false);
+    return data;
+  };
+
+  /** Adopt a token issued by another flow (e.g. the seller application) and load the user. */
+  const signInWithToken = async (nextToken) => {
+    setError(null);
+    setUser(null);
+    setLoading(true);
+    setToken(nextToken);
+  };
+
   const resendOtp = async (payload) => {
     setError(null);
     const { data } = await authService.resendOtp(payload);
@@ -122,6 +140,8 @@ export function AuthProvider({ children }) {
       verifyOtp,
       adminLogin,
       driverLogin,
+      sellerLogin,
+      signInWithToken,
       resendOtp,
       logout,
       setError,

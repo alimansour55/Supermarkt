@@ -1,5 +1,5 @@
 /**
- * Route config — customer storefront, driver app and admin panel.
+ * Route config — customer storefront, driver app, seller portal and admin panel.
  *
  * Storefront pages live under /ar (default) and /en — one static route tree per language,
  * so admin/driver paths can never be mistaken for a language. Public pages use route modules
@@ -64,6 +64,7 @@ const storefrontRoutes = [
     route('search', 'pages/SearchPage.jsx'),
     route('search/results', 'pages/SearchResultsPage.jsx'),
     route('track-order', 'pages/TrackOrderPage.jsx'),
+    route('sell-with-us', 'pages/SellWithUsPage.jsx'),
 
     layout('app/layouts/RequireAuth.jsx', [
       route('checkout', 'pages/CheckoutPage.jsx'),
@@ -103,6 +104,18 @@ export default [
       index('pages/driver/DriverDeliveriesPage.jsx'),
       route('account', 'pages/driver/DriverAccountPage.jsx'),
       route('deliveries/:id', 'pages/driver/DriverDeliveryPage.jsx'),
+    ]),
+  ]),
+
+  // Marketplace seller portal — third-party sellers manage their store here.
+  clientOnly('seller-client', [
+    route('seller-center/login', 'seller/pages/SellerLoginPage.jsx'),
+    route('seller-center', 'seller/SellerShell.jsx', [
+      index('seller/pages/SellerDashboardPage.jsx'),
+      route('products', 'seller/pages/SellerProductsPage.jsx'),
+      route('products/new', 'seller/pages/SellerProductFormPage.jsx', { id: 'seller-product-new' }),
+      route('products/:id', 'seller/pages/SellerProductFormPage.jsx'),
+      route('store', 'seller/pages/SellerStorePage.jsx'),
     ]),
   ]),
 

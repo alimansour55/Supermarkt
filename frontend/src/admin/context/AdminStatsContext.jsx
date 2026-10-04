@@ -9,6 +9,8 @@ const AdminStatsContext = createContext({
   pendingCallbackRequestsCount: 0,
   pendingLiveChatsCount: 0,
   outOfStockCount: 0,
+  pendingSellersCount: 0,
+  pendingListingsCount: 0,
   refreshStats: () => {},
 });
 
@@ -20,6 +22,8 @@ export function AdminStatsProvider({ children }) {
   const [pendingCallbackRequestsCount, setPendingCallbackRequestsCount] = useState(0);
   const [pendingLiveChatsCount, setPendingLiveChatsCount] = useState(0);
   const [outOfStockCount, setOutOfStockCount] = useState(0);
+  const [pendingSellersCount, setPendingSellersCount] = useState(0);
+  const [pendingListingsCount, setPendingListingsCount] = useState(0);
 
   const refreshStats = useCallback(() => {
     adminApi.getStats()
@@ -31,6 +35,8 @@ export function AdminStatsProvider({ children }) {
         setPendingCallbackRequestsCount(data.stats?.pendingCallbackRequestsCount ?? 0);
         setPendingLiveChatsCount(data.stats?.pendingLiveChatsCount ?? 0);
         setOutOfStockCount(data.stats?.outOfStockCount ?? 0);
+        setPendingSellersCount(data.stats?.pendingSellersCount ?? 0);
+        setPendingListingsCount(data.stats?.pendingListingsCount ?? 0);
       })
       .catch(() => {});
   }, []);
@@ -51,6 +57,8 @@ export function AdminStatsProvider({ children }) {
         pendingCallbackRequestsCount,
         pendingLiveChatsCount,
         outOfStockCount,
+        pendingSellersCount,
+        pendingListingsCount,
         refreshStats,
       }}
     >

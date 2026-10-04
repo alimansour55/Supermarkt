@@ -4,6 +4,9 @@ export const AdminRoute = lazy(() => import('../admin/AdminRoute'), 'AdminRoute'
 export const AdminPermissionRoute = lazy(() => import('../admin/AdminPermissionRoute'), 'AdminPermissionRoute');
 export const AdminLayout = lazy(() => import('../admin/AdminLayout'), 'AdminLayout');
 export const AdminLoginPage = lazy(() => import('../admin/pages/AdminLoginPage'), 'AdminLoginPage');
+export const SellersPage = lazy(() => import('../admin/pages/SellersPage'), 'SellersPage');
+export const ListingReviewPage = lazy(() => import('../admin/pages/ListingReviewPage'), 'ListingReviewPage');
+export const MarketplaceSettingsPage = lazy(() => import('../admin/pages/MarketplaceSettingsPage'), 'MarketplaceSettingsPage');
 export const DashboardPage = lazy(() => import('../admin/pages/DashboardPage'), 'DashboardPage');
 export const ProductsPage = lazy(() => import('../admin/pages/ProductsPage'), 'ProductsPage');
 export const StockAlertsPage = lazy(() => import('../admin/pages/StockAlertsPage'), 'StockAlertsPage');

@@ -19,6 +19,7 @@
     "check:maps": "node scripts/check-google-maps.js",
     "test:acceptance:categories": "node scripts/acceptance-category-product-sync.js",
     "search:reindex": "node scripts/search-reindex.js",
+    "seed:demo-seller": "node scripts/seed-demo-seller.js",
     "test": "node --test \"test/**/*.test.js\""
   },
   "keywords": [

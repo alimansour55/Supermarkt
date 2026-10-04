@@ -17,6 +17,8 @@ function resolveBadge(item, stats) {
     pendingCallbackRequestsCount,
     pendingLiveChatsCount,
     outOfStockCount,
+    pendingSellersCount,
+    pendingListingsCount,
   } = stats;
 
   if (item.badgeKey === 'pendingOrders' && pendingOrdersCount > 0) {
@@ -36,6 +38,12 @@ function resolveBadge(item, stats) {
   }
   if (item.badgeKey === 'pendingLiveChats' && pendingLiveChatsCount > 0) {
     return { value: pendingLiveChatsCount, variant: 'message' };
+  }
+  if (item.badgeKey === 'pendingSellers' && pendingSellersCount > 0) {
+    return { value: pendingSellersCount, variant: 'default' };
+  }
+  if (item.badgeKey === 'pendingListings' && pendingListingsCount > 0) {
+    return { value: pendingListingsCount, variant: 'default' };
   }
   if (item.badgeKey === 'pendingReviews' && pendingReviewsCount > 0) {
     return { value: pendingReviewsCount, variant: 'default' };

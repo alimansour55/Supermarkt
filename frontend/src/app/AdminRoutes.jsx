@@ -48,6 +48,9 @@ export default function AdminRoutes() {
         <Route path="coverage-area" element={withSuspense(<P.AdminPermissionRoute permission="delivery:write"><P.CoverageAreaPage /></P.AdminPermissionRoute>)} />
         <Route path="delivery" element={withSuspense(<P.AdminPermissionRoute permission="delivery:write"><P.DeliveryZonesPage /></P.AdminPermissionRoute>)} />
         <Route path="fulfillment-locations" element={withSuspense(<P.AdminPermissionRoute permission="delivery:write"><P.FulfillmentLocationsPage /></P.AdminPermissionRoute>)} />
+        <Route path="sellers" element={withSuspense(<P.AdminPermissionRoute permission="sellers:read"><P.SellersPage /></P.AdminPermissionRoute>)} />
+        <Route path="listing-review" element={withSuspense(<P.AdminPermissionRoute permission="sellers:read"><P.ListingReviewPage /></P.AdminPermissionRoute>)} />
+        <Route path="marketplace-settings" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.MarketplaceSettingsPage /></P.AdminPermissionRoute>)} />
         <Route path="reviews" element={withSuspense(<P.AdminPermissionRoute permission="reviews:moderate"><P.ReviewsPage /></P.AdminPermissionRoute>)} />
         <Route path="loyalty" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.LoyaltyPage /></P.AdminPermissionRoute>)} />
         <Route path="wallet" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.WalletPage /></P.AdminPermissionRoute>)} />

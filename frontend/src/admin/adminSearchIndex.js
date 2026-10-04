@@ -16,6 +16,9 @@ import { ADMIN_NAV_GROUPS } from './adminNavGroups';
  * Keyed by route path so it stays in sync with adminNavGroups.
  */
 const NAV_KEYWORDS = {
+  '/admin/sellers': ['seller', 'sellers', 'vendor', 'merchant', 'marketplace', 'بائع', 'بائعين', 'البائعون', 'تاجر', 'تجار', 'سوق', 'متجر خارجي'],
+  '/admin/listing-review': ['listing', 'approve', 'moderation', 'queue', 'مراجعة', 'اعتماد', 'منتجات البائعين', 'طابور'],
+  '/admin/marketplace-settings': ['commission', 'عمولة', 'payout', 'hold', 'marketplace', 'إعدادات السوق', 'شروط البيع'],
   '/admin': ['home', 'overview', 'رئيسية', 'الرئيسية', 'نظرة عامة', 'stats', 'احصائيات', 'إحصائيات', 'kpi'],
   '/admin/products': ['catalog', 'كتالوج', 'سلعة', 'سلع', 'اصناف', 'أصناف', 'inventory', 'sku', 'باركود', 'barcode', 'price', 'سعر', 'اسعار', 'أسعار'],
   '/admin/stock-alerts': ['out of stock', 'نفاد', 'نفد', 'مخزون منخفض', 'low stock', 'restock', 'اعادة تعبئة', 'الكمية', 'quantity'],
