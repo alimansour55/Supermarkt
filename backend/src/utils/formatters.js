@@ -240,6 +240,10 @@ export const formatCartItem = (item) => {
     unit: product.unit,
     quantity: item.quantity,
     availableStock: getAvailableStock(line),
+    soldBy: product.seller
+      ? { _id: product.seller?._id || product.seller, slug: product.sellerSlug || '', nameAr: product.sellerNameAr || '', nameEn: product.sellerNameEn || '' }
+      : null,
+    fulfilledBy: product.fulfilledBy || 'store',
     promotionType: product.promotionType || null,
     offerBadgeAr: product.offerBadgeAr || null,
     offerBadgeEn: product.offerBadgeEn || null,

@@ -1,4 +1,5 @@
 import StoreSettings from '../models/StoreSettings.js';
+import { getMarketplaceSettings } from '../services/marketplace.service.js';
 import { isPaymentMethodConfigured } from '../config/payments.js';
 import { isOnlinePaymentMethod, paymentProviderFor } from '../constants/paymentMethods.js';
 import {
@@ -808,6 +809,12 @@ export const getPublicStoreSettings = asyncHandler(async (_req, res) => {
         provider: paymentProviderFor(method.id),
       }));
   }
+  // Marketplace knobs the cart needs to mirror server-side delivery fees.
+  const marketplace = await getMarketplaceSettings();
+  data.marketplace = {
+    enabled: marketplace.enabled,
+    sellerShipmentDeliveryFee: marketplace.sellerShipmentDeliveryFee,
+  };
   if (data.liveChat) {
     const available = isLiveChatAvailableNow(data.liveChat);
     data.liveChat = {
