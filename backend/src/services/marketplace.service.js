@@ -113,6 +113,14 @@ export async function syncSellerProductVisibility(sellerId) {
   );
 }
 
+/** Copy the seller's public name/slug onto its products (kept denormalized for the storefront). */
+export async function syncSellerProductNames(seller) {
+  await Product.updateMany(
+    { seller: seller._id },
+    { $set: { sellerNameAr: seller.nameAr, sellerNameEn: seller.nameEn, sellerSlug: seller.slug } },
+  );
+}
+
 const ALLOWED_TRANSITIONS = {
   applied: ['under_review', 'active', 'rejected'],
   under_review: ['active', 'rejected'],

@@ -63,6 +63,11 @@ const orderItemSchema = new mongoose.Schema(
     image: { type: String },
     substituted: { type: Boolean, default: false },
     substitutionId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    /** Marketplace snapshot: who sold the line and who delivers it (null seller = the store). */
+    seller: { type: mongoose.Schema.Types.ObjectId, ref: 'Seller', default: null },
+    sellerNameAr: { type: String, trim: true },
+    sellerNameEn: { type: String, trim: true },
+    fulfilledBy: { type: String, enum: ['store', 'seller'], default: 'store' },
   },
   { _id: false },
 );
@@ -373,6 +378,14 @@ const orderSchema = new mongoose.Schema(
       default: null,
     },
     trackingEnabled: { type: Boolean, default: false },
+    /**
+     * Marketplace: whether any line is delivered by the store itself. When false, every line
+     * ships from sellers and the order status is derived from its shipments.
+     */
+    hasStoreItems: { type: Boolean, default: true },
+    sellerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Seller' }],
+    /** Seller-shipped delivery fees included in deliveryFee. */
+    sellerShippingFee: { type: Number, min: 0, default: 0 },
     estimatedDeliveryAt: { type: Date, default: null },
     cancellationReason: { type: String, trim: true, default: '' },
     cancelledAt: { type: Date, default: null },
@@ -439,11 +452,36 @@ orderSchema.index({ 'trash.stage': 1, createdAt: -1 });
 // are ignored by the TTL monitor, so this only ever affects bin2 orders.
 orderSchema.index({ 'trash.purgeAt': 1 }, { expireAfterSeconds: 0 });
 
+orderSchema.index({ sellerIds: 1, createdAt: -1 });
+
 orderSchema.pre('validate', function validateOrderStatus(next) {
   if (this.orderStatus && !ORDER_STATUS_VALUES.includes(this.orderStatus)) {
     this.invalidate('orderStatus', `\`${this.orderStatus}\` is not a valid order status`);
   }
   next();
+});
+
+// Marketplace: store-fulfilled seller shipments follow the order's own status, whichever of the
+// status write paths (admin, driver, cancel, returns) changed it.
+orderSchema.pre('save', function flagStatusChange(next) {
+  this.$locals.statusChanged = !this.isNew && this.isModified('orderStatus');
+  next();
+});
+orderSchema.post('save', async (doc) => {
+  if (!doc.$locals.statusChanged || !doc.sellerIds?.length) return;
+  try {
+    const { syncShipmentsFromOrder } = await import('../services/marketplaceOrder.service.js');
+    await syncShipmentsFromOrder(doc);
+  } catch (err) {
+    console.error(`Shipment sync failed for order ${doc.orderNumber}:`, err.message);
+  }
+});
+
+// A deleted order (checkout rollback, recycle-bin purge) takes its shipments with it.
+orderSchema.post('findOneAndDelete', async (doc) => {
+  if (!doc?.sellerIds?.length) return;
+  const { default: Shipment } = await import('./Shipment.js');
+  await Shipment.deleteMany({ order: doc._id });
 });
 
 if (mongoose.models.Order) {

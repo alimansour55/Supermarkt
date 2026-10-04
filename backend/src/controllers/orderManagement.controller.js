@@ -18,6 +18,8 @@ import {
 import { reverseOrderWallet } from '../services/wallet.service.js';
 import { processOnlineRefund } from '../services/payments/payment.service.js';
 import { isOnlinePaymentMethod } from '../constants/paymentMethods.js';
+import Shipment from '../models/Shipment.js';
+import { assertShipmentsCancellable, shipmentsForOrder } from '../services/marketplaceOrder.service.js';
 import { getActiveDeliveryCounts } from '../services/deliveryDispatch.service.js';
 import { notifyOrderCustomerMessage } from '../services/notification.service.js';
 import {
@@ -94,6 +96,9 @@ async function formatOrderResponse(order, { isStaff = false, gpsDeliveryEnabled 
   if (isStaff) {
     formatted.unreadCustomerMessages = countUnreadCustomerMessages(order);
   }
+  if (order.sellerIds?.length) {
+    formatted.shipments = await shipmentsForOrder(order._id, { isStaff });
+  }
   if (order.assignedDriver) {
     formatted.assignedDriver = {
       _id: order.assignedDriver._id,
@@ -114,17 +119,30 @@ async function formatOrderResponse(order, { isStaff = false, gpsDeliveryEnabled 
 
 async function cancelOrderInternal(order, { reason, actor, isAdmin }) {
   if (isAdmin) assertAdminCanCancel(order);
-  else assertCustomerCanCancel(order);
+  else {
+    assertCustomerCanCancel(order);
+    await assertShipmentsCancellable(order);
+  }
 
   const previousStatus = order.orderStatus;
 
-  await restoreOrderInventory(order.items);
+  // Lines of shipments a seller already cancelled were restocked and refunded then.
+  const settledIdx = new Set();
+  if (order.sellerIds?.length) {
+    const cancelled = await Shipment.find({ order: order._id, status: 'cancelled' }).select('items.itemIndex').lean();
+    cancelled.forEach((s) => s.items.forEach((it) => settledIdx.add(it.itemIndex)));
+  }
+  await restoreOrderInventory(order.items.filter((_, i) => !settledIdx.has(i)));
   await reverseOrderLoyalty(order);
   await reverseOrderWallet(order);
   await reverseCouponUsage(order);
 
   if (order.paymentStatus === 'paid' && isOnlinePaymentMethod(order.paymentMethod)) {
-    const refund = await processOnlineRefund(order, order.total, reason || 'Order cancelled');
+    // A cancelled seller shipment may already have been refunded through the gateway.
+    const outstanding = Math.max(0, Math.round((order.total - (order.refundAmount || 0)) * 100) / 100);
+    const refund = outstanding > 0
+      ? await processOnlineRefund(order, outstanding, reason || 'Order cancelled')
+      : { refundId: null };
     if (refund.refundId) order.paymentRefundId = refund.refundId;
     order.paymentStatus = 'refunded';
     order.refundAmount = order.total;
@@ -245,6 +263,7 @@ export const suggestSubstitution = asyncHandler(async (req, res) => {
   const idx = Number(itemIndex);
   const item = order.items[idx];
   if (!item) throw new AppError('Invalid item index', 400);
+  if (item.seller) throw new AppError('Marketplace seller items cannot be substituted', 400);
 
   const product = await Product.findById(replacementProductId);
   if (!product?.isActive) throw new AppError('Replacement product not found', 404);

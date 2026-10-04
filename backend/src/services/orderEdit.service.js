@@ -25,6 +25,8 @@ export function isCustomerEditableOrder(order) {
   if (!order) return false;
   if (!CUSTOMER_EDITABLE_STATUSES.has(order.orderStatus)) return false;
   if (order.paymentStatus === 'paid') return false;
+  // Marketplace orders are split into seller shipments at checkout — lines are fixed.
+  if (order.sellerIds?.length) return false;
   if ((order.substitutions || []).some((sub) => sub.status === 'pending')) return false;
   return true;
 }
@@ -36,6 +38,12 @@ export function assertCustomerCanEditOrder(order, lang = 'ar') {
   }
   if (order.orderStatus === 'cancelled') {
     throw new AppError(isAr ? 'لا يمكن تعديل طلب ملغي' : 'Cancelled orders cannot be edited', 400);
+  }
+  if (order.sellerIds?.length) {
+    throw new AppError(
+      isAr ? 'هذا الطلب يحتوي على منتجات من بائعين آخرين ولا يمكن تعديله — يمكنك إلغاؤه وإعادة الطلب' : 'Orders with marketplace items cannot be edited — cancel and order again instead',
+      400,
+    );
   }
   if (order.orderStatus === 'out_for_delivery') {
     throw new AppError(
@@ -277,6 +285,9 @@ export function getCustomerEditBlockReason(order, lang = 'ar') {
   }
   if (order.orderStatus === 'cancelled') {
     return isAr ? 'الطلب ملغي' : 'Order is cancelled';
+  }
+  if (order.sellerIds?.length) {
+    return isAr ? 'طلبات البائعين لا يمكن تعديلها' : 'Orders with marketplace items cannot be edited';
   }
   if (['delivered', 'delivery_failed', 'returned'].includes(order.orderStatus)) {
     return isAr ? 'تم إغلاق هذا الطلب' : 'This order is closed';

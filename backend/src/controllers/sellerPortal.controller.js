@@ -5,6 +5,9 @@
  */
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
+import Order from '../models/Order.js';
+import Shipment, { SHIPMENT_STATUSES } from '../models/Shipment.js';
+import { formatShipmentForSeller, updateShipmentStatus } from '../services/marketplaceOrder.service.js';
 import Category from '../models/Category.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -26,6 +29,7 @@ import {
   uniqueProductSlug,
   changeSellerStatus,
   sellerUsers,
+  syncSellerProductNames,
 } from '../services/marketplace.service.js';
 import { SELLER_DOCUMENT_TYPES, LISTING_STATUSES } from '../constants/marketplace.js';
 import { normalizePhone } from '../utils/phone.js';
@@ -110,7 +114,9 @@ export const updateSellerProfile = asyncHandler(async (req, res) => {
     seller.bannerPublicId = up.publicId;
   }
 
+  const renamed = seller.isModified('nameAr') || seller.isModified('nameEn');
   await seller.save();
+  if (renamed) await syncSellerProductNames(seller);
   res.json({ success: true, data: formatSellerPrivate(seller, { revealBank: req.user.role === 'seller_owner' }) });
 });
 
@@ -159,7 +165,8 @@ export const resubmitApplication = asyncHandler(async (req, res) => {
 
 export const getSellerDashboard = asyncHandler(async (req, res) => {
   const sellerId = req.seller._id;
-  const [byStatus, pendingEdits, stock] = await Promise.all([
+  const since30 = new Date(Date.now() - 30 * 86400000);
+  const [byStatus, pendingEdits, stock, shipmentRows, sales30] = await Promise.all([
     Product.aggregate([
       { $match: { seller: sellerId } },
       { $group: { _id: '$listingStatus', count: { $sum: 1 } } },
@@ -177,7 +184,18 @@ export const getSellerDashboard = asyncHandler(async (req, res) => {
         },
       },
     ]),
+    Shipment.aggregate([
+      { $match: { seller: sellerId } },
+      { $group: { _id: { status: '$status', fulfilledBy: '$fulfilledBy' }, count: { $sum: 1 } } },
+    ]),
+    Shipment.aggregate([
+      { $match: { seller: sellerId, status: 'delivered', deliveredAt: { $gte: since30 } } },
+      { $group: { _id: null, gross: { $sum: '$subtotal' }, net: { $sum: '$sellerNet' }, orders: { $sum: 1 } } },
+    ]),
   ]);
+  const countShipments = (statuses, fulfilledBy) => shipmentRows
+    .filter((r) => statuses.includes(r._id.status) && (!fulfilledBy || r._id.fulfilledBy === fulfilledBy))
+    .reduce((sum, r) => sum + r.count, 0);
 
   const listings = Object.fromEntries(LISTING_STATUSES.map((s) => [s, 0]));
   byStatus.forEach((row) => { if (row._id in listings) listings[row._id] = row.count; });
@@ -191,6 +209,17 @@ export const getSellerDashboard = asyncHandler(async (req, res) => {
       pendingEdits,
       outOfStock: stock[0]?.outOfStock || 0,
       lowStock: stock[0]?.lowStock || 0,
+      orders: {
+        toConfirm: countShipments(['pending'], 'seller'),
+        toShip: countShipments(['confirmed', 'packed'], 'seller'),
+        inTransit: countShipments(['shipped']),
+        storeFulfilledOpen: countShipments(['pending', 'confirmed', 'shipped'], 'store'),
+      },
+      last30Days: {
+        orders: sales30[0]?.orders || 0,
+        gross: Math.round((sales30[0]?.gross || 0) * 100) / 100,
+        net: Math.round((sales30[0]?.net || 0) * 100) / 100,
+      },
     },
   });
 });
@@ -353,6 +382,9 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
     slug,
     sku,
     seller: seller._id,
+    sellerNameAr: seller.nameAr,
+    sellerNameEn: seller.nameEn,
+    sellerSlug: seller.slug,
     sellerSuspended: seller.status !== 'active',
     fulfilledBy: operational.fulfilledBy || seller.defaultFulfillment || 'seller',
     listingStatus: submit ? (canPublishDirectly(seller) ? 'approved' : 'pending_review') : 'draft',
@@ -479,4 +511,55 @@ export const updateSellerProductStock = asyncHandler(async (req, res) => {
   await product.save();
   await product.populate(POPULATE_CATEGORY);
   res.json({ success: true, data: formatSellerProduct(product) });
+});
+
+// ── Orders (shipments) ──
+
+const OPEN_SHIPMENT = ['pending', 'confirmed', 'packed', 'shipped'];
+
+const ORDER_CONTACT_FIELDS = 'user phone alternatePhone shippingAddress notes deliveryMethod scheduledDate';
+
+export const listSellerShipments = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = parsePagination(req.query, 100);
+  const filter = { seller: req.seller._id };
+  if (req.query.status === 'open') filter.status = { $in: OPEN_SHIPMENT };
+  else if (SHIPMENT_STATUSES.includes(req.query.status)) filter.status = req.query.status;
+  if (['seller', 'store'].includes(req.query.fulfilledBy)) filter.fulfilledBy = req.query.fulfilledBy;
+  if (req.query.q) {
+    const q = escapeRegex(String(req.query.q).slice(0, 60));
+    filter.$or = [{ shipmentNumber: { $regex: q, $options: 'i' } }, { orderNumber: { $regex: q, $options: 'i' } }];
+  }
+  const [items, total, counts] = await Promise.all([
+    Shipment.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    Shipment.countDocuments(filter),
+    Shipment.aggregate([{ $match: { seller: req.seller._id } }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
+  ]);
+  res.json({
+    success: true,
+    data: items.map((s) => formatShipmentForSeller(s)),
+    counts: Object.fromEntries(counts.map((c) => [c._id, c.count])),
+    pagination: paginationMeta(page, limit, total),
+  });
+});
+
+export const getSellerShipment = asyncHandler(async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) throw new AppError('Shipment not found', 404);
+  const shipment = await Shipment.findOne({ _id: req.params.id, seller: req.seller._id });
+  if (!shipment) throw new AppError('Shipment not found', 404);
+  const order = await Order.findById(shipment.order).select(ORDER_CONTACT_FIELDS).populate('user', 'name');
+  res.json({ success: true, data: formatShipmentForSeller(shipment, order) });
+});
+
+export const updateSellerShipmentStatus = asyncHandler(async (req, res) => {
+  const { status, trackingNumber, carrier, note } = req.body || {};
+  const shipment = await updateShipmentStatus(req.params.id, String(status || ''), {
+    scope: { sellerId: req.seller._id },
+    actor: req.user,
+    role: 'seller',
+    trackingNumber,
+    carrier,
+    note,
+  });
+  const order = await Order.findById(shipment.order).select(ORDER_CONTACT_FIELDS).populate('user', 'name');
+  res.json({ success: true, data: formatShipmentForSeller(shipment, order) });
 });

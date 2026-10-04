@@ -20,6 +20,9 @@ import {
   discardSellerProductChanges,
   deleteSellerProduct,
   updateSellerProductStock,
+  listSellerShipments,
+  getSellerShipment,
+  updateSellerShipmentStatus,
 } from '../controllers/sellerPortal.controller.js';
 
 /** Seller portal API — every route runs as the signed-in seller (req.seller). */
@@ -47,5 +50,10 @@ router.post('/products/:id/pause', pauseSellerProduct);
 router.post('/products/:id/unpause', sellerCanEditCatalog, unpauseSellerProduct);
 router.post('/products/:id/discard-changes', discardSellerProductChanges);
 router.delete('/products/:id', deleteSellerProduct);
+
+router.get('/shipments', listSellerShipments);
+router.get('/shipments/:id', getSellerShipment);
+// Suspended sellers still finish shipments already sold — the customer has paid.
+router.post('/shipments/:id/status', updateSellerShipmentStatus);
 
 export default router;

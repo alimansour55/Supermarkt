@@ -14,7 +14,8 @@ import {
   reserveCouponRedemption,
   releaseCouponRedemption,
 } from '../services/coupon.service.js';
-import { calculateItemsSubtotal } from '../utils/cartLinePricing.js';
+import { calculateItemsSubtotal, calculatePromotedLineTotal } from '../utils/cartLinePricing.js';
+import { createShipmentsForOrder } from '../services/marketplaceOrder.service.js';
 import { formatOrder } from '../utils/formatters.js';
 import { notifyOrderCreated, notifyOrderStatusChange } from '../utils/sendEmail.js';
 import { notifyOrderTimeline } from '../services/orderNotification.service.js';
@@ -324,6 +325,18 @@ export const createOrder = asyncHandler(async (req, res) => {
     user: req.user,
     deliveryZoneId: deliveryZone.id,
   });
+  const marketplacePlan = totals.marketplacePlan;
+  if (marketplacePlan.problems.length) {
+    throw new AppError(marketplacePlan.problems[0], 400);
+  }
+  if (marketplacePlan.hasSellerItems && deliveryMethod === 'recurring') {
+    throw new AppError(
+      lang === 'ar'
+        ? 'التوصيل الدوري متاح لمنتجات المتجر فقط — احذف منتجات البائعين أو اختر توصيلاً عادياً'
+        : 'Recurring delivery is only available for store products — remove seller items or choose standard delivery',
+      400,
+    );
+  }
   const scheduledLeadMinutes = resolveDeliveryLeadMinutes({
     deliveryMethod: 'scheduled',
     storeSettings,
@@ -434,8 +447,15 @@ export const createOrder = asyncHandler(async (req, res) => {
       quantity: item.quantity,
       unit: item.unit,
       image: item.image || item.emoji || line?.image,
+      ...(product?.seller ? {
+        seller: product.seller,
+        sellerNameAr: product.sellerNameAr,
+        sellerNameEn: product.sellerNameEn,
+        fulfilledBy: product.fulfilledBy || 'seller',
+      } : { fulfilledBy: 'store' }),
     };
   });
+  const sellerIds = [...new Set(marketplacePlan.sellerGroups.map((g) => g.sellerId))];
 
   // Claim the coupon redemption slot atomically BEFORE persisting the order.
   // reserveCouponRedemption only increments while usedCount < usageLimit, so two
@@ -482,6 +502,9 @@ export const createOrder = asyncHandler(async (req, res) => {
       alternatePhone: normalizedAlternatePhone || undefined,
       subtotal: totals.subtotal,
       deliveryFee: totals.deliveryFee,
+      sellerShippingFee: totals.sellerShippingFee || 0,
+      hasStoreItems: marketplacePlan.hasStoreItems,
+      sellerIds,
       discount: totals.discountAmount,
       pointsRedeemed: totals.pointsRedeemed,
       pointsDiscount: totals.pointsDiscount,
@@ -520,6 +543,18 @@ export const createOrder = asyncHandler(async (req, res) => {
     // The coupon slot was already claimed above — hand it back if the order
     // itself couldn't be persisted, same as every other failure path below.
     if (couponClaimed) await releaseCouponRedemption(couponClaimed);
+    throw err;
+  }
+
+  // Marketplace: split seller lines into shipments. Nothing else has happened yet
+  // (points, wallet, stock), so a failure here only needs the order and coupon undone.
+  try {
+    await createShipmentsForOrder(order, marketplacePlan, {
+      lineTotals: items.map((item) => calculatePromotedLineTotal(item)),
+    });
+  } catch (err) {
+    if (couponClaimed) await releaseCouponRedemption(couponClaimed);
+    await Order.findByIdAndDelete(order._id);
     throw err;
   }
 

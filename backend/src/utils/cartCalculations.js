@@ -17,6 +17,8 @@ import {
 import StoreSettings from '../models/StoreSettings.js';
 import { findDeliveryZone } from '../services/deliveryZone.service.js';
 import { calculateItemsSubtotal, calculatePromotionSavings } from './cartLinePricing.js';
+import { planMarketplaceItems } from '../services/marketplaceOrder.service.js';
+import { getMarketplaceSettings } from '../services/marketplace.service.js';
 
 function roundMoney(n) {
   return Math.round(Number(n) * 100) / 100;
@@ -102,15 +104,27 @@ export async function calculateCartTotals({
     }
   }
 
-  const deliveryFee = resolveDeliveryFee({
-    deliveryMethod,
-    subtotal,
-    threshold: freeDeliveryThreshold,
-    freeDeliveryMethods,
-    freeDeliveryFromCoupon,
-    scheduledFee: deliveryZone?.scheduledFee ?? SCHEDULED_DELIVERY_FEE,
-    expressFee: deliveryZone?.expressFee ?? EXPRESS_DELIVERY_FEE,
-  });
+  // Marketplace: the store's delivery fee (and free-delivery threshold) covers only lines the
+  // store delivers; each seller-shipped shipment adds its own flat fee.
+  const plan = await planMarketplaceItems(items, { deliveryZoneId: deliveryZone?._id || deliveryZoneId });
+  const storeSubtotal = plan.hasSellerItems
+    ? calculateItemsSubtotal(items.filter((_, i) => plan.lines[i]?.fulfilledBy === 'store'))
+    : subtotal;
+  const storeDeliveryFee = plan.hasStoreItems || !items.length
+    ? resolveDeliveryFee({
+      deliveryMethod,
+      subtotal: storeSubtotal,
+      threshold: freeDeliveryThreshold,
+      freeDeliveryMethods,
+      freeDeliveryFromCoupon,
+      scheduledFee: deliveryZone?.scheduledFee ?? SCHEDULED_DELIVERY_FEE,
+      expressFee: deliveryZone?.expressFee ?? EXPRESS_DELIVERY_FEE,
+    })
+    : 0;
+  const sellerShippingFee = plan.sellerShippedGroups
+    ? roundMoney(plan.sellerShippedGroups * ((await getMarketplaceSettings()).sellerShipmentDeliveryFee || 0))
+    : 0;
+  const deliveryFee = roundMoney(storeDeliveryFee + sellerShippingFee);
 
   let pointsRedeemed = 0;
   let pointsDiscount = 0;
@@ -147,21 +161,32 @@ export async function calculateCartTotals({
   }
 
   const total = Math.max(0, roundMoney(totalBeforeWallet - walletApplied));
-  const freeDeliveryRemaining = Math.max(0, freeDeliveryThreshold - subtotal);
-  const thresholdMet = isThresholdMet(subtotal, freeDeliveryThreshold, freeDeliveryFromCoupon);
+  const freeDeliveryRemaining = Math.max(0, freeDeliveryThreshold - storeSubtotal);
+  const thresholdMet = isThresholdMet(storeSubtotal, freeDeliveryThreshold, freeDeliveryFromCoupon);
   const freeDeliveryForCurrentMethod = isFreeDeliveryForMethod({
     deliveryMethod,
-    subtotal,
+    subtotal: storeSubtotal,
     threshold: freeDeliveryThreshold,
     freeDeliveryMethods,
     freeDeliveryFromCoupon,
   });
 
-  return {
+  const result = {
     subtotal,
     listSubtotal: roundMoney(listSubtotal),
     promotionSavings,
     deliveryFee,
+    storeDeliveryFee,
+    sellerShippingFee,
+    marketplace: plan.hasSellerItems ? {
+      hasStoreItems: plan.hasStoreItems,
+      sellerShipments: plan.sellerGroups.map((g) => ({
+        seller: { _id: g.sellerId, nameAr: g.seller.nameAr, nameEn: g.seller.nameEn },
+        fulfilledBy: g.fulfilledBy,
+        itemIndexes: g.indices,
+      })),
+      problems: plan.problems,
+    } : null,
     discountAmount,
     discount: discountAmount,
     pointsRedeemed,
@@ -179,6 +204,9 @@ export async function calculateCartTotals({
     freeDeliveryForCurrentMethod,
     qualifiesForFreeDelivery: thresholdMet,
   };
+  // Internal (seller docs, commission rules) — non-enumerable so `...totals` never serializes it.
+  Object.defineProperty(result, 'marketplacePlan', { value: plan, enumerable: false });
+  return result;
 }
 
 export { formatCoupon };

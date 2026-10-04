@@ -11,6 +11,13 @@ const USER_NOTIFICATION_TYPES = [
   'wallet_credit',
   'wallet_debit',
   'support_chat_reply',
+  // Marketplace
+  'shipment_update',
+  'seller_new_order',
+  'seller_shipment_cancelled',
+  'seller_listing_review',
+  'seller_account',
+  'seller_payout',
 ];
 
 const userNotificationSchema = new mongoose.Schema(

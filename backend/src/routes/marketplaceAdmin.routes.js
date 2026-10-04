@@ -12,6 +12,8 @@ import {
   listListingQueue,
   approveListing,
   rejectListing,
+  listShipmentsAdmin,
+  updateShipmentStatusAdmin,
 } from '../controllers/marketplaceAdmin.controller.js';
 
 /** Staff marketplace management — mounted at /api/admin/marketplace. */
@@ -33,5 +35,8 @@ router.put('/sellers/:id/documents/:docId', ...write, reviewSellerDocument);
 router.get('/listings', ...read, listListingQueue);
 router.post('/listings/:id/approve', ...write, approveListing);
 router.post('/listings/:id/reject', ...write, rejectListing);
+
+router.get('/shipments', ...requirePermission('orders:read'), listShipmentsAdmin);
+router.post('/shipments/:id/status', ...requirePermission('orders:write'), updateShipmentStatusAdmin);
 
 export default router;

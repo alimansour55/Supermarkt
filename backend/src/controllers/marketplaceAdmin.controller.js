@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import Seller from '../models/Seller.js';
 import Product from '../models/Product.js';
+import Shipment, { SHIPMENT_STATUSES } from '../models/Shipment.js';
+import { formatShipmentForOrder, updateShipmentStatus } from '../services/marketplaceOrder.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { parsePagination, paginationMeta } from '../utils/listQuery.js';
@@ -12,6 +14,7 @@ import {
   formatSellerPrivate,
   changeSellerStatus,
   sellerUsers,
+  syncSellerProductNames,
 } from '../services/marketplace.service.js';
 import { FULFILLMENT_MODES, SELLER_STATUSES } from '../constants/marketplace.js';
 import { formatSellerProduct } from './sellerPortal.controller.js';
@@ -187,7 +190,9 @@ export const updateSellerAdmin = asyncHandler(async (req, res) => {
     if (Number.isFinite(days) && days >= 0 && days <= 30) seller.handlingDays = days;
   }
 
+  const renamed = seller.isModified('nameAr') || seller.isModified('nameEn');
   await seller.save();
+  if (renamed) await syncSellerProductNames(seller);
   // Fulfillment options shrank — products using a removed mode fall back to an allowed one.
   if (b.allowedFulfillment !== undefined) {
     await Product.updateMany(
@@ -329,4 +334,59 @@ export const rejectListing = asyncHandler(async (req, res) => {
 
   await logAudit({ req, action: 'reject', entityType: 'product', entityId: product._id, entityLabel: product.nameEn, changes: { note: { from: null, to: note } } });
   res.json({ success: true, data: formatSellerProduct(product) });
+});
+
+// ── Seller shipments (ops view) ──
+
+export const listShipmentsAdmin = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = parsePagination(req.query, 100);
+  const filter = {};
+  if (isId(req.query.seller)) filter.seller = new mongoose.Types.ObjectId(String(req.query.seller));
+  if (req.query.status === 'open') filter.status = { $in: ['pending', 'confirmed', 'packed', 'shipped'] };
+  else if (SHIPMENT_STATUSES.includes(req.query.status)) filter.status = req.query.status;
+  if (['seller', 'store'].includes(req.query.fulfilledBy)) filter.fulfilledBy = req.query.fulfilledBy;
+  if (req.query.refund === 'manual') filter['refund.status'] = 'manual_required';
+  if (req.query.q) {
+    const q = escapeRegex(String(req.query.q).slice(0, 60));
+    filter.$or = [{ shipmentNumber: { $regex: q, $options: 'i' } }, { orderNumber: { $regex: q, $options: 'i' } }];
+  }
+  const [items, total] = await Promise.all([
+    Shipment.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    Shipment.countDocuments(filter),
+  ]);
+  res.json({
+    success: true,
+    data: items.map((s) => ({
+      ...formatShipmentForOrder(s, { isStaff: true }),
+      orderId: s.order,
+      orderNumber: s.orderNumber,
+      items: s.items,
+      paymentMethod: s.paymentMethod,
+      createdAt: s.createdAt,
+    })),
+    pagination: paginationMeta(page, limit, total),
+  });
+});
+
+/** Staff override — e.g. mark delivered when the seller forgot, or cancel on the seller's behalf. */
+export const updateShipmentStatusAdmin = asyncHandler(async (req, res) => {
+  const { status, note, trackingNumber, carrier } = req.body || {};
+  if (!SHIPMENT_STATUSES.includes(status)) throw new AppError('Unknown status', 400);
+  const shipment = await updateShipmentStatus(req.params.id, status, {
+    actor: req.user,
+    role: 'staff',
+    note,
+    trackingNumber,
+    carrier,
+    force: true,
+  });
+  await logAudit({
+    req,
+    action: 'status_change',
+    entityType: 'order',
+    entityId: shipment.order,
+    entityLabel: shipment.shipmentNumber,
+    changes: { shipmentStatus: { from: null, to: status } },
+  });
+  res.json({ success: true, data: formatShipmentForOrder(shipment, { isStaff: true }) });
 });

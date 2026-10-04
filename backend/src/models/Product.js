@@ -395,6 +395,10 @@ const productSchema = new mongoose.Schema(
       default: 'approved',
       index: true,
     },
+    /** Mirrors of the seller's public card, so storefront responses need no join. */
+    sellerNameAr: { type: String, trim: true, default: '' },
+    sellerNameEn: { type: String, trim: true, default: '' },
+    sellerSlug: { type: String, trim: true, default: '' },
     /** Mirror of the seller's suspension, so visibility needs no join. */
     sellerSuspended: { type: Boolean, default: false },
     reviewNote: { type: String, trim: true, default: '' },
