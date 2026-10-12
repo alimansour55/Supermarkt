@@ -16,6 +16,7 @@ import {
   sellerUsers,
   syncSellerProductNames,
   notifySellerUsers,
+  documentsWithLinks,
 } from '../services/marketplace.service.js';
 import { FULFILLMENT_MODES, SELLER_STATUSES } from '../constants/marketplace.js';
 import { formatSellerProduct } from './sellerPortal.controller.js';
@@ -234,7 +235,7 @@ export const reviewSellerDocument = asyncHandler(async (req, res) => {
   doc.status = status;
   doc.note = String(note ?? '').trim().slice(0, 500);
   await seller.save();
-  res.json({ success: true, data: seller.documents });
+  res.json({ success: true, data: documentsWithLinks(seller.documents) });
 });
 
 // ── Listing review queue ──

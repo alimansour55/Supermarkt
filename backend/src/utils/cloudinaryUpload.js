@@ -67,9 +67,38 @@ export const uploadFilesToCloudinary = async (files, folder = CLOUDINARY_FOLDERS
   return Promise.all(files.map((file) => uploadFileToCloudinary(file, folder)));
 };
 
-export const deleteFromCloudinary = async (publicId, resourceType = 'image') => {
+export const deleteFromCloudinary = async (publicId, resourceType = 'image', deliveryType = 'upload') => {
   if (!publicId || !cloudinaryReady) return;
-  await cloudinary.uploader.destroy(publicId, { resource_type: resourceType }).catch(() => {});
+  await cloudinary.uploader.destroy(publicId, { resource_type: resourceType, type: deliveryType }).catch(() => {});
+};
+
+/**
+ * Upload a sensitive image (e.g. an ID card) as an `authenticated` asset — it has no public URL;
+ * read it only through privateCloudinaryLink().
+ */
+export const uploadPrivateFileToCloudinary = async (file, folder) => {
+  assertCloudinary();
+  if (!file?.buffer?.length) throw new AppError('Invalid file', 400);
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: 'image', type: 'authenticated' },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve({ publicId: result.public_id, format: result.format });
+      },
+    );
+    Readable.from(file.buffer).pipe(uploadStream);
+  });
+};
+
+/** Time-limited link to an authenticated asset (default 10 minutes). */
+export const privateCloudinaryLink = (publicId, format, ttlSeconds = 600) => {
+  if (!publicId || !cloudinaryReady) return '';
+  return cloudinary.utils.private_download_url(publicId, format || 'jpg', {
+    type: 'authenticated',
+    resource_type: 'image',
+    expires_at: Math.floor(Date.now() / 1000) + ttlSeconds,
+  });
 };
 
 export const deleteManyFromCloudinary = async (publicIds = [], mediaTypes = []) => {

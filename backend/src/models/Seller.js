@@ -5,8 +5,12 @@ import { SELLER_STATUSES, SELLER_DOCUMENT_TYPES, FULFILLMENT_MODES } from '../co
 const sellerDocumentSchema = new mongoose.Schema(
   {
     type: { type: String, enum: SELLER_DOCUMENT_TYPES, required: true },
-    url: { type: String, trim: true, required: true },
+    /** Public URL — only for legacy documents; new uploads are private (see `private`). */
+    url: { type: String, trim: true, default: '' },
     publicId: { type: String, trim: true, default: '' },
+    format: { type: String, trim: true, default: '' },
+    /** Stored as an authenticated Cloudinary asset; served via short-lived signed links. */
+    private: { type: Boolean, default: false },
     status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
     note: { type: String, trim: true, default: '' },
     uploadedAt: { type: Date, default: Date.now },

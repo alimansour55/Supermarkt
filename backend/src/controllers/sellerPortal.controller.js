@@ -20,6 +20,7 @@ import {
   uploadFileToCloudinary,
   deleteFromCloudinary,
   deleteManyFromCloudinary,
+  uploadPrivateFileToCloudinary,
   CLOUDINARY_FOLDERS,
 } from '../utils/cloudinaryUpload.js';
 import {
@@ -30,6 +31,7 @@ import {
   changeSellerStatus,
   sellerUsers,
   syncSellerProductNames,
+  documentsWithLinks,
 } from '../services/marketplace.service.js';
 import { SELLER_DOCUMENT_TYPES, LISTING_STATUSES } from '../constants/marketplace.js';
 import { normalizePhone } from '../utils/phone.js';
@@ -137,20 +139,21 @@ export const uploadSellerDocument = asyncHandler(async (req, res) => {
   if (!req.file) throw new AppError('Document image is required', 400);
   if (req.seller.documents.length >= 20) throw new AppError('Too many documents — remove one first', 400);
 
-  const up = await uploadFileToCloudinary(req.file, CLOUDINARY_FOLDERS.sellerDocuments);
-  req.seller.documents.push({ type, url: up.url, publicId: up.publicId });
+  // ID cards and registers are private: no public URL, staff see them through expiring links.
+  const up = await uploadPrivateFileToCloudinary(req.file, CLOUDINARY_FOLDERS.sellerDocuments);
+  req.seller.documents.push({ type, publicId: up.publicId, format: up.format, private: true });
   await req.seller.save();
-  res.status(201).json({ success: true, data: req.seller.documents });
+  res.status(201).json({ success: true, data: documentsWithLinks(req.seller.documents) });
 });
 
 export const deleteSellerDocument = asyncHandler(async (req, res) => {
   const doc = req.seller.documents.id(req.params.docId);
   if (!doc) throw new AppError('Document not found', 404);
   if (doc.status === 'accepted') throw new AppError('Accepted documents can only be changed by staff', 400);
-  if (doc.publicId) await deleteFromCloudinary(doc.publicId);
+  if (doc.publicId) await deleteFromCloudinary(doc.publicId, 'image', doc.private ? 'authenticated' : 'upload');
   doc.deleteOne();
   await req.seller.save();
-  res.json({ success: true, data: req.seller.documents });
+  res.json({ success: true, data: documentsWithLinks(req.seller.documents) });
 });
 
 /** A rejected applicant fixes their details and asks for another review. */

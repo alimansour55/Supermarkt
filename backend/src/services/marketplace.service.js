@@ -6,6 +6,7 @@ import Product from '../models/Product.js';
 import User from '../models/User.js';
 import { AppError } from '../utils/AppError.js';
 import { slugify } from '../utils/slugify.js';
+import { privateCloudinaryLink } from '../utils/cloudinaryUpload.js';
 import {
   DEFAULT_MARKETPLACE_SETTINGS,
   FULFILLMENT_MODES,
@@ -206,6 +207,14 @@ export function formatSellerPublic(seller) {
   };
 }
 
+/** Documents with a viewable link: private ones get a link that expires in minutes. */
+export function documentsWithLinks(documents = []) {
+  return documents.map((d) => {
+    const doc = d.toObject ? d.toObject() : d;
+    return doc.private ? { ...doc, url: privateCloudinaryLink(doc.publicId, doc.format) } : doc;
+  });
+}
+
 /** Full seller profile for the seller itself and staff. Bank numbers masked unless `revealBank`. */
 export function formatSellerPrivate(seller, { revealBank = false } = {}) {
   if (!seller) return null;
@@ -228,7 +237,7 @@ export function formatSellerPrivate(seller, { revealBank = false } = {}) {
       accountNumber: maskTail(bank.accountNumber),
       iban: maskTail(bank.iban),
     },
-    documents: s.documents || [],
+    documents: documentsWithLinks(s.documents || []),
     commissionRate: s.commissionRate,
     categoryCommissions: s.categoryCommissions || [],
     allowedFulfillment: s.allowedFulfillment || ['seller'],
