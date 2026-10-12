@@ -295,6 +295,14 @@ export const adminApi = {
   rejectListing: (id, data) => api.post(`/admin/marketplace/listings/${id}/reject`, data),
   listSellerShipments: (params) => api.get('/admin/marketplace/shipments', { params }),
   updateShipmentStatusAdmin: (id, data) => api.post(`/admin/marketplace/shipments/${id}/status`, data),
+  getSellerBalances: () => api.get('/admin/marketplace/finance/balances'),
+  getSellerLedger: (id, params) => api.get(`/admin/marketplace/sellers/${id}/ledger`, { params }),
+  addSellerAdjustment: (id, data) => api.post(`/admin/marketplace/sellers/${id}/adjustments`, data),
+  generateSellerPayout: (id) => api.post(`/admin/marketplace/sellers/${id}/payouts`),
+  listSellerPayouts: (params) => api.get('/admin/marketplace/payouts', { params }),
+  markSellerPayoutPaid: (id, data) => api.post(`/admin/marketplace/payouts/${id}/paid`, data),
+  cancelSellerPayout: (id) => api.post(`/admin/marketplace/payouts/${id}/cancel`),
+  exportSellerPayouts: () => api.get('/admin/marketplace/payouts/export', { responseType: 'blob' }),
 };
 
 export default adminApi;

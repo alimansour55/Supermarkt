@@ -26,6 +26,24 @@ export const SHIPMENT_STATUS = {
   returned: { ar: 'مرتجع', en: 'Returned', tone: 'bg-slate-200 text-slate-700' },
 };
 
+export const LEDGER_TYPE = {
+  sale: { ar: 'مبيعات', en: 'Sale' },
+  delivery_fee: { ar: 'رسوم توصيل', en: 'Delivery fee' },
+  commission: { ar: 'عمولة', en: 'Commission' },
+  fulfillment_fee: { ar: 'رسوم شحن المتجر', en: 'Fulfillment fee' },
+  cod_collected: { ar: 'نقدية حصّلتها', en: 'Cash you collected' },
+  return: { ar: 'مرتجع', en: 'Return' },
+  commission_reversal: { ar: 'استرداد عمولة', en: 'Commission refund' },
+  adjustment: { ar: 'تسوية', en: 'Adjustment' },
+  payout: { ar: 'تحويل لك', en: 'Payout' },
+};
+
+export const PAYOUT_STATUS = {
+  pending: { ar: 'قيد التحويل', en: 'Processing', tone: 'bg-amber-100 text-amber-900' },
+  paid: { ar: 'تم التحويل', en: 'Paid', tone: 'bg-emerald-100 text-emerald-800' },
+  cancelled: { ar: 'ملغي', en: 'Cancelled', tone: 'bg-slate-200 text-slate-700' },
+};
+
 export const FULFILLMENT = {
   seller: { ar: 'يشحنه البائع', en: 'Shipped by seller' },
   store: { ar: 'يشحنه المتجر', en: 'Shipped by store' },

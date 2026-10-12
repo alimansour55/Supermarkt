@@ -117,6 +117,7 @@ export default [
       route('products/:id', 'seller/pages/SellerProductFormPage.jsx'),
       route('orders', 'seller/pages/SellerOrdersPage.jsx'),
       route('orders/:id', 'seller/pages/SellerOrderDetailPage.jsx'),
+      route('finance', 'seller/pages/SellerFinancePage.jsx'),
       route('store', 'seller/pages/SellerStorePage.jsx'),
     ]),
   ]),

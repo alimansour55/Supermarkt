@@ -517,6 +517,14 @@ export default function DriverDeliveryPage() {
         )}
       </section>
 
+      {order.hasSellerShipments && (
+        <p className="rounded-2xl bg-sky-50 px-4 py-3 text-sm text-sky-900 ring-1 ring-sky-200">
+          {isAr
+            ? 'بعض منتجات هذا الطلب يوصّلها البائع مباشرة — المعروض هنا والمبلغ المطلوب يخصّان شحنتك فقط.'
+            : 'Some items in this order are delivered by their seller — the items and cash shown here are for your package only.'}
+        </p>
+      )}
+
       {/* Order items — picking checklist */}
       {showPicking && (
         <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">

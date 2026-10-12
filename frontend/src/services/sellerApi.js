@@ -23,6 +23,9 @@ export const sellerApi = {
 
   getDashboard: () => api.get('/seller/dashboard'),
 
+  getFinance: () => api.get('/seller/finance'),
+  getLedger: (params) => api.get('/seller/finance/ledger', { params }),
+
   listShipments: (params) => api.get('/seller/shipments', { params }),
   getShipment: (id) => api.get(`/seller/shipments/${id}`),
   updateShipmentStatus: (id, data) => api.post(`/seller/shipments/${id}/status`, data),
