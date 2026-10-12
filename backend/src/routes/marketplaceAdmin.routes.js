@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requirePermission } from '../middleware/auth.js';
 import { listSellerReviewsAdmin, setSellerReviewStatusAdmin } from '../controllers/sellerReview.controller.js';
+import { listInboundAdmin, receiveInboundAdmin } from '../controllers/sellerOps.controller.js';
 import {
   getSellerBalancesAdmin,
   getSellerLedgerAdmin,
@@ -49,6 +50,9 @@ router.post('/listings/:id/reject', ...write, rejectListing);
 
 router.get('/shipments', ...requirePermission('orders:read'), listShipmentsAdmin);
 router.post('/shipments/:id/status', ...requirePermission('orders:write'), updateShipmentStatusAdmin);
+
+router.get('/inbound', ...requirePermission('products:read'), listInboundAdmin);
+router.post('/inbound/:id/receive', ...requirePermission('products:write'), receiveInboundAdmin);
 
 router.get('/seller-reviews', ...read, listSellerReviewsAdmin);
 router.put('/seller-reviews/:id', ...write, setSellerReviewStatusAdmin);

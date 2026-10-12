@@ -15,6 +15,7 @@ import {
   changeSellerStatus,
   sellerUsers,
   syncSellerProductNames,
+  notifySellerUsers,
 } from '../services/marketplace.service.js';
 import { FULFILLMENT_MODES, SELLER_STATUSES } from '../constants/marketplace.js';
 import { formatSellerProduct } from './sellerPortal.controller.js';
@@ -307,6 +308,14 @@ export const approveListing = asyncHandler(async (req, res) => {
   if (orphaned.length) await deleteManyFromCloudinary(orphaned);
 
   await logAudit({ req, action: 'approve', entityType: 'product', entityId: product._id, entityLabel: product.nameEn });
+  await notifySellerUsers(product.seller, {
+    type: 'seller_listing_review',
+    titleAr: hadNew ? 'تم اعتماد منتجك' : 'تم اعتماد تعديلاتك',
+    titleEn: hadNew ? 'Product approved' : 'Edits approved',
+    messageAr: `«${product.nameAr}» ${hadNew ? 'معروض الآن للعملاء.' : 'تم تحديثه في المتجر.'}`,
+    messageEn: `"${product.nameEn}" ${hadNew ? 'is now live.' : 'was updated in the store.'}`,
+    link: `/seller-center/products/${product._id}`,
+  });
   res.json({ success: true, data: formatSellerProduct(product) });
 });
 
@@ -336,6 +345,14 @@ export const rejectListing = asyncHandler(async (req, res) => {
   await product.save();
 
   await logAudit({ req, action: 'reject', entityType: 'product', entityId: product._id, entityLabel: product.nameEn, changes: { note: { from: null, to: note } } });
+  await notifySellerUsers(product.seller, {
+    type: 'seller_listing_review',
+    titleAr: 'منتج يحتاج تعديلاً',
+    titleEn: 'Product needs changes',
+    messageAr: `«${product.nameAr}»: ${note}`,
+    messageEn: `"${product.nameEn}": ${note}`,
+    link: `/seller-center/products/${product._id}`,
+  });
   res.json({ success: true, data: formatSellerProduct(product) });
 });
 

@@ -33,6 +33,7 @@ import {
 } from '../services/marketplace.service.js';
 import { SELLER_DOCUMENT_TYPES, LISTING_STATUSES } from '../constants/marketplace.js';
 import { normalizePhone } from '../utils/phone.js';
+import { parseCsv } from '../utils/csvExport.js';
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -325,6 +326,38 @@ function mergeVariants(product, incoming) {
   });
 }
 
+/**
+ * Stock of a store-fulfilled product is physically in the store's warehouse — the seller can't
+ * type it in; it changes only when staff receive an inbound shipment (or sell it). Switching
+ * fulfillment mode is allowed only while no warehouse stock is held.
+ */
+function guardStoreHeldStock(product, operational) {
+  const heldNow = product.fulfilledBy === 'store';
+  const switching = operational.fulfilledBy && operational.fulfilledBy !== product.fulfilledBy;
+  const warehouseUnits = (product.stock || 0) + (product.variants || []).reduce((s, v) => s + (v.stock || 0), 0);
+
+  if (switching && heldNow && warehouseUnits > 0) {
+    throw new AppError('Your units are in our warehouse — ask staff to return them before switching to shipping yourself', 400);
+  }
+  if (switching && operational.fulfilledBy === 'store') {
+    // Moving to store fulfillment: the seller's own stock doesn't come along.
+    operational.stock = 0;
+    if (operational.variants) operational.variants = operational.variants.map((v) => ({ ...v, stock: 0 }));
+    else product.variants = (product.variants || []).map((v) => ({ ...v.toObject(), stock: 0 }));
+    return;
+  }
+  if (heldNow && !switching) {
+    if (operational.stock !== undefined && operational.stock !== product.stock) {
+      throw new AppError('Stock of store-fulfilled items is updated when we receive your inbound shipments', 400);
+    }
+    delete operational.stock;
+    if (operational.variants) {
+      const prev = new Map((product.variants || []).map((v) => [String(v._id), v.stock || 0]));
+      operational.variants = operational.variants.map((v) => ({ ...v, stock: v._id ? prev.get(String(v._id)) ?? 0 : 0 }));
+    }
+  }
+}
+
 function applyOperational(product, operational) {
   const { variants, stock, ...rest } = operational;
   if (stock !== undefined) {
@@ -353,9 +386,12 @@ function droppedPublicIds(beforeIds = [], afterIds = []) {
   return beforeIds.filter((id) => id && !keep.has(id));
 }
 
-export const createSellerProduct = asyncHandler(async (req, res) => {
-  const seller = req.seller;
-  const { content, operational } = sanitizeSellerProductInput(req.body, seller);
+/**
+ * Create one seller product (form or CSV row). Store-fulfilled products start at zero stock:
+ * their stock lives in the store's warehouse and only grows through received inbound shipments.
+ */
+export async function createProductForSeller(seller, user, body, { submit = false } = {}) {
+  const { content, operational } = sanitizeSellerProductInput(body, seller);
 
   if (!content.nameAr || !content.nameEn) throw new AppError('Arabic and English names are required', 400);
   if (operational.price == null || operational.price <= 0) throw new AppError('A price above zero is required', 400);
@@ -373,12 +409,14 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
     categorySlug: leaf?.slug || '',
   });
 
-  const submit = req.body.submit === true || req.body.submit === 'true';
   const now = new Date();
+  const fulfilledBy = operational.fulfilledBy || seller.defaultFulfillment || 'seller';
+  const storeHeld = fulfilledBy === 'store';
   const product = new Product({
     ...content,
     ...operational,
-    variants: operational.variants || [],
+    ...(storeHeld ? { stock: 0 } : {}),
+    variants: (operational.variants || []).map((v) => (storeHeld ? { ...v, stock: 0 } : v)),
     slug,
     sku,
     seller: seller._id,
@@ -386,16 +424,62 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
     sellerNameEn: seller.nameEn,
     sellerSlug: seller.slug,
     sellerSuspended: seller.status !== 'active',
-    fulfilledBy: operational.fulfilledBy || seller.defaultFulfillment || 'seller',
+    fulfilledBy,
     listingStatus: submit ? (canPublishDirectly(seller) ? 'approved' : 'pending_review') : 'draft',
     submittedAt: submit ? now : null,
     ...(submit && canPublishDirectly(seller) ? { reviewedAt: now } : {}),
-    createdBy: req.user._id,
+    createdBy: user._id,
     stockUpdatedAt: now,
   });
   await product.save();
+  return product;
+}
+
+export const createSellerProduct = asyncHandler(async (req, res) => {
+  const submit = req.body.submit === true || req.body.submit === 'true';
+  const product = await createProductForSeller(req.seller, req.user, req.body, { submit });
   await product.populate(POPULATE_CATEGORY);
   res.status(201).json({ success: true, data: formatSellerProduct(product) });
+});
+
+const CSV_COLUMNS = ['nameAr', 'nameEn', 'price', 'categorySlug'];
+const MAX_IMPORT_ROWS = 500;
+
+/**
+ * Bulk create drafts from CSV text. Required columns: nameAr, nameEn, price, categorySlug.
+ * Optional: descriptionAr, descriptionEn, oldPrice, stock, brand, sku, barcode, unit, size,
+ * fulfilledBy. Images are added afterwards in the editor. Returns a result per row.
+ */
+export const importSellerProducts = asyncHandler(async (req, res) => {
+  const { records, headers } = parseCsv(String(req.body?.csv || '').replace(/^\uFEFF/, ''));
+  const missing = CSV_COLUMNS.filter((c) => !headers.includes(c));
+  if (missing.length) throw new AppError(`Missing columns: ${missing.join(', ')}`, 400);
+  if (!records.length) throw new AppError('The file has no product rows', 400);
+  if (records.length > MAX_IMPORT_ROWS) throw new AppError(`Up to ${MAX_IMPORT_ROWS} rows per file`, 400);
+
+  const slugs = [...new Set(records.map((r) => r.categorySlug).filter(Boolean))];
+  const categories = await Category.find({ slug: { $in: slugs }, isActive: true }).select('_id slug').lean();
+  const categoryBySlug = new Map(categories.map((c) => [c.slug, c._id]));
+
+  const results = [];
+  for (const [i, row] of records.entries()) {
+    const line = i + 2; // header is line 1
+    try {
+      const category = categoryBySlug.get(row.categorySlug);
+      if (!category) throw new AppError(`Unknown category "${row.categorySlug}"`, 400);
+      // eslint-disable-next-line no-await-in-loop
+      const product = await createProductForSeller(req.seller, req.user, {
+        ...row,
+        category: String(category),
+        ...(row.fulfilledBy ? {} : { fulfilledBy: undefined }),
+      });
+      results.push({ line, ok: true, productId: product._id, nameEn: product.nameEn });
+    } catch (err) {
+      results.push({ line, ok: false, nameEn: row.nameEn || '', error: err.message });
+    }
+  }
+  const created = results.filter((r) => r.ok).length;
+  res.status(created ? 201 : 400).json({ success: created > 0, created, failed: results.length - created, results });
 });
 
 export const updateSellerProduct = asyncHandler(async (req, res) => {
@@ -415,6 +499,7 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
   const live = ['approved', 'paused'].includes(product.listingStatus);
   const needsReview = live && settings.reviewContentEdits && !canPublishDirectly(seller);
 
+  guardStoreHeldStock(product, operational);
   applyOperational(product, operational);
 
   let dropped = [];
@@ -507,6 +592,7 @@ export const deleteSellerProduct = asyncHandler(async (req, res) => {
 export const updateSellerProductStock = asyncHandler(async (req, res) => {
   const product = await findOwnProduct(req);
   const { operational } = sanitizeSellerProductInput({ stock: req.body.stock, variants: req.body.variants }, req.seller);
+  guardStoreHeldStock(product, operational);
   applyOperational(product, operational);
   await product.save();
   await product.populate(POPULATE_CATEGORY);

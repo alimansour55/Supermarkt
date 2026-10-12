@@ -225,6 +225,9 @@ const applyProductSourceFilter = (filter, productSource) => {
     case 'new_arrivals':
       filter.isFeatured = true;
       break;
+    case 'marketplace':
+      filter.seller = { $ne: null };
+      break;
     default:
       break;
   }

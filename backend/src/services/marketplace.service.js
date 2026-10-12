@@ -121,6 +121,26 @@ export async function syncSellerProductNames(seller) {
   );
 }
 
+/** In-app (+ push) notification to every active login of a seller. Never throws. */
+export async function notifySellerUsers(sellerId, { type, titleAr, titleEn, messageAr, messageEn, link = '/seller-center', data = {} }) {
+  try {
+    const { createUserNotification } = await import('./userNotification.service.js');
+    const users = await User.find({ seller: sellerId, isActive: { $ne: false } }).select('_id').lean();
+    await Promise.all(users.map((u) => createUserNotification({
+      userId: u._id, type, titleAr, titleEn, messageAr, messageEn, link, data,
+    })));
+  } catch (err) {
+    console.error('Seller notification failed:', err.message);
+  }
+}
+
+const STATUS_NOTICE = {
+  active: { ar: 'تم اعتماد متجرك 🎉', en: 'Your store is approved 🎉', msgAr: 'أصبح متجرك نشطاً — منتجاتك المعتمدة تظهر الآن للعملاء.', msgEn: 'Your store is live — your approved products are now visible to customers.' },
+  rejected: { ar: 'لم يتم اعتماد طلبك', en: 'Application not approved', msgAr: 'راجع السبب في صفحة بيانات المتجر ثم أعد الإرسال.', msgEn: 'See the reason on your Store profile page, then resubmit.' },
+  suspended: { ar: 'تم إيقاف متجرك', en: 'Your store is suspended', msgAr: 'منتجاتك مخفية عن العملاء. تواصل مع الدعم.', msgEn: 'Your products are hidden from customers. Please contact support.' },
+  under_review: { ar: 'طلبك قيد المراجعة', en: 'Application under review', msgAr: 'يراجع فريقنا بيانات متجرك الآن.', msgEn: 'Our team is reviewing your store now.' },
+};
+
 const ALLOWED_TRANSITIONS = {
   applied: ['under_review', 'active', 'rejected'],
   under_review: ['active', 'rejected'],
@@ -146,6 +166,17 @@ export async function changeSellerStatus(seller, nextStatus, { reason = '', acto
   }
   await seller.save();
   await syncSellerProductVisibility(seller._id);
+  const notice = STATUS_NOTICE[nextStatus];
+  if (notice && actor?.seller == null) {
+    await notifySellerUsers(seller._id, {
+      type: 'seller_account',
+      titleAr: notice.ar,
+      titleEn: notice.en,
+      messageAr: seller.statusReason ? `${notice.msgAr} (${seller.statusReason})` : notice.msgAr,
+      messageEn: seller.statusReason ? `${notice.msgEn} (${seller.statusReason})` : notice.msgEn,
+      link: '/seller-center/store',
+    });
+  }
   return seller;
 }
 

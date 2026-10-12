@@ -4,6 +4,14 @@ import { uploadSingle, uploadProductMediaMultiple, optionalUploadFields } from '
 import { getMyFinance, getMyLedger } from '../controllers/sellerFinance.controller.js';
 import { listMyReviews } from '../controllers/sellerReview.controller.js';
 import {
+  listTeam,
+  addTeamMember,
+  updateTeamMember,
+  listMyInbound,
+  createInbound,
+  cancelMyInbound,
+} from '../controllers/sellerOps.controller.js';
+import {
   getSellerMe,
   updateSellerProfile,
   updateSellerBank,
@@ -22,6 +30,7 @@ import {
   discardSellerProductChanges,
   deleteSellerProduct,
   updateSellerProductStock,
+  importSellerProducts,
   listSellerShipments,
   getSellerShipment,
   updateSellerShipmentStatus,
@@ -45,9 +54,18 @@ router.get('/finance', getMyFinance);
 router.get('/finance/ledger', getMyLedger);
 router.get('/reviews', listMyReviews);
 
+router.get('/team', sellerOwnerOnly, listTeam);
+router.post('/team', sellerOwnerOnly, addTeamMember);
+router.put('/team/:userId', sellerOwnerOnly, updateTeamMember);
+
+router.get('/inbound', listMyInbound);
+router.post('/inbound', sellerCanEditCatalog, createInbound);
+router.post('/inbound/:id/cancel', cancelMyInbound);
+
 router.get('/products', listSellerProducts);
 router.post('/products/media', sellerCanEditCatalog, uploadProductMediaMultiple('images', 10), uploadSellerProductMedia);
 router.post('/products', sellerCanEditCatalog, createSellerProduct);
+router.post('/products/import', sellerCanEditCatalog, importSellerProducts);
 router.get('/products/:id', getSellerProduct);
 router.put('/products/:id', sellerCanEditCatalog, updateSellerProduct);
 router.put('/products/:id/stock', sellerCanEditCatalog, updateSellerProductStock);
