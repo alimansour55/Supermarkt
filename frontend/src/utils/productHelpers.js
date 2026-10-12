@@ -215,6 +215,7 @@ export const buildMockProductFilters = (products, categories, params = {}) => {
     { id: 'offers', labelAr: 'عروض وخصومات', labelEn: 'Offers & discounts' },
     { id: 'best_sellers', labelAr: 'الأكثر مبيعاً', labelEn: 'Best sellers' },
     { id: 'new_arrivals', labelAr: 'وصل حديثاً', labelEn: 'New arrivals' },
+    { id: 'marketplace', labelAr: 'من بائعين آخرين', labelEn: 'From marketplace sellers' },
   ];
   const productSources = sourceDefs.map((row) => ({
     ...row,
@@ -250,6 +251,8 @@ export const filterProductsMock = (products, params = {}) => {
     // Ranked by soldCount when sort=best-selling is applied.
   } else if (params.productSource === 'new_arrivals') {
     result = result.filter((p) => p.isNew || p.isFeatured);
+  } else if (params.productSource === 'marketplace') {
+    result = result.filter((p) => p.soldBy);
   } else if (params.productSource === 'offers') {
     result = result.filter((p) => p.isOffer || getDiscountPercent(p) > 0);
   }

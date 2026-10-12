@@ -5,6 +5,8 @@ export const marketplaceApi = {
   getConfig: () => api.get('/sellers/config'),
   apply: (data) => api.post('/sellers/apply', data),
   getSeller: (slug) => api.get(`/sellers/${encodeURIComponent(slug)}`),
+  getReviews: (slug, params) => api.get(`/sellers/${encodeURIComponent(slug)}/reviews`, { params }),
+  rateShipment: (orderId, shipmentId, data) => api.post(`/orders/${orderId}/shipments/${shipmentId}/review`, data),
 };
 
 /** Seller portal — every call runs as the signed-in seller. */
@@ -24,6 +26,7 @@ export const sellerApi = {
   getDashboard: () => api.get('/seller/dashboard'),
 
   getFinance: () => api.get('/seller/finance'),
+  getMyReviews: (params) => api.get('/seller/reviews', { params }),
   getLedger: (params) => api.get('/seller/finance/ledger', { params }),
 
   listShipments: (params) => api.get('/seller/shipments', { params }),

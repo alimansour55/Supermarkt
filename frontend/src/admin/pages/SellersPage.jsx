@@ -76,6 +76,45 @@ function StatusActions({ seller, isAr, onChanged, canWrite }) {
   );
 }
 
+function SellerReviewsAdmin({ sellerId, isAr, canWrite }) {
+  const toast = useToast();
+  const [reviews, setReviews] = useState(null);
+  const load = useCallback(() => {
+    adminApi.listSellerReviews({ seller: sellerId, limit: 20 }).then(({ data }) => setReviews(data.data || [])).catch(() => setReviews([]));
+  }, [sellerId]);
+  useEffect(() => { load(); }, [load]);
+  if (!reviews?.length) return null;
+  const toggle = async (r) => {
+    try {
+      await adminApi.setSellerReviewStatus(r._id, r.status === 'visible' ? 'hidden' : 'visible');
+      load();
+    } catch (err) {
+      toast.error(apiError(err, isAr ? 'تعذّر التحديث' : 'Update failed'));
+    }
+  };
+  return (
+    <section className="rounded-2xl border border-border bg-white p-4">
+      <h3 className="mb-2 font-bold">{isAr ? 'تقييمات العملاء' : 'Customer reviews'}</h3>
+      <ul className="space-y-2">
+        {reviews.map((r) => (
+          <li key={r._id} className={`flex items-start justify-between gap-3 rounded-xl border border-border p-2 text-sm ${r.status === 'hidden' ? 'opacity-60' : ''}`}>
+            <div>
+              <span className="font-semibold text-amber-600">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+              <span className="ms-2 text-xs text-text-muted">{r.userName}</span>
+              {r.comment && <p className="mt-1">{r.comment}</p>}
+            </div>
+            {canWrite && (
+              <button type="button" onClick={() => toggle(r)} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-border">
+                {r.status === 'visible' ? (isAr ? 'إخفاء' : 'Hide') : (isAr ? 'إظهار' : 'Show')}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function SellerDetail({ sellerId, isAr, onChanged, canWrite }) {
   const toast = useToast();
   const [seller, setSeller] = useState(null);
@@ -189,6 +228,24 @@ function SellerDetail({ sellerId, isAr, onChanged, canWrite }) {
           ))}
         </div>
       </section>
+
+      {seller.performance && (
+        <section className="rounded-2xl border border-border bg-white p-4">
+          <h3 className="mb-2 font-bold">{isAr ? `الأداء (آخر ${seller.performance.days} يوماً)` : `Performance (last ${seller.performance.days} days)`}</h3>
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+            <p><span className="block text-text-muted">{isAr ? 'الحالة' : 'Health'}</span>
+              <span className={`font-bold ${seller.performance.health === 'at_risk' ? 'text-red-700' : seller.performance.health === 'fair' ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {{ good: isAr ? 'جيد' : 'Good', fair: isAr ? 'متوسط' : 'Fair', at_risk: isAr ? 'معرّض للخطر' : 'At risk' }[seller.performance.health]}
+              </span>
+            </p>
+            <p><span className="block text-text-muted">{isAr ? 'التقييم' : 'Rating'}</span><span className="font-bold">{seller.performance.ratingCount ? `${seller.performance.rating} (${seller.performance.ratingCount})` : '—'}</span></p>
+            <p><span className="block text-text-muted">{isAr ? 'إلغاء من البائع' : 'Seller cancels'}</span><span className="font-bold">{seller.performance.cancelRate}%</span></p>
+            <p><span className="block text-text-muted">{isAr ? 'شحن متأخر' : 'Late shipping'}</span><span className="font-bold">{seller.performance.lateShipRate}%</span></p>
+          </div>
+        </section>
+      )}
+
+      <SellerReviewsAdmin sellerId={seller._id} isAr={isAr} canWrite={canWrite} />
 
       <section className="rounded-2xl border border-border bg-white p-4">
         <h3 className="mb-2 font-bold">{isAr ? 'المستندات' : 'Documents'}</h3>

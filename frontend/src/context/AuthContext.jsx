@@ -40,9 +40,15 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await authService.getMe();
       setUser(data.user);
-    } catch {
-      removeToken();
-      setUser(null);
+    } catch (err) {
+      // Only a rejected session signs the user out — a network blip (flaky mobile data, a
+      // restarting server) keeps the token so the next load restores the session.
+      if (err.response?.status === 401) {
+        removeToken();
+        setUser(null);
+      } else if (!silent) {
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }

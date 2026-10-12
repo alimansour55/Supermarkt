@@ -17,6 +17,7 @@ export const PRODUCT_SOURCE_OPTION_IDS = [
   'offers',
   'best_sellers',
   'new_arrivals',
+  'marketplace',
 ];
 
 export const DEFAULT_PRODUCT_FILTER_SECTIONS = [
@@ -65,6 +66,13 @@ export const DEFAULT_PRODUCT_SOURCE_OPTIONS = [
     labelEn: 'New arrivals',
     enabled: true,
     sortOrder: 4,
+  },
+  {
+    id: 'marketplace',
+    labelAr: 'من بائعين آخرين',
+    labelEn: 'From marketplace sellers',
+    enabled: true,
+    sortOrder: 5,
   },
 ];
 

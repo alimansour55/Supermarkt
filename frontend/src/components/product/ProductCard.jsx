@@ -505,7 +505,8 @@ export default function ProductCard({ product, compact = false }) {
           </div>
 
           {/* Delivery line */}
-          {!compact && deliveryTime && (
+          {/* The store's delivery ETA doesn't apply to items a seller ships itself. */}
+          {!compact && deliveryTime && !(product.soldBy && product.fulfilledBy === 'seller') && (
             <p
               className={[
                 // Plain text (no flex) so RTL always starts from the right.
