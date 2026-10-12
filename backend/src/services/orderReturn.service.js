@@ -231,6 +231,10 @@ export async function applyApprovedReturn(order, returnDoc) {
   }
 
   order.refundAmount = (order.refundAmount || 0) + refundAmount;
+  if (order.sellerIds?.length) {
+    const { postReturnReversal } = await import('./sellerLedger.service.js');
+    await postReturnReversal(order, returnDoc).catch((err) => console.error('Seller return reversal failed:', err.message));
+  }
   if (!order.refundReason) {
     order.refundReason = 'Product return';
   }

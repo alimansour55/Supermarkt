@@ -19,6 +19,7 @@ import { normalizeVariantId } from '../utils/productCatalog.js';
 import { getMarketplaceSettings, resolveCommissionRate } from './marketplace.service.js';
 import { pushStatusHistory } from './orderManagement.service.js';
 import { createUserNotification } from './userNotification.service.js';
+import { postShipmentSettlement } from './sellerLedger.service.js';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const idOf = (v) => String(v?._id || v || '');
@@ -99,6 +100,10 @@ export async function planMarketplaceItems(items = [], { deliveryZoneId = null, 
 export async function createShipmentsForOrder(order, plan, { lineTotals = [] } = {}) {
   if (!plan.sellerGroups.length) return [];
   const settings = await getMarketplaceSettings();
+  // Share of the gross the customer actually pays (after coupons, points, wallet) — applied to
+  // each seller-shipped COD shipment so the cash collected across packages adds up to the total.
+  const gross = (Number(order.subtotal) || 0) + (Number(order.deliveryFee) || 0);
+  const payableRatio = gross > 0 ? Math.min(1, (Number(order.total) || 0) / gross) : 0;
 
   const docs = plan.sellerGroups.map((group, n) => {
     const items = group.indices.map((i) => {
@@ -144,12 +149,20 @@ export async function createShipmentsForOrder(order, plan, { lineTotals = [] } =
       fulfillmentFee,
       sellerNet: round2(subtotal + deliveryFee - commissionTotal - fulfillmentFee),
       paymentMethod: order.paymentMethod,
+      collectAmount: order.paymentMethod === 'cod' && group.fulfilledBy === 'seller'
+        ? round2((subtotal + deliveryFee) * payableRatio)
+        : 0,
       status: 'pending',
       statusHistory: [{ status: 'pending' }],
     };
   });
 
   const shipments = await Shipment.insertMany(docs);
+  const sellerCollect = round2(shipments.reduce((s, sh) => s + (sh.collectAmount || 0), 0));
+  if (sellerCollect > 0) {
+    order.sellerCollectAmount = sellerCollect;
+    await Order.updateOne({ _id: order._id }, { $set: { sellerCollectAmount: sellerCollect } });
+  }
   notifySellersOfNewShipments(shipments).catch((err) => console.error('Seller new-order notify failed:', err.message));
   return shipments;
 }
@@ -188,7 +201,6 @@ const STORE_SHIPMENT_STATUS = {
   preparing: 'confirmed',
   out_for_delivery: 'shipped',
   delivered: 'delivered',
-  returned: 'returned',
   cancelled: 'cancelled',
 };
 
@@ -217,9 +229,7 @@ export async function syncShipmentsFromOrder(order) {
       if (!FINAL.has(shipment.status)) next = 'cancelled';
     } else if (shipment.fulfilledBy === 'store') {
       const mapped = STORE_SHIPMENT_STATUS[order.orderStatus];
-      if (mapped && mapped !== shipment.status && !(shipment.status === 'cancelled')) next = mapped;
-    } else if (order.orderStatus === 'returned' && shipment.status === 'delivered') {
-      next = 'returned';
+      if (mapped && mapped !== shipment.status && !FINAL.has(shipment.status)) next = mapped;
     }
     if (!next) continue;
     if (next === 'cancelled') {
@@ -229,6 +239,8 @@ export async function syncShipmentsFromOrder(order) {
     setShipmentStatus(shipment, next, { note: 'order', role: 'system' });
     // eslint-disable-next-line no-await-in-loop
     await shipment.save();
+    // eslint-disable-next-line no-await-in-loop
+    if (next === 'delivered') await postShipmentSettlement(shipment);
   }
 }
 
@@ -323,13 +335,17 @@ async function refundCancelledShipment(order, shipment) {
   const amount = remaining;
   const parts = [];
 
-  if (remaining > 0 && order.paymentStatus === 'pending' && !['paid', 'refunded'].includes(order.paymentStatus)) {
+  if (remaining > 0 && order.paymentStatus === 'pending') {
     const { isOnlinePaymentMethod } = await import('../constants/paymentMethods.js');
     if (!isOnlinePaymentMethod(order.paymentMethod)) {
       const cut = Math.min(remaining, Number(order.total) || 0);
       order.total = round2((Number(order.total) || 0) - cut);
       remaining = round2(remaining - cut);
       if (cut > 0) parts.push('reduced_cod');
+      if (shipment.collectAmount) {
+        order.sellerCollectAmount = round2(Math.max(0, (Number(order.sellerCollectAmount) || 0) - shipment.collectAmount));
+        shipment.collectAmount = 0;
+      }
     }
   }
 
@@ -433,6 +449,7 @@ export async function updateShipmentStatus(shipmentId, nextStatus, {
 
   setShipmentStatus(shipment, nextStatus, { note: String(note || '').slice(0, 500), actor, role });
   await shipment.save();
+  if (nextStatus === 'delivered') await postShipmentSettlement(shipment);
 
   await applyDerivedOrderStatus(order._id, actor);
   notifyCustomerOfShipment(shipment, nextStatus).catch((err) => console.error('Shipment notify failed:', err.message));
@@ -475,9 +492,7 @@ export function formatShipmentForSeller(shipment, order = null) {
     fulfillmentFee: s.fulfillmentFee,
     sellerNet: s.sellerNet,
     paymentMethod: s.paymentMethod,
-    collectOnDelivery: s.paymentMethod === 'cod' && s.fulfilledBy === 'seller'
-      ? round2(s.subtotal + s.deliveryFee)
-      : 0,
+    collectOnDelivery: s.collectAmount || 0,
     carrier: s.carrier,
     trackingNumber: s.trackingNumber,
     cancelReason: s.cancelReason,

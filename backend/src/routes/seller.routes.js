@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { sellerOnly, sellerCanEditCatalog, sellerOwnerOnly } from '../middleware/auth.js';
 import { uploadSingle, uploadProductMediaMultiple, optionalUploadFields } from '../middleware/upload.js';
+import { getMyFinance, getMyLedger } from '../controllers/sellerFinance.controller.js';
 import {
   getSellerMe,
   updateSellerProfile,
@@ -38,6 +39,9 @@ router.delete('/me/documents/:docId', deleteSellerDocument);
 router.post('/me/resubmit', sellerOwnerOnly, resubmitApplication);
 
 router.get('/dashboard', getSellerDashboard);
+
+router.get('/finance', getMyFinance);
+router.get('/finance/ledger', getMyLedger);
 
 router.get('/products', listSellerProducts);
 router.post('/products/media', sellerCanEditCatalog, uploadProductMediaMultiple('images', 10), uploadSellerProductMedia);

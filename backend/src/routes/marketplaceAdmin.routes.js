@@ -1,6 +1,16 @@
 import { Router } from 'express';
 import { requirePermission } from '../middleware/auth.js';
 import {
+  getSellerBalancesAdmin,
+  getSellerLedgerAdmin,
+  addSellerAdjustmentAdmin,
+  generatePayoutAdmin,
+  listPayoutsAdmin,
+  markPayoutPaidAdmin,
+  cancelPayoutAdmin,
+  exportPendingPayoutsAdmin,
+} from '../controllers/sellerFinance.controller.js';
+import {
   getMarketplaceAdminSettings,
   updateMarketplaceAdminSettings,
   listSellers,
@@ -38,5 +48,15 @@ router.post('/listings/:id/reject', ...write, rejectListing);
 
 router.get('/shipments', ...requirePermission('orders:read'), listShipmentsAdmin);
 router.post('/shipments/:id/status', ...requirePermission('orders:write'), updateShipmentStatusAdmin);
+
+// Seller money — reading balances needs reports access; moving money needs sellers:write.
+router.get('/finance/balances', ...requirePermission('reports:read'), getSellerBalancesAdmin);
+router.get('/sellers/:id/ledger', ...requirePermission('reports:read'), getSellerLedgerAdmin);
+router.post('/sellers/:id/adjustments', ...write, addSellerAdjustmentAdmin);
+router.post('/sellers/:id/payouts', ...write, generatePayoutAdmin);
+router.get('/payouts', ...requirePermission('reports:read'), listPayoutsAdmin);
+router.get('/payouts/export', ...write, exportPendingPayoutsAdmin);
+router.post('/payouts/:id/paid', ...write, markPayoutPaidAdmin);
+router.post('/payouts/:id/cancel', ...write, cancelPayoutAdmin);
 
 export default router;

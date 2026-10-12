@@ -345,6 +345,9 @@ export const respondToSubstitution = asyncHandler(async (req, res) => {
 export const assignDriver = asyncHandler(async (req, res) => {
   const order = await loadOrderForAdmin(req.params.id);
   const { driverId } = req.body;
+  if (driverId && order.hasStoreItems === false) {
+    throw new AppError('Sellers deliver every line of this order — no store driver is needed', 400);
+  }
 
   if (!order.fulfillmentLocationId) {
     const fulfillmentLocation = await resolveFulfillmentLocationForZone(order.deliveryZone);

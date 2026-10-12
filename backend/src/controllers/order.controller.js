@@ -1019,6 +1019,9 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     if (!ORDER_STATUS_VALUES.includes(orderStatus)) {
       throw new AppError('Invalid order status', 400);
     }
+    if (order.hasStoreItems === false) {
+      throw new AppError('Every line of this order ships from sellers — update its seller shipments instead', 400);
+    }
 
     if (!order.fulfillmentLocationId && ['preparing', 'confirmed', 'out_for_delivery'].includes(orderStatus)) {
       const fulfillmentLocation = await resolveFulfillmentLocationForZone(order.deliveryZone);

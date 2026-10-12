@@ -24,8 +24,14 @@ import { getGpsDeliveryEnabled, getDriverSettings } from '../services/storeSetti
 import User from '../models/User.js';
 import { CLOUDINARY_FOLDERS, uploadFileToCloudinary } from '../utils/cloudinaryUpload.js';
 
+/** Marketplace: lines a seller ships itself never travel with the store driver. */
+const storeDeliveredLines = (items = []) => items.filter((item) => item.fulfilledBy !== 'seller');
+
+/** Cash the store driver collects — sellers collect their own COD shipments. */
+const storeCollectTotal = (raw) => Math.max(0, Math.round(((raw.total || 0) - (raw.sellerCollectAmount || 0)) * 100) / 100);
+
 function formatDriverItems(items = []) {
-  return items.map((item) => ({
+  return storeDeliveredLines(items).map((item) => ({
     nameAr: item.nameAr,
     nameEn: item.nameEn,
     quantity: item.quantity,
@@ -57,7 +63,9 @@ export function formatDriverOrder(order, {
     subtotal: raw.subtotal,
     deliveryFee: raw.deliveryFee,
     discount: raw.discount,
-    total: raw.total,
+    total: storeCollectTotal(raw),
+    orderTotal: raw.total,
+    hasSellerShipments: (raw.items || []).some((item) => item.fulfilledBy === 'seller'),
     paymentMethod: raw.paymentMethod,
     paymentStatus: raw.paymentStatus,
     items,
@@ -89,10 +97,10 @@ function formatDriverHistoryOrder(order) {
     orderNumber: raw.orderNumber,
     orderStatus: raw.orderStatus,
     customerName: user?.name || null,
-    total: raw.total,
+    total: storeCollectTotal(raw),
     paymentMethod: raw.paymentMethod,
     paymentStatus: raw.paymentStatus,
-    itemCount: (raw.items || []).reduce((sum, item) => sum + (item.quantity || 0), 0),
+    itemCount: storeDeliveredLines(raw.items).reduce((sum, item) => sum + (item.quantity || 0), 0),
     shippingAddress: raw.shippingAddress,
     deliveredAt: raw.deliveredAt || null,
     deliveryFailureReasonAr: raw.deliveryFailureReasonAr || '',

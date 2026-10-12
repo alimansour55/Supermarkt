@@ -62,6 +62,8 @@ const shipmentSchema = new mongoose.Schema(
     /** What the seller earns: subtotal + deliveryFee − commission − fulfillmentFee. */
     sellerNet: { type: Number, default: 0 },
     paymentMethod: { type: String, trim: true, default: '' },
+    /** Cash-on-delivery money the seller collects itself (seller-shipped COD only). */
+    collectAmount: { type: Number, min: 0, default: 0 },
 
     status: { type: String, enum: SHIPMENT_STATUSES, default: 'pending', index: true },
     statusHistory: {

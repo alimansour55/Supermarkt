@@ -386,6 +386,8 @@ const orderSchema = new mongoose.Schema(
     sellerIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Seller' }],
     /** Seller-shipped delivery fees included in deliveryFee. */
     sellerShippingFee: { type: Number, min: 0, default: 0 },
+    /** COD cash collected by sellers for their own shipments; the store collects total − this. */
+    sellerCollectAmount: { type: Number, min: 0, default: 0 },
     estimatedDeliveryAt: { type: Date, default: null },
     cancellationReason: { type: String, trim: true, default: '' },
     cancelledAt: { type: Date, default: null },
