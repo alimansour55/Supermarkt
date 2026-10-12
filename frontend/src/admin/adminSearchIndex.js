@@ -17,6 +17,7 @@ import { ADMIN_NAV_GROUPS } from './adminNavGroups';
  */
 const NAV_KEYWORDS = {
   '/admin/sellers': ['seller', 'sellers', 'vendor', 'merchant', 'marketplace', 'بائع', 'بائعين', 'البائعون', 'تاجر', 'تجار', 'سوق', 'متجر خارجي'],
+  '/admin/seller-inbound': ['inbound', 'وارد', 'استلام', 'receive', 'warehouse', 'مخزن', 'مستودع', 'ASN'],
   '/admin/seller-payouts': ['payout', 'تحويل', 'تحويلات', 'مدفوعات', 'رصيد', 'balance', 'ledger', 'كشف حساب', 'settlement', 'تسوية', 'bank batch'],
   '/admin/seller-shipments': ['shipment', 'شحنة', 'شحنات', 'seller orders', 'طلبات البائعين', 'tracking', 'تتبع', 'manual refund', 'استرداد'],
   '/admin/listing-review': ['listing', 'approve', 'moderation', 'queue', 'مراجعة', 'اعتماد', 'منتجات البائعين', 'طابور'],

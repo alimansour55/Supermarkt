@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from '../../app/router';
-import { AlertTriangle, Banknote, CheckCircle2, ClipboardList, Clock, FileEdit, PackageX, Plus, Truck } from 'lucide-react';
+import { AlertTriangle, Banknote, Bell, CheckCircle2, ClipboardList, Clock, FileEdit, PackageX, Plus, Truck } from 'lucide-react';
 import { formatPrice } from '../../utils/formatters';
 import Loader from '../../components/ui/Loader';
 import { sellerApi } from '../../services/sellerApi';
@@ -16,6 +16,33 @@ function Stat({ icon: Icon, label, value, tone, to }) {
     </article>
   );
   return to ? <Link to={to} className="block">{body}</Link> : body;
+}
+
+function Notifications({ isAr }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => {
+    sellerApi.getNotifications({ limit: 6 }).then(({ data }) => {
+      setItems(data.data || []);
+      if (data.unreadCount) sellerApi.markNotificationsRead().catch(() => {});
+    }).catch(() => setItems([]));
+  }, []);
+  if (!items?.length) return null;
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <h2 className="flex items-center gap-2 border-b border-slate-100 px-5 py-3 font-bold"><Bell className="h-4 w-4 text-slate-500" />{isAr ? 'آخر التنبيهات' : 'Latest updates'}</h2>
+      <ul className="divide-y divide-slate-100">
+        {items.map((n) => (
+          <li key={n._id}>
+            <Link to={n.link?.startsWith('/seller-center') ? n.link : '/seller-center'} className={`block px-5 py-3 text-sm hover:bg-slate-50 ${n.readAt ? '' : 'bg-indigo-50/40'}`}>
+              <p className="font-semibold">{isAr ? n.titleAr : n.titleEn}</p>
+              <p className="text-slate-600">{isAr ? n.messageAr : n.messageEn}</p>
+              <p className="mt-0.5 text-xs text-slate-400">{new Date(n.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 export default function SellerDashboardPage() {
@@ -82,6 +109,8 @@ export default function SellerDashboardPage() {
         <Stat icon={AlertTriangle} tone="text-red-600" label={isAr ? 'مرفوضة — تحتاج تعديل' : 'Rejected — needs changes'} value={listings.rejected} to="/seller-center/products?listingStatus=rejected" />
         <Stat icon={PackageX} tone="text-orange-600" label={isAr ? 'نفد المخزون' : 'Out of stock'} value={stats.outOfStock} />
       </section>
+
+      <Notifications isAr={isAr} />
 
       <section className="grid gap-4 sm:grid-cols-3">
         <Stat icon={FileEdit} tone="text-slate-500" label={isAr ? 'مسودات' : 'Drafts'} value={listings.draft} to="/seller-center/products?listingStatus=draft" />

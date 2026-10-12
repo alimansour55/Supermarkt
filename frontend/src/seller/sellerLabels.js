@@ -44,6 +44,12 @@ export const PAYOUT_STATUS = {
   cancelled: { ar: 'ملغي', en: 'Cancelled', tone: 'bg-slate-200 text-slate-700' },
 };
 
+export const INBOUND_STATUS = {
+  pending: { ar: 'في الطريق للمخزن', en: 'On its way', tone: 'bg-amber-100 text-amber-900' },
+  received: { ar: 'تم الاستلام', en: 'Received', tone: 'bg-emerald-100 text-emerald-800' },
+  cancelled: { ar: 'ملغاة', en: 'Cancelled', tone: 'bg-slate-200 text-slate-700' },
+};
+
 export const FULFILLMENT = {
   seller: { ar: 'يشحنه البائع', en: 'Shipped by seller' },
   store: { ar: 'يشحنه المتجر', en: 'Shipped by store' },

@@ -120,6 +120,7 @@ export default [
       route('orders/:id', 'seller/pages/SellerOrderDetailPage.jsx'),
       route('finance', 'seller/pages/SellerFinancePage.jsx'),
       route('reviews', 'seller/pages/SellerReviewsPage.jsx'),
+      route('inbound', 'seller/pages/SellerInboundPage.jsx'),
       route('store', 'seller/pages/SellerStorePage.jsx'),
     ]),
   ]),

@@ -159,9 +159,9 @@ test('store-fulfilled stock only changes through received inbound shipments', as
 test('CSV import creates drafts and reports bad rows', async (ctx) => {
   if (skip) return ctx.skip('MongoDB not reachable');
   const csv = [
-    'nameAr,nameEn,price,categorySlug,stock,brand',
+    'nameAr,nameEn,price,category,stock,brand',
     'زعتر,Thyme,25,spices-ops,40,East',
-    '"شطة, حارة","Hot Chili, extra",35.5,spices-ops,12,',
+    '"شطة, حارة","Hot Chili, extra",35.5,توابل,12,',
     'ملح,Salt,10,no-such-category,5,',
   ].join('\n');
   const res = await call('POST', '/seller/products/import', { csv }, t.ownerToken);

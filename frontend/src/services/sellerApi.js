@@ -27,6 +27,18 @@ export const sellerApi = {
 
   getFinance: () => api.get('/seller/finance'),
   getMyReviews: (params) => api.get('/seller/reviews', { params }),
+  getNotifications: (params) => api.get('/my-notifications', { params }),
+  markNotificationsRead: () => api.patch('/my-notifications/read-all'),
+
+  listTeam: () => api.get('/seller/team'),
+  addTeamMember: (data) => api.post('/seller/team', data),
+  updateTeamMember: (id, data) => api.put(`/seller/team/${id}`, data),
+
+  listInbound: (params) => api.get('/seller/inbound', { params }),
+  createInbound: (data) => api.post('/seller/inbound', data),
+  cancelInbound: (id) => api.post(`/seller/inbound/${id}/cancel`),
+
+  importProducts: (csv) => api.post('/seller/products/import', { csv }, { timeout: 120_000 }),
   getLedger: (params) => api.get('/seller/finance/ledger', { params }),
 
   listShipments: (params) => api.get('/seller/shipments', { params }),

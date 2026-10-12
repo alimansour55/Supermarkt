@@ -442,31 +442,40 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, data: formatSellerProduct(product) });
 });
 
-const CSV_COLUMNS = ['nameAr', 'nameEn', 'price', 'categorySlug'];
+const CSV_COLUMNS = ['nameAr', 'nameEn', 'price'];
 const MAX_IMPORT_ROWS = 500;
 
 /**
- * Bulk create drafts from CSV text. Required columns: nameAr, nameEn, price, categorySlug.
+ * Bulk create drafts from CSV text. Required columns: nameAr, nameEn, price, and `category`
+ * (an Arabic or English category name, or its slug) — `categorySlug` is accepted too.
  * Optional: descriptionAr, descriptionEn, oldPrice, stock, brand, sku, barcode, unit, size,
  * fulfilledBy. Images are added afterwards in the editor. Returns a result per row.
  */
 export const importSellerProducts = asyncHandler(async (req, res) => {
   const { records, headers } = parseCsv(String(req.body?.csv || '').replace(/^\uFEFF/, ''));
   const missing = CSV_COLUMNS.filter((c) => !headers.includes(c));
+  if (!headers.includes('category') && !headers.includes('categorySlug')) missing.push('category');
   if (missing.length) throw new AppError(`Missing columns: ${missing.join(', ')}`, 400);
   if (!records.length) throw new AppError('The file has no product rows', 400);
   if (records.length > MAX_IMPORT_ROWS) throw new AppError(`Up to ${MAX_IMPORT_ROWS} rows per file`, 400);
 
-  const slugs = [...new Set(records.map((r) => r.categorySlug).filter(Boolean))];
-  const categories = await Category.find({ slug: { $in: slugs }, isActive: true }).select('_id slug').lean();
-  const categoryBySlug = new Map(categories.map((c) => [c.slug, c._id]));
+  // Match a category by slug, Arabic name or English name (case-insensitive).
+  const categories = await Category.find({ isActive: true }).select('_id slug nameAr nameEn').lean();
+  const categoryByKey = new Map();
+  for (const c of categories) {
+    [c.slug, c.nameAr, c.nameEn].filter(Boolean).forEach((k) => {
+      const key = String(k).trim().toLowerCase();
+      if (!categoryByKey.has(key)) categoryByKey.set(key, c._id);
+    });
+  }
 
   const results = [];
   for (const [i, row] of records.entries()) {
     const line = i + 2; // header is line 1
     try {
-      const category = categoryBySlug.get(row.categorySlug);
-      if (!category) throw new AppError(`Unknown category "${row.categorySlug}"`, 400);
+      const wanted = String(row.category || row.categorySlug || '').trim();
+      const category = categoryByKey.get(wanted.toLowerCase());
+      if (!category) throw new AppError(`Unknown category "${wanted}"`, 400);
       // eslint-disable-next-line no-await-in-loop
       const product = await createProductForSeller(req.seller, req.user, {
         ...row,

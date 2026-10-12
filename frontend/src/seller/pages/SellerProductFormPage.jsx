@@ -182,6 +182,8 @@ export default function SellerProductFormPage() {
     setSaving(true);
     try {
       const payload = toPayload(form);
+      // Warehouse stock is the store's to change — never send a (possibly stale) value back.
+      if (product?.fulfilledBy === 'store') delete payload.stock;
       if (!isEdit) {
         await sellerApi.createProduct({ ...payload, submit });
         toast.success(submit
@@ -301,7 +303,14 @@ export default function SellerProductFormPage() {
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label={isAr ? 'السعر (ج.م) *' : 'Price (EGP) *'}><input type="number" min="0" step="0.01" className={inputCls} value={form.price} onChange={set('price')} dir="ltr" /></Field>
           <Field label={isAr ? 'السعر قبل الخصم' : 'Price before discount'} hint={isAr ? 'اتركه فارغاً إن لم يوجد خصم' : 'Leave empty if no discount'}><input type="number" min="0" step="0.01" className={inputCls} value={form.oldPrice} onChange={set('oldPrice')} dir="ltr" /></Field>
-          <Field label={isAr ? 'المخزون المتاح' : 'Stock available'}><input type="number" min="0" className={inputCls} value={form.stock} onChange={set('stock')} dir="ltr" disabled={form.variants.length > 0} /></Field>
+          <Field
+            label={isAr ? 'المخزون المتاح' : 'Stock available'}
+            hint={product?.fulfilledBy === 'store'
+              ? (isAr ? 'المخزون في مخزننا — يزيد عند استلام شحناتك للمخزن' : 'Held in our warehouse — grows when we receive your inbound shipments')
+              : null}
+          >
+            <input type="number" min="0" className={inputCls} value={form.stock} onChange={set('stock')} dir="ltr" disabled={form.variants.length > 0 || product?.fulfilledBy === 'store'} />
+          </Field>
           <Field label="SKU" hint={isAr ? 'يُنشأ تلقائياً إن تُرك فارغاً' : 'Generated if left empty'}><input className={inputCls} value={form.sku} onChange={set('sku')} dir="ltr" /></Field>
           <Field label={isAr ? 'الباركود' : 'Barcode'}><input className={inputCls} value={form.barcode} onChange={set('barcode')} dir="ltr" /></Field>
           <Field label={isAr ? 'وحدة البيع' : 'Selling unit'}>

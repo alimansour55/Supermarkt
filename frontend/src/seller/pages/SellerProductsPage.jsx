@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from '../../app/router';
-import { Pause, Play, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { FileDown, FileUp, Pause, Play, Plus, Search, Send, Trash2 } from 'lucide-react';
 import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
@@ -10,10 +10,89 @@ import StatusBadge from '../StatusBadge';
 
 const TABS = ['', 'approved', 'pending_review', 'draft', 'rejected', 'paused'];
 
+const CSV_TEMPLATE = [
+  'nameAr,nameEn,price,category,oldPrice,stock,brand,sku,barcode,unit,size,descriptionAr,descriptionEn,fulfilledBy',
+  'عسل نحل,Bee Honey,120,عسل,140,25,Nahl,,,piece,500 g,عسل طبيعي,Natural honey,seller',
+].join('\n');
+
+function downloadTemplate() {
+  const blob = new Blob([`\uFEFF${CSV_TEMPLATE}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'products-template.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Bulk-create drafts from a CSV file; shows a result per row. */
+function CsvImport({ isAr, onDone }) {
+  const toast = useToast();
+  const fileRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const { data } = await sellerApi.importProducts(await file.text());
+      setResult(data);
+      onDone();
+    } catch (err) {
+      const data = err.response?.data;
+      if (data?.results) setResult(data);
+      else toast.error(apiError(err, isAr ? 'تعذّر الاستيراد' : 'Import failed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white disabled:opacity-50">
+          <FileUp className="h-4 w-4" />{busy ? (isAr ? 'جاري الاستيراد...' : 'Importing...') : (isAr ? 'استيراد ملف CSV' : 'Import CSV')}
+        </button>
+        <button type="button" onClick={downloadTemplate} className="inline-flex items-center gap-1.5 font-semibold text-indigo-700 hover:underline">
+          <FileDown className="h-4 w-4" />{isAr ? 'تحميل النموذج' : 'Download template'}
+        </button>
+        <span className="text-xs text-slate-500">{isAr ? 'اكتب اسم القسم كما يظهر في المتجر. تُنشأ المنتجات كمسودات — أضف الصور ثم أرسلها للمراجعة. حتى 500 صف.' : 'Write the category name as it appears in the store. Products are created as drafts — add photos, then submit. Up to 500 rows.'}</span>
+        <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={onFile} />
+      </div>
+      {result && (
+        <div className="mt-3">
+          <p className="font-semibold">
+            {isAr ? `تم إنشاء ${result.created} — فشل ${result.failed}` : `${result.created} created — ${result.failed} failed`}
+          </p>
+          {result.results?.some((r) => !r.ok) && (
+            <ul className="mt-1 max-h-40 overflow-y-auto text-xs text-red-700">
+              {result.results.filter((r) => !r.ok).map((r) => (
+                <li key={r.line}>{isAr ? `السطر ${r.line}` : `Line ${r.line}`}{r.nameEn ? ` (${r.nameEn})` : ''}: {r.error}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StockCell({ product, isAr, onSaved }) {
   const toast = useToast();
   const [value, setValue] = useState(String(product.stock ?? 0));
   const [busy, setBusy] = useState(false);
+  if (product.fulfilledBy === 'store') {
+    return (
+      <span className="text-sm">
+        {product.stock ?? 0}
+        <span className="block text-[11px] text-slate-500">{isAr ? 'في مخزننا' : 'in our warehouse'}</span>
+      </span>
+    );
+  }
   if (product.hasVariants) {
     return <span className="text-xs text-slate-500">{isAr ? 'حسب النوع' : 'Per variant'}</span>;
   }
@@ -111,6 +190,8 @@ export default function SellerProductsPage() {
           {isAr ? 'إضافة منتج' : 'Add product'}
         </Link>
       </div>
+
+      <CsvImport isAr={isAr} onDone={load} />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-1.5">
