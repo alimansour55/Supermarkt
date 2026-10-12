@@ -563,6 +563,8 @@ export function CartProvider({ children }) {
       storeDeliveryFee: totals.storeDeliveryFee,
       sellerShippingFee: totals.sellerShippingFee,
       sellerShipmentCount: totals.sellerShipmentCount,
+      storeSubtotal: totals.storeSubtotal,
+      hasStoreItems: totals.hasStoreItems,
       discountAmount: totals.discountAmount,
       total: totals.total,
       appliedCoupon,

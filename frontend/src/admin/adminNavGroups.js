@@ -178,6 +178,7 @@ export const ADMIN_NAV_GROUPS = [
     Icon: Building2,
     items: [
       { path: '/admin/sellers', labelAr: 'البائعون', labelEn: 'Sellers', Icon: Building2, badgeKey: 'pendingSellers', permission: 'sellers:read' },
+      { path: '/admin/seller-shipments', labelAr: 'شحنات البائعين', labelEn: 'Seller shipments', Icon: Truck, permission: 'orders:read' },
       { path: '/admin/listing-review', labelAr: 'مراجعة المنتجات', labelEn: 'Listing review', Icon: ClipboardCheck, badgeKey: 'pendingListings', permission: 'sellers:read' },
       { path: '/admin/marketplace-settings', labelAr: 'إعدادات السوق', labelEn: 'Marketplace settings', Icon: SlidersHorizontal, permission: 'settings:write' },
     ],

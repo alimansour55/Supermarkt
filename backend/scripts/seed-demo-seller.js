@@ -3,6 +3,7 @@
  * /seller-center/login. Refuses to run in production.
  *
  *   npm run seed:demo-seller --prefix backend
+ *   npm run seed:demo-seller --prefix backend -- --approve-listings   (also publish pending listings)
  *
  * Login: demo-seller@marketplus.test / DemoSeller#2026  (override with DEMO_SELLER_PASSWORD)
  */
@@ -55,6 +56,16 @@ await owner.save();
 
 seller.owner = owner._id;
 await seller.save();
+
+// Demo convenience: publish the demo seller's listings waiting for review.
+if (process.argv.includes('--approve-listings') && status === 'active') {
+  const { default: Product } = await import('../src/models/Product.js');
+  const { modifiedCount } = await Product.updateMany(
+    { seller: seller._id, listingStatus: 'pending_review' },
+    { $set: { listingStatus: 'approved', reviewedAt: new Date(), sellerNameAr: seller.nameAr, sellerNameEn: seller.nameEn, sellerSlug: seller.slug } },
+  );
+  console.log(`Approved ${modifiedCount} pending listing(s).`);
+}
 await syncSellerProductVisibility(seller._id);
 
 console.log(`Demo seller ready (${status}). Sign in at /seller-center/login with ${EMAIL}`);

@@ -256,6 +256,13 @@ export default function OrdersPage() {
               : (isAr ? 'تم تحديث مرحلة الاسترجاع' : 'Return stage updated'),
           );
           break;
+        case 'shipmentStatus': {
+          const { shipmentId, ...body } = payload;
+          await adminApi.updateShipmentStatusAdmin(shipmentId, body);
+          ({ data } = await adminApi.getOrder(selectedId));
+          toast.success(isAr ? 'تم تحديث الشحنة' : 'Shipment updated');
+          break;
+        }
         case 'invoice': {
           const res = await adminApi.downloadInvoice(selectedId, isAr ? 'ar' : 'en');
           downloadBlob(res.data, `invoice-${selected?.orderNumber || selectedId}.pdf`);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from '../../app/router';
-import { AlertTriangle, CheckCircle2, Clock, FileEdit, PackageX, Plus } from 'lucide-react';
+import { AlertTriangle, Banknote, CheckCircle2, ClipboardList, Clock, FileEdit, PackageX, Plus, Truck } from 'lucide-react';
+import { formatPrice } from '../../utils/formatters';
 import Loader from '../../components/ui/Loader';
 import { sellerApi } from '../../services/sellerApi';
 
@@ -55,6 +56,24 @@ export default function SellerDashboardPage() {
           <FileEdit className="h-5 w-5 shrink-0" aria-hidden />
           {isAr ? 'ارفع السجل التجاري والبطاقة الضريبية لتسريع مراجعة طلبك ←' : 'Upload your commercial register and tax card to speed up your review →'}
         </Link>
+      )}
+
+      {stats.orders && (
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat icon={ClipboardList} tone="text-amber-600" label={isAr ? 'طلبات بانتظار التأكيد' : 'Orders to confirm'} value={stats.orders.toConfirm} to="/seller-center/orders?status=pending" />
+          <Stat icon={Truck} tone="text-indigo-600" label={isAr ? 'جاهزة للشحن' : 'Ready to ship'} value={stats.orders.toShip} to="/seller-center/orders?status=confirmed" />
+          <Stat icon={Truck} tone="text-violet-600" label={isAr ? 'في الطريق' : 'In transit'} value={stats.orders.inTransit} to="/seller-center/orders?status=shipped" />
+          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <Banknote className="h-5 w-5 text-emerald-600" aria-hidden />
+              {isAr ? 'مبيعات آخر 30 يوماً' : 'Sales, last 30 days'}
+            </div>
+            <p className="mt-3 text-2xl font-extrabold">{formatPrice(stats.last30Days?.gross || 0)}</p>
+            <p className="text-xs text-slate-500">
+              {isAr ? `صافي ${formatPrice(stats.last30Days?.net || 0)} · ${stats.last30Days?.orders || 0} طلب` : `net ${formatPrice(stats.last30Days?.net || 0)} · ${stats.last30Days?.orders || 0} orders`}
+            </p>
+          </article>
+        </section>
       )}
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

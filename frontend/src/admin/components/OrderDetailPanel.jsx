@@ -6,6 +6,7 @@ import { getDeliveryFailureReason } from '../../constants/deliveryFailureReasons
 import OrderFlowSteps from '../../components/order/OrderFlowSteps';
 import DeliveryFailureModal from './DeliveryFailureModal';
 import OrderReturnsPanel from './OrderReturnsPanel';
+import OrderShipmentsPanel from './OrderShipmentsPanel';
 import AdminDriverAssignmentSection from './AdminDriverAssignmentSection';
 import OrderDeliveryLocationCard, { CustomerContactRow } from './OrderDeliveryLocationCard';
 import DetailSection from './orders/DetailSection';
@@ -254,6 +255,12 @@ export default function OrderDetailPanel({
               <tr key={i} className="hover:bg-slate-50/50">
                 <td className="px-4 py-2.5 font-medium text-text">
                   {isAr ? item.nameAr || item.nameEn : item.nameEn || item.nameAr}
+                  {item.seller && (
+                    <span className="block text-xs font-normal text-text-muted">
+                      {isAr ? 'البائع: ' : 'Seller: '}{isAr ? item.sellerNameAr : item.sellerNameEn}
+                      {' · '}{item.fulfilledBy === 'seller' ? (isAr ? 'يشحنه البائع' : 'seller ships') : (isAr ? 'يشحنه المتجر' : 'store ships')}
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-center text-text-muted">{item.quantity}</td>
                 <td className="px-3 py-2.5 text-end tabular-nums text-text-muted">{formatPrice(item.price)}</td>
@@ -289,6 +296,14 @@ export default function OrderDetailPanel({
         </table>
         </div>
       </DetailSection>
+
+      <OrderShipmentsPanel
+        order={order}
+        isAr={isAr}
+        updating={updating}
+        canWrite={hasPermission(user, 'orders:write')}
+        onOverride={(shipmentId, payload) => onAction?.('shipmentStatus', { shipmentId, ...payload })}
+      />
 
       <AdminDriverAssignmentSection
         order={order}

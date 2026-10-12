@@ -293,6 +293,8 @@ export const adminApi = {
   listListingQueue: (params) => api.get('/admin/marketplace/listings', { params }),
   approveListing: (id, data) => api.post(`/admin/marketplace/listings/${id}/approve`, data || {}),
   rejectListing: (id, data) => api.post(`/admin/marketplace/listings/${id}/reject`, data),
+  listSellerShipments: (params) => api.get('/admin/marketplace/shipments', { params }),
+  updateShipmentStatusAdmin: (id, data) => api.post(`/admin/marketplace/shipments/${id}/status`, data),
 };
 
 export default adminApi;

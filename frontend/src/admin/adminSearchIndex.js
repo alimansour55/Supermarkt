@@ -17,6 +17,7 @@ import { ADMIN_NAV_GROUPS } from './adminNavGroups';
  */
 const NAV_KEYWORDS = {
   '/admin/sellers': ['seller', 'sellers', 'vendor', 'merchant', 'marketplace', 'بائع', 'بائعين', 'البائعون', 'تاجر', 'تجار', 'سوق', 'متجر خارجي'],
+  '/admin/seller-shipments': ['shipment', 'شحنة', 'شحنات', 'seller orders', 'طلبات البائعين', 'tracking', 'تتبع', 'manual refund', 'استرداد'],
   '/admin/listing-review': ['listing', 'approve', 'moderation', 'queue', 'مراجعة', 'اعتماد', 'منتجات البائعين', 'طابور'],
   '/admin/marketplace-settings': ['commission', 'عمولة', 'payout', 'hold', 'marketplace', 'إعدادات السوق', 'شروط البيع'],
   '/admin': ['home', 'overview', 'رئيسية', 'الرئيسية', 'نظرة عامة', 'stats', 'احصائيات', 'إحصائيات', 'kpi'],

@@ -34,7 +34,8 @@ export default function FreeDeliveryProgress({ showWhenEmpty = false, linkToCart
   const { location } = useLocation();
   const { settings } = useStoreSettings();
   const {
-    subtotal,
+    storeSubtotal: subtotal,
+    hasStoreItems,
     totalItems,
     freeDeliveryRemaining,
     deliveryMethod,
@@ -46,6 +47,8 @@ export default function FreeDeliveryProgress({ showWhenEmpty = false, linkToCart
 
   const hasItems = totalItems > 0;
   if (!hasItems && !showWhenEmpty) return null;
+  // Free delivery is the store's — a cart of only seller-shipped items can't earn it.
+  if (hasItems && !hasStoreItems) return null;
 
   const threshold = location?.freeDeliveryThreshold ?? settings?.freeDeliveryThreshold ?? 500;
   const freeDeliveryMethods = resolveFreeDeliveryMethods(

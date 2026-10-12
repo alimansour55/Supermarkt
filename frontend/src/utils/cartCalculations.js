@@ -158,6 +158,8 @@ export function calculateCartTotals({
     storeDeliveryFee,
     sellerShippingFee,
     sellerShipmentCount,
+    storeSubtotal,
+    hasStoreItems: storeItems.length > 0,
     discountAmount,
     total,
     appliedCoupon: coupon,

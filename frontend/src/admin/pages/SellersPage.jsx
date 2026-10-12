@@ -164,6 +164,9 @@ function SellerDetail({ sellerId, isAr, onChanged, canWrite }) {
         <Link to={`/admin/listing-review?seller=${seller._id}`} className="text-xs font-semibold text-primary-700 hover:underline">
           {isAr ? 'منتجات البائع' : 'Seller listings'}
         </Link>
+        <Link to={`/admin/seller-shipments?filter=&seller=${seller._id}`} className="text-xs font-semibold text-primary-700 hover:underline">
+          {isAr ? 'شحنات البائع' : 'Seller shipments'}
+        </Link>
       </div>
       {seller.statusReason && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{isAr ? 'السبب: ' : 'Reason: '}{seller.statusReason}</p>}
       <StatusActions seller={seller} isAr={isAr} onChanged={refresh} canWrite={canWrite} />

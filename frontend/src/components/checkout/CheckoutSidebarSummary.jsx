@@ -224,6 +224,8 @@ export default function CheckoutSidebarSummary({
     appliedCoupon,
     discountCode,
     sellerShippingFee,
+    storeSubtotal,
+    hasStoreItems,
     updateQuantity,
     removeItem,
     setDeliveryMethod,
@@ -249,11 +251,11 @@ export default function CheckoutSidebarSummary({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50 shadow-sm">
-      {!hideFreeDeliveryBar && (
+      {!hideFreeDeliveryBar && (checkoutQuote?.marketplace?.hasStoreItems ?? hasStoreItems) !== false && (
         <div className="border-b border-slate-200/80 bg-white p-4">
           <CheckoutFreeDeliveryBar
             language={language}
-            subtotal={displaySubtotal}
+            subtotal={storeSubtotal ?? displaySubtotal}
             freeDeliveryRemaining={freeDeliveryRemaining}
             threshold={threshold}
             deliveryMethod={deliveryMethod}
