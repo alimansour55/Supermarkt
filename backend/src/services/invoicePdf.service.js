@@ -258,7 +258,10 @@ function lbl(invoice, key, isAr) {
   return invoice.labels?.[`${key}${isAr ? 'Ar' : 'En'}`] || '';
 }
 function itemName(item, isAr) {
-  return isAr ? (item.nameAr || item.nameEn || 'منتج') : (item.nameEn || item.nameAr || 'Product');
+  const name = isAr ? (item.nameAr || item.nameEn || 'منتج') : (item.nameEn || item.nameAr || 'Product');
+  // Marketplace lines name their seller — the invoice shows who sold what.
+  const seller = item.seller ? (isAr ? item.sellerNameAr || item.sellerNameEn : item.sellerNameEn || item.sellerNameAr) : '';
+  return seller ? `${name} — ${isAr ? 'البائع' : 'Seller'}: ${seller}` : name;
 }
 function customerName(order, user, isAr) {
   return user?.name || order.user?.name || (isAr ? 'عميل' : 'Customer');
