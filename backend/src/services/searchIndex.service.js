@@ -30,10 +30,12 @@ const PERIODIC_SYNC_MS = Number(process.env.MEILI_FULL_SYNC_HOURS || 6) * 60 * 6
 export const SEARCH_INDEXED_FIELDS = [
   'nameAr', 'nameEn', 'brand', 'brandAr', 'brandEn', 'searchKeywordsAr', 'searchKeywordsEn',
   'sku', 'barcode', 'category', 'mainCategory', 'categoryAncestors', 'isActive', 'soldCount', 'rating',
+  'sellerNameAr', 'sellerNameEn',
 ];
 
 const INDEX_SETTINGS = {
-  searchableAttributes: ['nameAr', 'nameEn', 'brand', 'keywords', 'category', 'codes'],
+  // `seller` last: a seller's name finds its products, but never outranks a product-name match.
+  searchableAttributes: ['nameAr', 'nameEn', 'brand', 'keywords', 'category', 'codes', 'seller'],
   displayedAttributes: ['id'],
   filterableAttributes: ['isActive'],
   sortableAttributes: ['soldCount', 'rating'],
@@ -133,6 +135,7 @@ export function toSearchDocument(product, categoryNames = new Map()) {
     keywords: joinNormalized([product.searchKeywordsAr || [], product.searchKeywordsEn || []]),
     category: joinNormalized(pathCategories.map((c) => [c.nameAr, c.nameEn])),
     codes: [product.sku, product.barcode].filter(Boolean).join(' '),
+    seller: joinNormalized([product.sellerNameAr || '', product.sellerNameEn || '']),
     isActive: product.isActive !== false,
     soldCount: Number(product.soldCount) || 0,
     rating: Number(product.rating) || 0,

@@ -83,6 +83,8 @@ import {
 import { optionalUploadSingle, parseOrderMultipartBody, uploadSingle } from '../middleware/upload.js';
 import { createOrderValidation, updateOrderItemsValidation, updateRecurringDeliveryValidation, driverTrackingLocationValidation, driverFailDeliveryValidation, validate } from '../middleware/validate.js';
 
+import { rateShipmentSeller } from '../controllers/sellerReview.controller.js';
+
 const router = Router();
 
 router.post('/calculate', optionalProtect, calculateTotals);
@@ -92,6 +94,7 @@ router.use(protect);
 router.post('/', optionalUploadSingle('paymentProof'), parseOrderMultipartBody, validate(createOrderValidation), createOrder);
 router.get('/my-orders', getMyOrders);
 router.get('/my', getMyOrders);
+router.post('/:id/shipments/:shipmentId/review', rateShipmentSeller);
 router.get('/recurring-deliveries', getMyRecurringDeliveries);
 router.patch('/recurring-deliveries/:id', validate(updateRecurringDeliveryValidation), updateMyRecurringDelivery);
 router.patch('/recurring-deliveries/:id/pause', pauseMyRecurringDelivery);

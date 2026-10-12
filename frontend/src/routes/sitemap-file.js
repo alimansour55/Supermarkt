@@ -1,5 +1,5 @@
 /**
- * /sitemaps/pages.xml, /sitemaps/categories.xml, /sitemaps/products-N.xml
+ * /sitemaps/pages.xml, /sitemaps/categories.xml, /sitemaps/sellers.xml, /sitemaps/products-N.xml
  */
 import { apiGetSafe } from '../server/api.server';
 import { resolveSiteUrl } from '../server/site.server';
@@ -19,6 +19,11 @@ async function pageEntries() {
 async function categoryEntries() {
   const body = await apiGetSafe('/sitemap/categories', { cached: true, ttlMs: 600_000 });
   return (body?.data || []).map((cat) => ({ path: `/category/${cat.slugPath}`, lastmod: cat.updatedAt }));
+}
+
+async function sellerEntries() {
+  const body = await apiGetSafe('/sitemap/sellers', { cached: true, ttlMs: 600_000 });
+  return (body?.data || []).map((s) => ({ path: `/sellers/${s.slug}`, lastmod: s.updatedAt }));
 }
 
 async function productEntries(page) {
@@ -42,6 +47,7 @@ export async function loader({ params, request }) {
   let entries = null;
   if (name === 'pages.xml') entries = await pageEntries();
   else if (name === 'categories.xml') entries = await categoryEntries();
+  else if (name === 'sellers.xml') entries = await sellerEntries();
   else {
     const match = name.match(/^products-(\d+)\.xml$/);
     if (match) entries = await productEntries(Number(match[1]));

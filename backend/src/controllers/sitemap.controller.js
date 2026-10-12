@@ -45,6 +45,13 @@ export const getSitemapProducts = asyncHandler(async (req, res) => {
   });
 });
 
+/** GET /api/sitemap/sellers — active marketplace sellers (store pages). */
+export const getSitemapSellers = asyncHandler(async (_req, res) => {
+  const { default: Seller } = await import('../models/Seller.js');
+  const sellers = await Seller.find({ status: 'active' }).select('slug updatedAt').lean();
+  res.json({ success: true, data: sellers.map((s) => ({ slug: s.slug, updatedAt: s.updatedAt })) });
+});
+
 /** GET /api/sitemap/categories — every active category with its full slug path. */
 export const getSitemapCategories = asyncHandler(async (_req, res) => {
   const categories = await Category.find({})

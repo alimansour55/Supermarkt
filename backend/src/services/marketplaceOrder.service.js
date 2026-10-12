@@ -544,5 +544,11 @@ export function formatShipmentForOrder(shipment, { isStaff = false } = {}) {
 
 export async function shipmentsForOrder(orderId, opts) {
   const shipments = await Shipment.find({ order: orderId }).sort({ shipmentNumber: 1 }).lean();
-  return shipments.map((s) => formatShipmentForOrder(s, opts));
+  const { default: SellerReview } = await import('../models/SellerReview.js');
+  const reviews = await SellerReview.find({ shipment: { $in: shipments.map((s) => s._id) } }).select('shipment rating').lean();
+  const ratingByShipment = new Map(reviews.map((r) => [String(r.shipment), r.rating]));
+  return shipments.map((s) => ({
+    ...formatShipmentForOrder(s, opts),
+    myRating: ratingByShipment.get(String(s._id)) ?? null,
+  }));
 }

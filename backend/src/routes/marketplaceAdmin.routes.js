@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requirePermission } from '../middleware/auth.js';
+import { listSellerReviewsAdmin, setSellerReviewStatusAdmin } from '../controllers/sellerReview.controller.js';
 import {
   getSellerBalancesAdmin,
   getSellerLedgerAdmin,
@@ -48,6 +49,9 @@ router.post('/listings/:id/reject', ...write, rejectListing);
 
 router.get('/shipments', ...requirePermission('orders:read'), listShipmentsAdmin);
 router.post('/shipments/:id/status', ...requirePermission('orders:write'), updateShipmentStatusAdmin);
+
+router.get('/seller-reviews', ...read, listSellerReviewsAdmin);
+router.put('/seller-reviews/:id', ...write, setSellerReviewStatusAdmin);
 
 // Seller money — reading balances needs reports access; moving money needs sellers:write.
 router.get('/finance/balances', ...requirePermission('reports:read'), getSellerBalancesAdmin);

@@ -18,6 +18,7 @@ import {
 } from '../services/marketplace.service.js';
 import { FULFILLMENT_MODES, SELLER_STATUSES } from '../constants/marketplace.js';
 import { formatSellerProduct } from './sellerPortal.controller.js';
+import { getSellerPerformance } from '../services/sellerReputation.service.js';
 import { validateSellerApplication, createSellerWithOwner } from './sellerPublic.controller.js';
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -128,12 +129,13 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
     { path: 'intendedCategories', select: 'nameAr nameEn slug' },
     { path: 'categoryCommissions.category', select: 'nameAr nameEn slug' },
   ]);
-  const [team, listingRows] = await Promise.all([
+  const [team, listingRows, performance] = await Promise.all([
     sellerUsers(seller._id),
     Product.aggregate([
       { $match: { seller: seller._id } },
       { $group: { _id: '$listingStatus', count: { $sum: 1 } } },
     ]),
+    getSellerPerformance(seller._id),
   ]);
   res.json({
     success: true,
@@ -141,6 +143,7 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
       ...formatSellerPrivate(seller, { revealBank: req.user.role === 'super_admin' }),
       internalNote: seller.internalNote || '',
       team,
+      performance,
       listings: Object.fromEntries(listingRows.map((r) => [r._id, r.count])),
     },
   });

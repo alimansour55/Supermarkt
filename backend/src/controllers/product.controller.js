@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Product from '../models/Product.js';
 import Brand from '../models/Brand.js';
+import Seller from '../models/Seller.js';
 import Category from '../models/Category.js';
 import { AppError } from '../utils/AppError.js';
 import { formatProduct } from '../utils/formatters.js';
@@ -110,6 +111,7 @@ async function buildAdminProductFilter(query) {
   if (query.isActive !== undefined && query.isActive !== '') {
     filter.isActive = query.isActive === 'true';
   }
+  await applyMarketplaceFilter(filter, query, { activeSellersOnly: false });
   await applyProductCategoryQueryToFilter(filter, query);
   applyStockFilter(filter, query, threshold);
   if (query.offers === 'true') applyOffersOnlyFilter(filter);
@@ -228,6 +230,28 @@ const applyProductSourceFilter = (filter, productSource) => {
   }
 };
 
+/**
+ * Marketplace filters shared by storefront and admin lists:
+ * - seller: a seller slug or id (unknown → no results)
+ * - soldBy: 'store' (store-owned) | 'marketplace' (third-party sellers)
+ * - fulfilledBy: 'store' | 'seller' (who delivers)
+ */
+async function applyMarketplaceFilter(filter, { seller, soldBy, fulfilledBy } = {}, { activeSellersOnly = true } = {}) {
+  if (seller) {
+    const key = String(seller).trim().toLowerCase();
+    const sellerDoc = await Seller.findOne({
+      ...(mongoose.Types.ObjectId.isValid(key) ? { _id: key } : { slug: key }),
+      ...(activeSellersOnly ? { status: 'active' } : {}),
+    }).select('_id').lean();
+    filter.seller = sellerDoc ? sellerDoc._id : new mongoose.Types.ObjectId();
+  } else if (soldBy === 'store') {
+    filter.seller = null;
+  } else if (soldBy === 'marketplace') {
+    filter.seller = { $ne: null };
+  }
+  if (['store', 'seller'].includes(fulfilledBy)) filter.fulfilledBy = fulfilledBy;
+}
+
 const buildFilter = async (query, { includeSearch = true } = {}) => {
   const filter = { isActive: true };
   const {
@@ -255,6 +279,7 @@ const buildFilter = async (query, { includeSearch = true } = {}) => {
   }
 
   applyProductSourceFilter(filter, productSource);
+  await applyMarketplaceFilter(filter, query);
   if (offers === 'true') applyOffersOnlyFilter(filter);
   if (minPrice || maxPrice) {
     filter.price = {};

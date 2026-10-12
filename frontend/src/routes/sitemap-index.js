@@ -18,6 +18,7 @@ export async function loader({ request }) {
   return xmlResponse(sitemapIndexXml(siteUrl, [
     { path: '/sitemaps/pages.xml' },
     { path: '/sitemaps/categories.xml' },
+    { path: '/sitemaps/sellers.xml' },
     ...Array.from({ length: productFiles }, (_, index) => ({ path: `/sitemaps/products-${index + 1}.xml` })),
   ]));
 }
