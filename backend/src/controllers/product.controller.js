@@ -28,6 +28,7 @@ import { toCsv, sendCsv, parseCsv } from '../utils/csvExport.js';
 import { logAudit, pickChanges } from '../services/auditLog.service.js';
 import { checkInventoryAlert } from '../services/inventoryAlert.service.js';
 import { resolveProductSearchFilter, arabicSearchPattern, fetchRankedProducts } from '../utils/searchQuery.js';
+import { sellerCategoryWithChildren } from '../services/sellerCategory.service.js';
 import { searchProductIds } from '../services/searchIndex.service.js';
 import { applyOffersOnlyFilter } from '../utils/offersFilter.js';
 import StoreSettings from '../models/StoreSettings.js';
@@ -238,8 +239,9 @@ const applyProductSourceFilter = (filter, productSource) => {
  * - seller: a seller slug or id (unknown → no results)
  * - soldBy: 'store' (store-owned) | 'marketplace' (third-party sellers)
  * - fulfilledBy: 'store' | 'seller' (who delivers)
+ * - sellerCategory: one of the seller's own store sections (with `seller` only)
  */
-async function applyMarketplaceFilter(filter, { seller, soldBy, fulfilledBy } = {}, { activeSellersOnly = true } = {}) {
+async function applyMarketplaceFilter(filter, { seller, soldBy, fulfilledBy, sellerCategory } = {}, { activeSellersOnly = true } = {}) {
   if (seller) {
     const key = String(seller).trim().toLowerCase();
     const sellerDoc = await Seller.findOne({
@@ -247,6 +249,11 @@ async function applyMarketplaceFilter(filter, { seller, soldBy, fulfilledBy } = 
       ...(activeSellersOnly ? { status: 'active' } : {}),
     }).select('_id').lean();
     filter.seller = sellerDoc ? sellerDoc._id : new mongoose.Types.ObjectId();
+    // The seller's own store section (id or slug), including its sub-sections.
+    if (sellerDoc && sellerCategory) {
+      const ids = await sellerCategoryWithChildren(sellerDoc._id, sellerCategory, { activeOnly: activeSellersOnly });
+      filter.sellerCategories = { $in: ids || [] };
+    }
   } else if (soldBy === 'store') {
     filter.seller = null;
   } else if (soldBy === 'marketplace') {

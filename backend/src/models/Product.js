@@ -173,16 +173,22 @@ const productSchema = new mongoose.Schema(
       max: 100,
       default: 0,
     },
+    /**
+     * Marketplace category. Required for store products; a seller listing may leave it empty
+     * until staff place it during review (it can't go live without one).
+     */
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Category',
-      required: true,
+      required() { return !this.seller; },
+      default: null,
       index: true,
     },
     mainCategory: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Category',
-      required: true,
+      required() { return !this.seller; },
+      default: null,
       index: true,
     },
     /**
@@ -395,6 +401,10 @@ const productSchema = new mongoose.Schema(
       default: 'approved',
       index: true,
     },
+    /** Seller's suggestion when no marketplace category fits — staff read it on review. */
+    categorySuggestion: { type: String, trim: true, default: '', maxlength: 120 },
+    /** The seller's own store sections (SellerCategory) — filters on the seller's store page. */
+    sellerCategories: [{ type: mongoose.Schema.Types.ObjectId, ref: 'SellerCategory' }],
     /** Mirrors of the seller's public card, so storefront responses need no join. */
     sellerNameAr: { type: String, trim: true, default: '' },
     sellerNameEn: { type: String, trim: true, default: '' },
@@ -426,6 +436,12 @@ const productSchema = new mongoose.Schema(
 );
 
 async function syncProductCategoryFields(doc) {
+  if (doc.seller && !doc.category) {
+    // Uncategorized seller draft — staff assign the marketplace category on review.
+    doc.mainCategory = null;
+    doc.categoryAncestors = [];
+    return;
+  }
   const fields = await resolveProductCategoryFields({
     mainCategory: doc.mainCategory,
     category: doc.category,
@@ -452,7 +468,12 @@ export function sellerListingIsVisible(doc) {
 }
 
 productSchema.pre('validate', function enforceSellerListingVisibility(next) {
-  if (this.seller) this.isActive = sellerListingIsVisible(this);
+  if (this.seller) {
+    if (this.listingStatus === 'approved' && !this.category) {
+      this.invalidate('category', 'Choose a marketplace category before this product goes live');
+    }
+    this.isActive = sellerListingIsVisible(this);
+  }
   next();
 });
 
@@ -490,6 +511,7 @@ productSchema.index({ isOffer: 1, isFeatured: 1, isBestSeller: 1 });
 productSchema.index({ activePromotionId: 1 });
 productSchema.index({ discount: -1 });
 productSchema.index({ seller: 1, listingStatus: 1, updatedAt: -1 });
+productSchema.index({ seller: 1, sellerCategories: 1 });
 productSchema.index({ listingStatus: 1, submittedAt: 1 });
 productSchema.index({ pendingChangesAt: 1 }, { partialFilterExpression: { pendingChangesAt: { $type: 'date' } } });
 

@@ -62,12 +62,24 @@ and pays sellers after a hold period.
   are shown only for shipments the seller delivers itself, and only while the shipment is open.
 - KYC documents are private Cloudinary assets, viewable through links that expire in 10 minutes.
 
+## Categories: two kinds
+
+- **Store sections** (`SellerCategory`) belong to one seller — "Honey", "Gift boxes"… Sellers
+  create them freely (one nesting level, unique names, up to 200), assign products to them
+  (applies instantly, no review) and customers filter the seller's store page by them
+  (`/api/products?seller=…&sellerCategory=…`; a parent includes its sub-sections). Empty or
+  hidden sections are not shown to customers.
+- **Marketplace category** is the admin category tree used for site-wide browsing, search,
+  SEO and category commissions. It is **optional** for sellers: they can leave it empty and
+  type a suggestion (`categorySuggestion`). Staff pick or correct it in Listing review —
+  a listing cannot be approved (or auto-published) without one, and a live listing keeps it.
+
 ## Where things are
 
 | Who | Screen |
 |---|---|
 | Customers | `/sell-with-us`, `/sellers/:slug` (store page), "From marketplace sellers" filter, shipments + seller rating on the order page |
-| Sellers | `/seller-center` — Dashboard, Orders, Products (incl. CSV import), Inbound stock, Earnings & payouts, Ratings, Store profile (documents, bank details, team) |
+| Sellers | `/seller-center` — Dashboard, Orders, Products (incl. CSV import, bulk section edits, duplicate), My sections, Inbound stock, Earnings & payouts, Ratings, Store profile (documents, bank details, team) |
 | Staff | Admin → Marketplace: Sellers, Seller shipments, Listing review, Seller inbound stock, Seller payouts, Marketplace settings |
 
 Permissions: `sellers:read` (view sellers and queues), `sellers:write` (approve, money moves);
@@ -75,14 +87,15 @@ seller shipments use `orders:*`, inbound stock uses `products:*`, payouts readin
 
 ## Code map
 
-- Models: `Seller`, `MarketplaceSettings`, `Shipment`, `SellerLedgerEntry`, `SellerPayout`,
+- Models: `Seller`, `SellerCategory`, `MarketplaceSettings`, `Shipment`, `SellerLedgerEntry`, `SellerPayout`,
   `SellerReview`, `InboundShipment`; marketplace fields on `Product`, `Order` and `User`.
 - Services: `marketplace.service.js` (settings, commission, seller status),
   `marketplaceOrder.service.js` (cart plan, shipments, status sync, cancellations),
-  `sellerLedger.service.js` (ledger, payouts), `sellerReputation.service.js` (ratings, performance).
+  `sellerLedger.service.js` (ledger, payouts), `sellerReputation.service.js` (ratings, performance),
+  `sellerCategory.service.js` (store sections).
 - Routes: `/api/sellers` (public), `/api/seller` (portal, always scoped to the signed-in seller),
   `/api/admin/marketplace` (staff).
-- Tests: `backend/test/marketplace.*.test.js` (onboarding, orders, finance, storefront, ops).
+- Tests: `backend/test/marketplace.*.test.js` (onboarding, orders, finance, storefront, ops, catalog).
 
 ## Local demo
 

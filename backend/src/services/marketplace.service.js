@@ -329,7 +329,13 @@ export function sanitizeSellerProductInput(body = {}, seller) {
     else if (field === 'stock') operational.stock = Math.floor(toNum(body.stock) ?? 0);
     else if (field === 'variants') operational.variants = sanitizeVariants(body.variants);
     else if (field === 'sku') operational.sku = cleanStr(body.sku, 80);
-    else if (field === 'fulfilledBy') {
+    else if (field === 'categorySuggestion') operational.categorySuggestion = cleanStr(body.categorySuggestion, 120);
+    else if (field === 'sellerCategories') {
+      // Ownership is checked by the caller (ownSellerCategoryIds) — this only shapes the list.
+      operational.sellerCategories = (Array.isArray(body.sellerCategories) ? body.sellerCategories : [])
+        .map((id) => String(id?._id ?? id))
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    } else if (field === 'fulfilledBy') {
       const mode = String(body.fulfilledBy);
       const allowed = seller?.allowedFulfillment?.length ? seller.allowedFulfillment : ['seller'];
       if (!FULFILLMENT_MODES.includes(mode) || !allowed.includes(mode)) {

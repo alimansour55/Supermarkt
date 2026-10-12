@@ -10,7 +10,7 @@ import { breadcrumbJsonLd } from '../seo/jsonLd';
 
 export default SellerStorefrontPage;
 
-export async function loader({ params }) {
+export async function loader({ params, request }) {
   const slug = params.slug;
   let body;
   try {
@@ -23,11 +23,31 @@ export async function loader({ params }) {
   const seller = body?.data;
   if (!seller) return data({ seller: null, notFound: true }, { status: 404 });
 
-  const productsBody = await apiGetSafe('/products', { params: { seller: slug, sort: 'best-selling', limit: 24 } });
+  // Same filters the page reads from the URL, so a shared filtered link renders filtered.
+  const url = new URL(request.url);
+  const pick = (k) => url.searchParams.get(k) || undefined;
+  const [productsBody, sectionsBody] = await Promise.all([
+    apiGetSafe('/products', {
+      params: {
+        seller: slug,
+        sort: pick('sort') || 'best-selling',
+        page: pick('page'),
+        limit: 24,
+        sellerCategory: pick('section'),
+        q: pick('q'),
+        minPrice: pick('minPrice'),
+        maxPrice: pick('maxPrice'),
+        inStock: pick('inStock'),
+      },
+    }),
+    apiGetSafe(`/sellers/${encodeURIComponent(slug)}/categories`),
+  ]);
   return {
     seller,
     products: productsBody?.data || null,
     pages: productsBody?.pagination?.pages || 1,
+    total: productsBody?.pagination?.total ?? null,
+    sections: sectionsBody?.data || [],
   };
 }
 

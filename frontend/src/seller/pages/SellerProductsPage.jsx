@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useOutletContext, useSearchParams } from '../../app/router';
-import { FileDown, FileUp, Pause, Play, Plus, Search, Send, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useOutletContext, useSearchParams } from '../../app/router';
+import {
+  Copy, FileDown, FileUp, FolderMinus, FolderPlus, PackageOpen, Pause, Pencil, Play, Plus, Search, Send, Tags, Trash2, X,
+} from 'lucide-react';
 import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
@@ -60,7 +62,7 @@ function CsvImport({ isAr, onDone }) {
         <button type="button" onClick={downloadTemplate} className="inline-flex items-center gap-1.5 font-semibold text-indigo-700 hover:underline">
           <FileDown className="h-4 w-4" />{isAr ? 'تحميل النموذج' : 'Download template'}
         </button>
-        <span className="text-xs text-slate-500">{isAr ? 'اكتب اسم القسم كما يظهر في المتجر. تُنشأ المنتجات كمسودات — أضف الصور ثم أرسلها للمراجعة. حتى 500 صف.' : 'Write the category name as it appears in the store. Products are created as drafts — add photos, then submit. Up to 500 rows.'}</span>
+        <span className="text-xs text-slate-500">{isAr ? 'storeCategory: أقسام متجرك مفصولة بـ | (تُنشأ تلقائياً). category: قسم المنصة (اختياري). تُنشأ المنتجات كمسودات — أضف الصور ثم أرسلها. حتى 500 صف.' : 'storeCategory: your sections separated by | (created automatically). category: marketplace category (optional). Products are created as drafts — add photos, then submit. Up to 500 rows.'}</span>
         <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={onFile} />
       </div>
       {result && (
@@ -128,34 +130,104 @@ function StockCell({ product, isAr, onSaved }) {
   );
 }
 
+/** Bulk bar: add/remove a store section, submit drafts, pause live products. */
+function BulkBar({ isAr, count, sections, busy, onSection, onAction, onClear }) {
+  const [sectionId, setSectionId] = useState('');
+  return (
+    <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-2xl bg-slate-900 p-3 text-sm text-white shadow-lg">
+      <span className="font-semibold">{isAr ? `${count} محدد` : `${count} selected`}</span>
+      <select value={sectionId} onChange={(e) => setSectionId(e.target.value)} className="rounded-lg bg-white/10 px-2 py-1.5 text-sm text-white ring-1 ring-white/20 [&>option]:text-slate-900">
+        <option value="">{isAr ? 'اختر قسماً…' : 'Choose a section…'}</option>
+        {sections.map((c) => <option key={c._id} value={c._id}>{c.parent ? '↳ ' : ''}{isAr ? c.nameAr : c.nameEn}</option>)}
+      </select>
+      <button type="button" disabled={busy || !sectionId} onClick={() => onSection({ add: [sectionId] })} className="inline-flex items-center gap-1 rounded-lg bg-indigo-500 px-2.5 py-1.5 font-semibold disabled:opacity-40">
+        <FolderPlus className="h-4 w-4" />{isAr ? 'إضافة للقسم' : 'Add to section'}
+      </button>
+      <button type="button" disabled={busy || !sectionId} onClick={() => onSection({ remove: [sectionId] })} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold ring-1 ring-white/30 disabled:opacity-40">
+        <FolderMinus className="h-4 w-4" />{isAr ? 'إزالة من القسم' : 'Remove from section'}
+      </button>
+      <span className="mx-1 h-5 w-px bg-white/20" aria-hidden />
+      <button type="button" disabled={busy} onClick={() => onAction('submit')} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold ring-1 ring-white/30 disabled:opacity-40">
+        <Send className="h-4 w-4" />{isAr ? 'إرسال المسودات' : 'Submit drafts'}
+      </button>
+      <button type="button" disabled={busy} onClick={() => onAction('pause')} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold ring-1 ring-white/30 disabled:opacity-40">
+        <Pause className="h-4 w-4" />{isAr ? 'إيقاف المعروض' : 'Pause live'}
+      </button>
+      <button type="button" onClick={onClear} className="ms-auto rounded-lg p-1.5 hover:bg-white/10" aria-label={isAr ? 'إلغاء التحديد' : 'Clear selection'}>
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+const SORT_OPTIONS = [
+  { value: 'updated', ar: 'آخر تعديل', en: 'Recently updated' },
+  { value: 'newest', ar: 'الأحدث', en: 'Newest' },
+  { value: 'name', ar: 'الاسم', en: 'Name' },
+  { value: 'price-asc', ar: 'السعر ↑', en: 'Price ↑' },
+  { value: 'price-desc', ar: 'السعر ↓', en: 'Price ↓' },
+  { value: 'stock-asc', ar: 'المخزون ↑', en: 'Stock ↑' },
+  { value: 'best-selling', ar: 'الأكثر مبيعاً', en: 'Best selling' },
+];
+
 export default function SellerProductsPage() {
   const { isAr, reload: reloadSeller } = useOutletContext();
   const toast = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const listingStatus = searchParams.get('listingStatus') || '';
+  const sellerCategory = searchParams.get('sellerCategory') || '';
+  const stockFilter = searchParams.get('stock') || '';
+  const sort = searchParams.get('sort') || 'updated';
   const [q, setQ] = useState('');
   const [items, setItems] = useState([]);
+  const [sections, setSections] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+
+  const setParam = (key, value) => {
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(key, value); else next.delete(key);
+    setPage(1);
+    setSelected(new Set());
+    setSearchParams(next);
+  };
+
+  const loadSections = useCallback(() => {
+    sellerApi.listCategories().then(({ data }) => setSections(data.data || [])).catch(() => {});
+  }, []);
+  useEffect(() => { loadSections(); }, [loadSections]);
 
   const load = useCallback(() => {
     setLoading(true);
-    sellerApi.listProducts({ listingStatus: listingStatus || undefined, q: q || undefined, page, limit: 25 })
+    sellerApi.listProducts({
+      listingStatus: listingStatus || undefined,
+      sellerCategory: sellerCategory || undefined,
+      stock: stockFilter || undefined,
+      sort,
+      q: q || undefined,
+      page,
+      limit: 25,
+    })
       .then(({ data }) => {
         setItems(data.data || []);
         setPagination(data.pagination || { page: 1, pages: 1, total: 0 });
       })
       .catch(() => toast.error(isAr ? 'تعذّر تحميل المنتجات' : 'Could not load products'))
       .finally(() => setLoading(false));
-  }, [listingStatus, q, page, isAr, toast]);
+  }, [listingStatus, sellerCategory, stockFilter, sort, q, page, isAr, toast]);
 
   useEffect(() => {
     const t = setTimeout(load, q ? 300 : 0);
     return () => clearTimeout(t);
   }, [load, q]);
 
+  const sectionById = useMemo(() => new Map(sections.map((c) => [String(c._id), c])), [sections]);
   const replaceItem = (next) => setItems((prev) => prev.map((p) => (p._id === next._id ? next : p)));
 
   const act = async (product, action) => {
@@ -165,6 +237,11 @@ export default function SellerProductsPage() {
       if (action === 'delete') {
         await sellerApi.deleteProduct(product._id);
         setItems((prev) => prev.filter((p) => p._id !== product._id));
+      } else if (action === 'duplicate') {
+        const { data } = await sellerApi.duplicateProduct(product._id);
+        toast.success(isAr ? 'تم إنشاء نسخة كمسودة — أضف الصور' : 'Copy created as a draft — add photos');
+        navigate(`/seller-center/products/${data.data._id}`);
+        return;
       } else {
         const fn = { submit: sellerApi.submitProduct, pause: sellerApi.pauseProduct, unpause: sellerApi.unpauseProduct }[action];
         const { data } = await fn(product._id);
@@ -179,56 +256,142 @@ export default function SellerProductsPage() {
     }
   };
 
+  const toggle = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allOnPage = items.length > 0 && items.every((p) => selected.has(p._id));
+  const toggleAll = () => setSelected(allOnPage ? new Set() : new Set(items.map((p) => p._id)));
+
+  const bulkSection = async (change) => {
+    setBulkBusy(true);
+    try {
+      await sellerApi.bulkProductCategories({ ids: [...selected], ...change });
+      toast.success(isAr ? 'تم تحديث الأقسام' : 'Sections updated');
+      setSelected(new Set());
+      load();
+      loadSections();
+    } catch (err) {
+      toast.error(apiError(err, isAr ? 'تعذّر التحديث' : 'Update failed'));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  /** Runs the per-product endpoint for each eligible selected product. */
+  const bulkAction = async (action) => {
+    const eligible = items.filter((p) => selected.has(p._id)
+      && (action === 'submit' ? ['draft', 'rejected'].includes(p.listingStatus) : p.listingStatus === 'approved'));
+    if (!eligible.length) {
+      toast.error(action === 'submit'
+        ? (isAr ? 'لا توجد مسودات ضمن المحدد' : 'No drafts in the selection')
+        : (isAr ? 'لا توجد منتجات معروضة ضمن المحدد' : 'No live products in the selection'));
+      return;
+    }
+    setBulkBusy(true);
+    const fn = action === 'submit' ? sellerApi.submitProduct : sellerApi.pauseProduct;
+    const results = await Promise.allSettled(eligible.map((p) => fn(p._id)));
+    const ok = results.filter((r) => r.status === 'fulfilled').length;
+    toast[ok === eligible.length ? 'success' : 'error'](isAr ? `تم ${ok} من ${eligible.length}` : `${ok} of ${eligible.length} done`);
+    setBulkBusy(false);
+    setSelected(new Set());
+    load();
+    reloadSeller();
+  };
+
   const tabLabel = (tab) => (tab ? label(LISTING_STATUS, tab, isAr) : (isAr ? 'الكل' : 'All'));
+  const selectCls = 'rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm';
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">{isAr ? 'منتجاتي' : 'My products'}</h1>
-        <Link to="/seller-center/products/new" className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-indigo-700">
-          <Plus className="h-4 w-4" aria-hidden />
-          {isAr ? 'إضافة منتج' : 'Add product'}
-        </Link>
+        <div>
+          <h1 className="text-2xl font-bold">{isAr ? 'منتجاتي' : 'My products'}</h1>
+          <p className="text-sm text-slate-500">{isAr ? `${pagination.total} منتج` : `${pagination.total} product(s)`}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setShowImport((v) => !v)} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ring-1 ring-slate-300 hover:bg-white">
+            <FileUp className="h-4 w-4" aria-hidden />{isAr ? 'استيراد CSV' : 'Import CSV'}
+          </button>
+          <Link to="/seller-center/categories" className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ring-1 ring-slate-300 hover:bg-white">
+            <Tags className="h-4 w-4" aria-hidden />{isAr ? 'أقسام متجري' : 'My sections'}
+          </Link>
+          <Link to="/seller-center/products/new" className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-indigo-700">
+            <Plus className="h-4 w-4" aria-hidden />{isAr ? 'إضافة منتج' : 'Add product'}
+          </Link>
+        </div>
       </div>
 
-      <CsvImport isAr={isAr} onDone={load} />
+      {showImport && <CsvImport isAr={isAr} onDone={() => { load(); loadSections(); }} />}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          {TABS.map((tab) => (
-            <button
-              key={tab || 'all'}
-              type="button"
-              onClick={() => { setPage(1); setSearchParams(tab ? { listingStatus: tab } : {}); }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${listingStatus === tab ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}
-            >
-              {tabLabel(tab)}
-            </button>
-          ))}
-        </div>
-        <label className="relative ms-auto w-full sm:w-64">
+      <div className="flex flex-wrap gap-1.5">
+        {TABS.map((tab) => (
+          <button
+            key={tab || 'all'}
+            type="button"
+            onClick={() => setParam('listingStatus', tab)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${listingStatus === tab ? 'bg-indigo-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'}`}
+          >
+            {tabLabel(tab)}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto]">
+        <label className="relative">
           <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={q}
             onChange={(e) => { setPage(1); setQ(e.target.value); }}
-            placeholder={isAr ? 'بحث بالاسم أو SKU' : 'Search name or SKU'}
-            className="w-full rounded-xl border border-slate-200 bg-white py-2 ps-9 pe-3 text-sm"
+            placeholder={isAr ? 'بحث بالاسم أو SKU أو الباركود' : 'Search name, SKU or barcode'}
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pe-3 ps-9 text-sm"
           />
         </label>
+        <select value={sellerCategory} onChange={(e) => setParam('sellerCategory', e.target.value)} className={selectCls} aria-label={isAr ? 'القسم' : 'Section'}>
+          <option value="">{isAr ? 'كل الأقسام' : 'All sections'}</option>
+          <option value="none">{isAr ? 'بدون قسم' : 'No section'}</option>
+          {sections.map((c) => <option key={c._id} value={c._id}>{c.parent ? '↳ ' : ''}{isAr ? c.nameAr : c.nameEn} ({c.productCount})</option>)}
+        </select>
+        <select value={stockFilter} onChange={(e) => setParam('stock', e.target.value)} className={selectCls} aria-label={isAr ? 'المخزون' : 'Stock'}>
+          <option value="">{isAr ? 'كل المخزون' : 'Any stock'}</option>
+          <option value="low">{isAr ? 'مخزون منخفض (≤5)' : 'Low stock (≤5)'}</option>
+          <option value="out">{isAr ? 'نفد المخزون' : 'Out of stock'}</option>
+        </select>
+        <select value={sort} onChange={(e) => setParam('sort', e.target.value === 'updated' ? '' : e.target.value)} className={selectCls} aria-label={isAr ? 'ترتيب' : 'Sort'}>
+          {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{isAr ? o.ar : o.en}</option>)}
+        </select>
       </div>
+
+      {selected.size > 0 && (
+        <BulkBar
+          isAr={isAr}
+          count={selected.size}
+          sections={sections}
+          busy={bulkBusy}
+          onSection={bulkSection}
+          onAction={bulkAction}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
           <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div>
         ) : items.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-500">
-            {isAr ? 'لا توجد منتجات هنا بعد.' : 'No products here yet.'}
-          </p>
+          <div className="flex flex-col items-center gap-3 p-10 text-center text-sm text-slate-500">
+            <PackageOpen className="h-10 w-10 text-slate-300" aria-hidden />
+            {isAr ? 'لا توجد منتجات هنا.' : 'No products here.'}
+            <Link to="/seller-center/products/new" className="font-semibold text-indigo-700 hover:underline">{isAr ? 'أضف منتجاً' : 'Add a product'}</Link>
+          </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-slate-50 text-start text-xs uppercase text-slate-500">
                 <tr>
+                  <th className="w-10 px-4 py-3">
+                    <input type="checkbox" checked={allOnPage} onChange={toggleAll} aria-label={isAr ? 'تحديد الكل' : 'Select all'} className="h-4 w-4 rounded" />
+                  </th>
                   <th className="px-4 py-3 text-start">{isAr ? 'المنتج' : 'Product'}</th>
                   <th className="px-4 py-3 text-start">{isAr ? 'السعر' : 'Price'}</th>
                   <th className="px-4 py-3 text-start">{isAr ? 'المخزون' : 'Stock'}</th>
@@ -238,7 +401,10 @@ export default function SellerProductsPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {items.map((p) => (
-                  <tr key={p._id} className="align-top">
+                  <tr key={p._id} className={`align-top ${selected.has(p._id) ? 'bg-indigo-50/50' : ''}`}>
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selected.has(p._id)} onChange={() => toggle(p._id)} aria-label={isAr ? 'تحديد' : 'Select'} className="h-4 w-4 rounded" />
+                    </td>
                     <td className="px-4 py-3">
                       <Link to={`/seller-center/products/${p._id}`} className="flex items-center gap-3 hover:text-indigo-700">
                         {typeof p.image === 'string' && p.image.startsWith('http') ? (
@@ -252,8 +418,23 @@ export default function SellerProductsPage() {
                           <span className="block text-xs text-slate-500">{label(FULFILLMENT, p.fulfilledBy, isAr)}</span>
                         </span>
                       </Link>
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {(p.sellerCategories || []).map((cid) => sectionById.get(cid)).filter(Boolean).map((c) => (
+                          <button key={c._id} type="button" onClick={() => setParam('sellerCategory', c._id)} className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100">
+                            {isAr ? c.nameAr : c.nameEn}
+                          </button>
+                        ))}
+                        {!p.hasMarketplaceCategory && (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800" title={isAr ? 'سيضعه فريق المراجعة في قسم المنصة' : 'Our review team will place it in a marketplace category'}>
+                            {isAr ? 'بدون قسم منصة' : 'No marketplace category'}
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 font-semibold">{formatPrice(p.price)}</td>
+                    <td className="px-4 py-3">
+                      <span className="font-semibold">{formatPrice(p.price)}</span>
+                      {p.oldPrice > p.price && <span className="block text-xs text-slate-400 line-through">{formatPrice(p.oldPrice)}</span>}
+                    </td>
                     <td className="px-4 py-3"><StockCell product={p} isAr={isAr} onSaved={replaceItem} /></td>
                     <td className="px-4 py-3">
                       <StatusBadge map={LISTING_STATUS} value={p.listingStatus} isAr={isAr} />
@@ -281,6 +462,12 @@ export default function SellerProductsPage() {
                             <Play className="h-3.5 w-3.5" aria-hidden />{isAr ? 'تشغيل' : 'Resume'}
                           </button>
                         )}
+                        <Link to={`/seller-center/products/${p._id}`} className="rounded-lg p-1.5 ring-1 ring-slate-200 hover:bg-slate-50" aria-label={isAr ? 'تعديل' : 'Edit'} title={isAr ? 'تعديل' : 'Edit'}>
+                          <Pencil className="h-4 w-4" aria-hidden />
+                        </Link>
+                        <button type="button" disabled={busyId === p._id} onClick={() => act(p, 'duplicate')} className="rounded-lg p-1.5 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50" aria-label={isAr ? 'نسخ' : 'Duplicate'} title={isAr ? 'نسخ كمنتج جديد' : 'Duplicate'}>
+                          <Copy className="h-4 w-4" aria-hidden />
+                        </button>
                         {!(p.soldCount > 0) && (
                           <button type="button" disabled={busyId === p._id} onClick={() => act(p, 'delete')} className="rounded-lg p-1.5 text-red-600 ring-1 ring-slate-200 hover:bg-red-50 disabled:opacity-50" aria-label={isAr ? 'حذف' : 'Delete'}>
                             <Trash2 className="h-4 w-4" aria-hidden />

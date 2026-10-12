@@ -6,6 +6,7 @@ export const marketplaceApi = {
   apply: (data) => api.post('/sellers/apply', data),
   getSeller: (slug) => api.get(`/sellers/${encodeURIComponent(slug)}`),
   getReviews: (slug, params) => api.get(`/sellers/${encodeURIComponent(slug)}/reviews`, { params }),
+  getCategories: (slug) => api.get(`/sellers/${encodeURIComponent(slug)}/categories`),
   rateShipment: (orderId, shipmentId, data) => api.post(`/orders/${orderId}/shipments/${shipmentId}/review`, data),
 };
 
@@ -45,7 +46,15 @@ export const sellerApi = {
   getShipment: (id) => api.get(`/seller/shipments/${id}`),
   updateShipmentStatus: (id, data) => api.post(`/seller/shipments/${id}/status`, data),
 
+  listCategories: () => api.get('/seller/categories'),
+  createCategory: (data) => api.post('/seller/categories', data),
+  updateCategory: (id, data) => api.put(`/seller/categories/${id}`, data),
+  deleteCategory: (id) => api.delete(`/seller/categories/${id}`),
+  reorderCategories: (ids) => api.put('/seller/categories/reorder', { ids }),
+
   listProducts: (params) => api.get('/seller/products', { params }),
+  duplicateProduct: (id) => api.post(`/seller/products/${id}/duplicate`),
+  bulkProductCategories: (data) => api.post('/seller/products/bulk-categories', data),
   getProduct: (id) => api.get(`/seller/products/${id}`),
   createProduct: (data) => api.post('/seller/products', data),
   updateProduct: (id, data) => api.put(`/seller/products/${id}`, data),

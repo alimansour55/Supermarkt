@@ -45,8 +45,11 @@ export const SELLER_CONTENT_FIELDS = [
   'searchKeywordsAr', 'searchKeywordsEn', 'specs', 'emoji', 'barcode',
 ];
 
-/** Operational fields — applied immediately, even on an approved (live) listing. */
-export const SELLER_OPERATIONAL_FIELDS = ['price', 'oldPrice', 'stock', 'variants', 'sku', 'fulfilledBy'];
+/**
+ * Operational fields — applied immediately, even on an approved (live) listing. The seller's
+ * own store sections are their shop's organisation, not marketplace content, so no review.
+ */
+export const SELLER_OPERATIONAL_FIELDS = ['price', 'oldPrice', 'stock', 'variants', 'sku', 'fulfilledBy', 'sellerCategories', 'categorySuggestion'];
 
 export const SELLER_EDITABLE_FIELDS = [...SELLER_CONTENT_FIELDS, ...SELLER_OPERATIONAL_FIELDS];
 

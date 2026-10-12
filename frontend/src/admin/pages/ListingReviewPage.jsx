@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from '../../app/router';
-import { CheckCircle2, ExternalLink, XCircle } from 'lucide-react';
+import { CheckCircle2, ExternalLink, FolderTree, Lightbulb, XCircle } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../adminApi';
@@ -12,6 +12,8 @@ import { hasPermission } from '../adminPermissions';
 import { formatPrice } from '../../utils/formatters';
 import { FULFILLMENT, LISTING_STATUS, apiError, label } from '../../seller/sellerLabels';
 import StatusBadge from '../../seller/StatusBadge';
+import MarketplaceCategoryPicker from '../../seller/MarketplaceCategoryPicker';
+import { getCategoryBreadcrumb } from '../../utils/categoryHelpers';
 
 const STATES = ['pending', 'approved', 'rejected', 'paused', 'draft'];
 
@@ -57,9 +59,14 @@ function Thumbs({ media }) {
   );
 }
 
-function ListingCard({ item, isAr, canWrite, onDone }) {
+function ListingCard({ item, isAr, canWrite, onDone, categories }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const currentCategory = String(item.pendingChanges?.category || item.categoryId || '');
+  const [categoryId, setCategoryId] = useState(currentCategory);
+  const [pickCategory, setPickCategory] = useState(!currentCategory);
+  const categoryDoc = categories.find((c) => String(c._id) === categoryId);
+  const reviewing = item.listingStatus === 'pending_review' || Boolean(item.pendingChangesAt);
   const isNew = item.listingStatus === 'pending_review';
   const changes = item.pendingChanges || {};
   const diffKeys = Object.keys(changes).filter((k) => !HIDDEN_DIFF_FIELDS.has(k));
@@ -73,7 +80,9 @@ function ListingCard({ item, isAr, canWrite, onDone }) {
     }
     setBusy(true);
     try {
-      if (kind === 'approve') await adminApi.approveListing(item._id);
+      if (kind === 'approve') {
+        await adminApi.approveListing(item._id, categoryId && categoryId !== currentCategory ? { category: categoryId } : undefined);
+      }
       else await adminApi.rejectListing(item._id, { note, unlist: kind === 'unlist' });
       toast.success(isAr ? 'تم' : 'Done');
       onDone();
@@ -109,7 +118,7 @@ function ListingCard({ item, isAr, canWrite, onDone }) {
           )}
           {canWrite && (isNew || item.pendingChangesAt) && (
             <>
-              <Button size="sm" disabled={busy} onClick={() => act('approve')}><CheckCircle2 className="h-4 w-4" />{isAr ? 'اعتماد' : 'Approve'}</Button>
+              <Button size="sm" disabled={busy || !categoryId} title={!categoryId ? (isAr ? 'اختر قسم المنصة أولاً' : 'Choose a marketplace category first') : undefined} onClick={() => act('approve')}><CheckCircle2 className="h-4 w-4" />{isAr ? 'اعتماد' : 'Approve'}</Button>
               <Button size="sm" variant="danger" disabled={busy} onClick={() => act('reject')}><XCircle className="h-4 w-4" />{isAr ? 'رفض' : 'Reject'}</Button>
             </>
           )}
@@ -119,11 +128,41 @@ function ListingCard({ item, isAr, canWrite, onDone }) {
         </div>
       </div>
 
+      {canWrite && reviewing && (
+        <div className={`mt-4 rounded-xl p-3 ring-1 ${categoryId ? 'bg-slate-50 ring-border' : 'bg-amber-50 ring-amber-200'}`}>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <FolderTree className="h-4 w-4 text-text-muted" aria-hidden />
+            <span className="font-semibold">{isAr ? 'قسم المنصة:' : 'Marketplace category:'}</span>
+            {categoryDoc
+              ? <span>{getCategoryBreadcrumb(categoryDoc, categories, isAr, ' › ')}</span>
+              : <span className="font-medium text-amber-800">{isAr ? 'لم يُحدد — اختر قسماً قبل الاعتماد' : 'Not set — choose one before approving'}</span>}
+            {categoryId && (
+              <button type="button" onClick={() => setPickCategory((v) => !v)} className="ms-auto text-xs font-semibold text-primary-700 hover:underline">
+                {pickCategory ? (isAr ? 'إغلاق' : 'Close') : (isAr ? 'تغيير' : 'Change')}
+              </button>
+            )}
+          </div>
+          {item.categorySuggestion && (
+            <p className="mt-2 flex items-center gap-1.5 text-sm text-amber-900">
+              <Lightbulb className="h-4 w-4" aria-hidden />
+              {isAr ? 'اقتراح البائع: ' : 'Seller suggests: '}<strong>{item.categorySuggestion}</strong>
+              <a href="/admin/categories" target="_blank" rel="noreferrer" className="ms-1 text-xs font-semibold text-primary-700 hover:underline">
+                {isAr ? 'إنشاء قسم' : 'Create category'}
+              </a>
+            </p>
+          )}
+          {pickCategory && (
+            <div className="mt-3">
+              <MarketplaceCategoryPicker categories={categories} value={categoryId} onChange={(v) => { setCategoryId(v); if (v) setPickCategory(false); }} isAr={isAr} allowClear={false} />
+            </div>
+          )}
+        </div>
+      )}
+
       {isNew && (
         <div className="mt-4 grid gap-4 md:grid-cols-[auto,1fr]">
           <Thumbs media={item.media} />
           <div className="space-y-1 text-sm">
-            <p><span className="text-text-muted">{isAr ? 'القسم: ' : 'Category: '}</span>{item.categorySlug || '—'}</p>
             {item.brand && <p><span className="text-text-muted">{isAr ? 'العلامة: ' : 'Brand: '}</span>{item.brand}</p>}
             <p className="line-clamp-3 whitespace-pre-line">{isAr ? item.descriptionAr || item.descriptionEn : item.descriptionEn || item.descriptionAr}</p>
             {item.variants?.length > 0 && (
@@ -185,6 +224,13 @@ export default function ListingReviewPage() {
   const [pagination, setPagination] = useState(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    adminApi.getCategories({ limit: 500 })
+      .then(({ data }) => setCategories(Array.isArray(data.data) ? data.data : []))
+      .catch(() => setCategories([]));
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -236,7 +282,7 @@ export default function ListingReviewPage() {
       ) : (
         <div className="space-y-4">
           {items.map((item) => (
-            <ListingCard key={item._id} item={item} isAr={isAr} canWrite={canWrite} onDone={() => { load(); refreshStats(); }} />
+            <ListingCard key={item._id} item={item} isAr={isAr} canWrite={canWrite} categories={categories} onDone={() => { load(); refreshStats(); }} />
           ))}
         </div>
       )}

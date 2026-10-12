@@ -7,6 +7,7 @@ import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { parsePagination, paginationMeta } from '../utils/listQuery.js';
 import { deleteManyFromCloudinary } from '../utils/cloudinaryUpload.js';
+import { resolveProductCategoryFields } from '../utils/productCategorySync.js';
 import { logAudit } from '../services/auditLog.service.js';
 import {
   getMarketplaceSettingsDoc,
@@ -301,6 +302,12 @@ export const approveListing = asyncHandler(async (req, res) => {
     product.pendingChanges = null;
     product.pendingChangesAt = null;
   }
+  // Staff place (or correct) the marketplace category while reviewing.
+  if (isId(req.body?.category)) {
+    Object.assign(product, await resolveProductCategoryFields({ category: req.body.category }));
+  }
+  if (!product.category) throw new AppError('Choose a marketplace category for this product first', 400);
+  if (product.category) product.categorySuggestion = '';
   if (hadNew) product.listingStatus = 'approved';
   product.reviewNote = String(req.body?.note || '').trim().slice(0, 1000);
   product.reviewedAt = new Date();

@@ -36,6 +36,11 @@ import {
 import { SELLER_DOCUMENT_TYPES, LISTING_STATUSES } from '../constants/marketplace.js';
 import { normalizePhone } from '../utils/phone.js';
 import { parseCsv } from '../utils/csvExport.js';
+import {
+  ownSellerCategoryIds,
+  resolveSellerCategoryNames,
+  sellerCategoryWithChildren,
+} from '../services/sellerCategory.service.js';
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -254,6 +259,9 @@ export function formatSellerProduct(product) {
     pendingChangesAt: product.pendingChangesAt,
     fulfilledBy: product.fulfilledBy || 'store',
     reservedStock: product.reservedStock || 0,
+    sellerCategories: (product.sellerCategories || []).map((c) => String(c?._id ?? c)),
+    hasMarketplaceCategory: Boolean(product.category),
+    categorySuggestion: product.categorySuggestion || '',
   };
 }
 
@@ -270,12 +278,22 @@ async function findOwnProduct(req) {
 }
 
 const canPublishDirectly = (seller) => seller.status === 'active' && seller.autoApproveListings === true;
+/** Auto-approved sellers still go through review when staff must place the product in a category. */
+const canPublish = (seller, product) => canPublishDirectly(seller) && Boolean(product.category);
 
 export const listSellerProducts = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query, 100);
   const filter = { seller: req.seller._id };
   if (LISTING_STATUSES.includes(req.query.listingStatus)) filter.listingStatus = req.query.listingStatus;
   if (req.query.pendingEdits === 'true') filter.pendingChangesAt = { $type: 'date' };
+  if (req.query.sellerCategory === 'none') {
+    filter.sellerCategories = { $size: 0 };
+  } else if (req.query.sellerCategory) {
+    const ids = await sellerCategoryWithChildren(req.seller._id, req.query.sellerCategory);
+    filter.sellerCategories = { $in: ids || [] };
+  }
+  if (req.query.stock === 'out') filter.stock = { $lte: 0 };
+  else if (req.query.stock === 'low') filter.stock = { $gt: 0, $lte: 5 };
   if (req.query.q) {
     const q = escapeRegex(String(req.query.q).slice(0, 100));
     filter.$or = [
@@ -285,8 +303,17 @@ export const listSellerProducts = asyncHandler(async (req, res) => {
       { barcode: { $regex: q, $options: 'i' } },
     ];
   }
+  const SORTS = {
+    updated: { updatedAt: -1 },
+    newest: { createdAt: -1 },
+    name: { nameEn: 1 },
+    'price-asc': { price: 1 },
+    'price-desc': { price: -1 },
+    'stock-asc': { stock: 1 },
+    'best-selling': { soldCount: -1 },
+  };
   const [items, total] = await Promise.all([
-    Product.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit).populate(POPULATE_CATEGORY),
+    Product.find(filter).sort(SORTS[req.query.sort] || SORTS.updated).skip(skip).limit(limit).populate(POPULATE_CATEGORY),
     Product.countDocuments(filter),
   ]);
   res.json({ success: true, data: items.map(formatSellerProduct), pagination: paginationMeta(page, limit, total) });
@@ -304,8 +331,24 @@ export const uploadSellerProductMedia = asyncHandler(async (req, res) => {
   res.json({ success: true, data: uploaded });
 });
 
+/**
+ * Resolve the marketplace category of a seller payload. It's optional: an empty value leaves
+ * the product uncategorized (staff place it on review) — except on a live listing, which
+ * keeps its current category.
+ */
 async function resolveCategoryInput(content, product = null) {
   if (content.category === undefined && content.mainCategory === undefined) return;
+  if (!content.category) {
+    const live = product && ['approved', 'paused'].includes(product.listingStatus);
+    delete content.mainCategory;
+    if (live || content.category === undefined) {
+      delete content.category;
+      return;
+    }
+    content.category = null;
+    content.mainCategory = null;
+    return;
+  }
   const fields = await resolveProductCategoryFields({
     mainCategory: content.mainCategory ?? product?.mainCategory,
     category: content.category ?? product?.category,
@@ -398,11 +441,11 @@ export async function createProductForSeller(seller, user, body, { submit = fals
 
   if (!content.nameAr || !content.nameEn) throw new AppError('Arabic and English names are required', 400);
   if (operational.price == null || operational.price <= 0) throw new AppError('A price above zero is required', 400);
-  if (!content.category) throw new AppError('Choose a category', 400);
   await resolveCategoryInput(content);
+  if (operational.sellerCategories) operational.sellerCategories = await ownSellerCategoryIds(seller._id, operational.sellerCategories);
 
   const slug = await uniqueProductSlug(content.nameEn);
-  const leaf = await Category.findById(content.category).select('slug').lean();
+  const leaf = content.category ? await Category.findById(content.category).select('slug').lean() : null;
   const sku = await resolveProductSku({
     sku: operational.sku,
     nameEn: content.nameEn,
@@ -415,6 +458,7 @@ export async function createProductForSeller(seller, user, body, { submit = fals
   const now = new Date();
   const fulfilledBy = operational.fulfilledBy || seller.defaultFulfillment || 'seller';
   const storeHeld = fulfilledBy === 'store';
+  const publishNow = submit && canPublish(seller, content);
   const product = new Product({
     ...content,
     ...operational,
@@ -428,9 +472,9 @@ export async function createProductForSeller(seller, user, body, { submit = fals
     sellerSlug: seller.slug,
     sellerSuspended: seller.status !== 'active',
     fulfilledBy,
-    listingStatus: submit ? (canPublishDirectly(seller) ? 'approved' : 'pending_review') : 'draft',
+    listingStatus: submit ? (publishNow ? 'approved' : 'pending_review') : 'draft',
     submittedAt: submit ? now : null,
-    ...(submit && canPublishDirectly(seller) ? { reviewedAt: now } : {}),
+    ...(publishNow ? { reviewedAt: now } : {}),
     createdBy: user._id,
     stockUpdatedAt: now,
   });
@@ -449,15 +493,15 @@ const CSV_COLUMNS = ['nameAr', 'nameEn', 'price'];
 const MAX_IMPORT_ROWS = 500;
 
 /**
- * Bulk create drafts from CSV text. Required columns: nameAr, nameEn, price, and `category`
- * (an Arabic or English category name, or its slug) — `categorySlug` is accepted too.
- * Optional: descriptionAr, descriptionEn, oldPrice, stock, brand, sku, barcode, unit, size,
+ * Bulk create drafts from CSV text. Required columns: nameAr, nameEn, price.
+ * Optional: `category` (marketplace category — Arabic/English name or slug; `categorySlug` is
+ * accepted too), `storeCategory` (the seller's own sections, "Honey|Gift boxes" — missing ones
+ * are created), descriptionAr, descriptionEn, oldPrice, stock, brand, sku, barcode, unit, size,
  * fulfilledBy. Images are added afterwards in the editor. Returns a result per row.
  */
 export const importSellerProducts = asyncHandler(async (req, res) => {
-  const { records, headers } = parseCsv(String(req.body?.csv || '').replace(/^\uFEFF/, ''));
+  const { records, headers } = parseCsv(String(req.body?.csv || '').replace(/^﻿/, ''));
   const missing = CSV_COLUMNS.filter((c) => !headers.includes(c));
-  if (!headers.includes('category') && !headers.includes('categorySlug')) missing.push('category');
   if (missing.length) throw new AppError(`Missing columns: ${missing.join(', ')}`, 400);
   if (!records.length) throw new AppError('The file has no product rows', 400);
   if (records.length > MAX_IMPORT_ROWS) throw new AppError(`Up to ${MAX_IMPORT_ROWS} rows per file`, 400);
@@ -477,12 +521,15 @@ export const importSellerProducts = asyncHandler(async (req, res) => {
     const line = i + 2; // header is line 1
     try {
       const wanted = String(row.category || row.categorySlug || '').trim();
-      const category = categoryByKey.get(wanted.toLowerCase());
-      if (!category) throw new AppError(`Unknown category "${wanted}"`, 400);
+      const category = wanted ? categoryByKey.get(wanted.toLowerCase()) : null;
+      if (wanted && !category) throw new AppError(`Unknown category "${wanted}"`, 400);
+      // eslint-disable-next-line no-await-in-loop
+      const sellerCategories = await resolveSellerCategoryNames(req.seller._id, row.storeCategory || row.storeCategories);
       // eslint-disable-next-line no-await-in-loop
       const product = await createProductForSeller(req.seller, req.user, {
         ...row,
-        category: String(category),
+        category: category ? String(category) : undefined,
+        sellerCategories,
         ...(row.fulfilledBy ? {} : { fulfilledBy: undefined }),
       });
       results.push({ line, ok: true, productId: product._id, nameEn: product.nameEn });
@@ -494,12 +541,58 @@ export const importSellerProducts = asyncHandler(async (req, res) => {
   res.status(created ? 201 : 400).json({ success: created > 0, created, failed: results.length - created, results });
 });
 
+/**
+ * Copy a product into a new draft — same details, price, variants and sections. Photos are not
+ * copied: each listing owns its uploads, so deleting one never breaks the other.
+ */
+export const duplicateSellerProduct = asyncHandler(async (req, res) => {
+  const source = await findOwnProduct(req);
+  const pending = source.pendingChanges || {};
+  const base = { ...source.toObject(), ...pending };
+  const copy = await createProductForSeller(req.seller, req.user, {
+    ...Object.fromEntries(['descriptionAr', 'descriptionEn', 'brand', 'size', 'unit', 'unitAr', 'unitEn', 'emoji',
+      'searchKeywordsAr', 'searchKeywordsEn', 'specs', 'price', 'oldPrice'].map((k) => [k, base[k]])),
+    nameAr: `${base.nameAr} (نسخة)`.slice(0, 200),
+    nameEn: `${base.nameEn} (copy)`.slice(0, 200),
+    category: base.category ? String(base.category) : undefined,
+    sellerCategories: (source.sellerCategories || []).map(String),
+    fulfilledBy: source.fulfilledBy,
+    stock: 0,
+    variants: (source.variants || []).map((v) => ({
+      type: v.type, valueAr: v.valueAr, valueEn: v.valueEn, price: v.price, oldPrice: v.oldPrice, stock: 0,
+    })),
+  });
+  await copy.populate(POPULATE_CATEGORY);
+  res.status(201).json({ success: true, data: formatSellerProduct(copy) });
+});
+
+/** Add / remove store sections on many products at once (list bulk action). */
+export const bulkSellerProductCategories = asyncHandler(async (req, res) => {
+  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : [])
+    .map(String).filter((id) => mongoose.Types.ObjectId.isValid(id)).slice(0, 200);
+  if (!ids.length) throw new AppError('Select at least one product', 400);
+  const add = await ownSellerCategoryIds(req.seller._id, req.body?.add);
+  const remove = await ownSellerCategoryIds(req.seller._id, req.body?.remove);
+  if (!add.length && !remove.length) throw new AppError('Choose a section to add or remove', 400);
+
+  const filter = { _id: { $in: ids }, seller: req.seller._id };
+  // Two steps — MongoDB can't $addToSet and $pull the same array in one update.
+  if (remove.length) await Product.updateMany(filter, { $pull: { sellerCategories: { $in: remove } } });
+  let modified = 0;
+  if (add.length) {
+    const r = await Product.updateMany(filter, { $addToSet: { sellerCategories: { $each: add } } });
+    modified = r.modifiedCount;
+  }
+  res.json({ success: true, data: { matched: ids.length, modified } });
+});
+
 export const updateSellerProduct = asyncHandler(async (req, res) => {
   const seller = req.seller;
   const product = await findOwnProduct(req);
   const { content, operational } = sanitizeSellerProductInput(req.body, seller);
   if (operational.price !== undefined && !(operational.price > 0)) throw new AppError('A price above zero is required', 400);
   await resolveCategoryInput(content, product);
+  if (operational.sellerCategories) operational.sellerCategories = await ownSellerCategoryIds(seller._id, operational.sellerCategories);
 
   if (operational.sku !== undefined && operational.sku !== product.sku) {
     operational.sku = operational.sku
@@ -550,7 +643,7 @@ export const submitSellerProduct = asyncHandler(async (req, res) => {
     throw new AppError('Only drafts or rejected products can be submitted', 400);
   }
   const now = new Date();
-  product.listingStatus = canPublishDirectly(req.seller) ? 'approved' : 'pending_review';
+  product.listingStatus = canPublish(req.seller, product) ? 'approved' : 'pending_review';
   product.submittedAt = now;
   if (product.listingStatus === 'approved') product.reviewedAt = now;
   product.reviewNote = '';
