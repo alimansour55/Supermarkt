@@ -1,0 +1,22 @@
+{
+  // GitHub Codespaces / Dev Containers: Node + MongoDB + Meilisearch, ready for `npm run dev`.
+  // Open from a phone: github.com/alimansour55/Supermarkt → Code → Codespaces.
+  "name": "MarketPlus",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "hostRequirements": { "cpus": 2, "memory": "8gb" },
+  "forwardPorts": [5173, 5001],
+  "portsAttributes": {
+    "5173": { "label": "Website", "onAutoForward": "notify" },
+    "5001": { "label": "API", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postAttachCommand": "bash .devcontainer/start.sh",
+  "customizations": {
+    "codespaces": { "openFiles": [".devcontainer/README.md"] }
+  }
+}

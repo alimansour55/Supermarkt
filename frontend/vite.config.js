@@ -77,6 +77,8 @@ export default defineConfig({
     host: '0.0.0.0',
     port: FRONTEND_PORT,
     strictPort: true,
+    // GitHub Codespaces forwards the port as https://<name>-5173.app.github.dev.
+    allowedHosts: ['.app.github.dev'],
     // No custom hmr.host — Vite uses the page hostname (192.168.x.x on phone).
     // A fixed hmr host was breaking mobile reload / page load.
     proxy: apiProxy,

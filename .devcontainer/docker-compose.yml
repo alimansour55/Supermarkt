@@ -1,0 +1,31 @@
+# Dev-only stack for Codespaces. MongoDB and Meilisearch are reachable from the app
+# container as mongo:27017 and meilisearch:7700. Not used in production.
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm
+    volumes:
+      - ../..:/workspaces:cached
+    command: sleep infinity
+    depends_on:
+      - mongo
+      - meilisearch
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.54
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: codespaces_dev_master_key_0123456789
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
+
+volumes:
+  mongo_data:
+  meili_data:
