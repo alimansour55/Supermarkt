@@ -335,9 +335,10 @@ async function refundCancelledShipment(order, shipment) {
   const amount = remaining;
   const parts = [];
 
+  // Cash on delivery not yet collected: the customer simply owes less. (Transfer methods with a
+  // proof screenshot are "pending" too, but that money was already sent — it must be refunded.)
   if (remaining > 0 && order.paymentStatus === 'pending') {
-    const { isOnlinePaymentMethod } = await import('../constants/paymentMethods.js');
-    if (!isOnlinePaymentMethod(order.paymentMethod)) {
+    if (order.paymentMethod === 'cod') {
       const cut = Math.min(remaining, Number(order.total) || 0);
       order.total = round2((Number(order.total) || 0) - cut);
       remaining = round2(remaining - cut);

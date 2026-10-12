@@ -257,3 +257,35 @@ test('seller-only orders cannot be driven by the store', async (ctx) => {
   assert.equal(after.sellerCollectAmount, 0);
   assert.equal(after.total, 0);
 });
+
+test('cancelling a shipment of a transfer-paid order flags a manual refund instead of lowering the total', async (ctx) => {
+  if (skip) return ctx.skip('MongoDB not reachable');
+  const { default: Product } = await import('../src/models/Product.js');
+  const bProduct = await Product.findOne({ nameEn: 'B Oil' }).lean();
+  const order = await Order.create({
+    orderNumber: `TRF-${Date.now()}`,
+    user: (await (await import('../src/models/User.js')).default.findOne({ phone: '+201033334444' }))._id,
+    items: [{ product: bProduct._id, nameAr: 'زيت', nameEn: 'B Oil', price: 200, quantity: 1, seller: t.B.seller._id, fulfilledBy: 'seller' }],
+    shippingAddress: { street: '5 Nile St', city: 'Cairo' },
+    phone: '+201033334444',
+    subtotal: 200,
+    deliveryFee: 30,
+    total: 230,
+    paymentMethod: 'instapay',
+    paymentStatus: 'pending',
+    orderStatus: 'pending',
+    hasStoreItems: false,
+    sellerIds: [t.B.seller._id],
+  });
+  const shipment = await Shipment.create({
+    order: order._id, orderNumber: order.orderNumber, shipmentNumber: `${order.orderNumber}-S1`,
+    seller: t.B.seller._id, fulfilledBy: 'seller', paymentMethod: 'instapay',
+    items: [{ itemIndex: 0, product: bProduct._id, price: 200, quantity: 1, lineTotal: 200 }],
+    subtotal: 200, deliveryFee: 30, statusHistory: [{ status: 'pending' }],
+  });
+  const res = await call('POST', `/seller/shipments/${shipment._id}/status`, { status: 'cancelled', note: 'Sold out' }, t.B.token);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.data.refund.status, 'manual_required', 'the customer already transferred the money');
+  assert.equal(res.body.data.refund.amount, 230);
+  assert.equal((await Order.findById(order._id).lean()).total, 230, 'the order total is not silently reduced');
+});
