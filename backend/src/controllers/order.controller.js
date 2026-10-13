@@ -23,7 +23,7 @@ import {
   notifyCustomerDriverAssigned,
   notifyCustomerTrackingLive,
 } from '../services/orderTrackingNotify.service.js';
-import { autoAssignDriverToOrder } from '../services/deliveryDispatch.service.js';
+import { autoAssignDriverToOrder, notifyDriver } from '../services/deliveryDispatch.service.js';
 import { pushStatusHistory } from '../services/orderManagement.service.js';
 import { ORDER_STATUS_VALUES } from '../constants/orderStatuses.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
@@ -1038,6 +1038,10 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   }
 
   await order.save();
+
+  if (orderStatus === 'out_for_delivery' && previousStatus !== 'out_for_delivery' && order.assignedDriver) {
+    notifyDriver(order.assignedDriver, order, 'dispatched');
+  }
 
   try {
     await awardPointsForOrder(order);

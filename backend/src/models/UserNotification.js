@@ -11,6 +11,8 @@ const USER_NOTIFICATION_TYPES = [
   'wallet_credit',
   'wallet_debit',
   'support_chat_reply',
+  'driver_assignment',
+  'driver_unassigned',
 ];
 
 const userNotificationSchema = new mongoose.Schema(

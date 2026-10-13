@@ -202,6 +202,7 @@ export const DEFAULT_PARTNER_REVENUE = {
 export const DEFAULT_DRIVER_SETTINGS = {
   autoAssignEnabled: false,
   autoAssignMaxActive: 0,
+  assignDispatchesOrder: true,
   availabilityEnabled: true,
   pickingChecklistEnabled: true,
   cashCalculatorEnabled: true,

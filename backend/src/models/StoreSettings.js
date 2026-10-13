@@ -752,6 +752,8 @@ const driverSettingsSchema = new mongoose.Schema(
     autoAssignEnabled: { type: Boolean, default: false },
     /** Skip drivers with at least this many active deliveries (0 = no cap). */
     autoAssignMaxActive: { type: Number, min: 0, max: 50, default: 0 },
+    /** Assigning a driver to a pending/confirmed/preparing order also moves it to out-for-delivery. */
+    assignDispatchesOrder: { type: Boolean, default: true },
     /** Show the online/offline control in the driver app and honour it in auto-assign. */
     availabilityEnabled: { type: Boolean, default: true },
     /** Show the picking checklist on the driver delivery screen. */

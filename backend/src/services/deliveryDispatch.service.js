@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import User from '../models/User.js';
 import { logAudit } from './auditLog.service.js';
 import { createNotification } from './notification.service.js';
+import { createUserNotification } from './userNotification.service.js';
 import { getDriverSettings } from './storeSettings.service.js';
 
 /**
@@ -90,4 +91,46 @@ export async function autoAssignDriverToOrder(order, { req } = {}) {
   });
 
   return driver;
+}
+
+const DRIVER_NOTICE_COPY = {
+  assigned: {
+    titleAr: 'طلب جديد لك',
+    titleEn: 'New delivery assigned',
+    messageAr: (n) => `تم تعيينك لطلب #${n} — جهّز نفسك للاستلام من الفرع.`,
+    messageEn: (n) => `You've been assigned order #${n} — get ready to pick it up.`,
+  },
+  dispatched: {
+    titleAr: 'طلب جاهز للتوصيل',
+    titleEn: 'Delivery ready to go',
+    messageAr: (n) => `طلب #${n} في الطريق الآن — ابدأ التوصيل وشارك موقعك.`,
+    messageEn: (n) => `Order #${n} is out for delivery — start the trip and share your location.`,
+  },
+  unassigned: {
+    titleAr: 'تم سحب طلب منك',
+    titleEn: 'Delivery removed',
+    messageAr: (n) => `لم يعد طلب #${n} معيّناً لك.`,
+    messageEn: (n) => `Order #${n} is no longer assigned to you.`,
+  },
+};
+
+/**
+ * In-app notice to a driver about one of their orders. `kind` is
+ * `assigned` | `dispatched` | `unassigned`. Never throws — a failed notice must not
+ * fail the order update that triggered it.
+ */
+export async function notifyDriver(driverId, order, kind) {
+  const copy = DRIVER_NOTICE_COPY[kind];
+  if (!driverId || !copy || !order) return;
+  const isActive = kind !== 'unassigned';
+  await createUserNotification({
+    userId: driverId,
+    type: isActive ? 'driver_assignment' : 'driver_unassigned',
+    titleAr: copy.titleAr,
+    titleEn: copy.titleEn,
+    messageAr: copy.messageAr(order.orderNumber),
+    messageEn: copy.messageEn(order.orderNumber),
+    link: isActive ? `/driver/deliveries/${order._id}` : '/driver',
+    data: { orderId: order._id, orderNumber: order.orderNumber, kind },
+  }).catch((err) => console.error('Driver notice failed:', err.message));
 }

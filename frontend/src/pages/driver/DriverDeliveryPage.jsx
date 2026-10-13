@@ -33,6 +33,7 @@ import {
 } from './driverUtils';
 
 const TERMINAL_STATUSES = ['delivered', 'delivery_failed'];
+const UPCOMING_STATUSES = ['pending', 'confirmed', 'preparing'];
 const REFRESH_MS = 30000;
 
 function relAgo(iso, isAr) {
@@ -165,6 +166,7 @@ export default function DriverDeliveryPage() {
   const hasMapCoords = addr?.lat != null && addr?.lng != null;
   const canStart = order?.canShareLocation && !isTerminal;
   const canComplete = order?.canComplete && !isTerminal;
+  const isUpcoming = UPCOMING_STATUSES.includes(order?.orderStatus);
   const isCod = order?.paymentMethod === 'cod' && order?.paymentStatus !== 'paid';
   const showPicking = (order?.items?.length || 0) > 0 && order?.pickingChecklistEnabled !== false;
   const showCashCalc = isCod && !isTerminal && order?.cashCalculatorEnabled !== false;
@@ -215,6 +217,12 @@ export default function DriverDeliveryPage() {
       setCompleteOpen(false);
     } catch (err) {
       setActionError(err.response?.data?.message || err.message);
+      // Someone else (admin, or an earlier retry) already changed this order.
+      if (err.response?.status === 409) {
+        setCompleteOpen(false);
+        setFailOpen(false);
+        loadOrder();
+      }
     } finally {
       setActionLoading(false);
     }
@@ -231,6 +239,12 @@ export default function DriverDeliveryPage() {
       setTrackingActive(false);
     } catch (err) {
       setActionError(err.response?.data?.message || err.message);
+      // Someone else (admin, or an earlier retry) already changed this order.
+      if (err.response?.status === 409) {
+        setCompleteOpen(false);
+        setFailOpen(false);
+        loadOrder();
+      }
     } finally {
       setActionLoading(false);
     }
@@ -283,6 +297,19 @@ export default function DriverDeliveryPage() {
           {isAr ? 'تحديث' : 'Refresh'}
         </button>
       </div>
+
+      {isUpcoming && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">
+            {isAr ? 'الطلب لم يخرج للتوصيل بعد' : 'Not dispatched yet'}
+          </p>
+          <p className="mt-1 text-amber-800">
+            {isAr
+              ? 'الطلب معيّن لك وما زال قيد التجهيز. ستتمكن من بدء التوصيل ومشاركة موقعك عندما يحوّله المتجر إلى «في الطريق».'
+              : "This order is assigned to you and still being prepared. You can start the trip and share your location once the store marks it out for delivery."}
+          </p>
+        </section>
+      )}
 
       {/* Order header */}
       <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">

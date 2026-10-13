@@ -17,7 +17,8 @@
     "repair:superadmin": "node scripts/repair-superadmin-login.js",
     "repair:user-indexes": "node scripts/repair-user-indexes.js",
     "check:maps": "node scripts/check-google-maps.js",
-    "test:acceptance:categories": "node scripts/acceptance-category-product-sync.js"
+    "test:acceptance:categories": "node scripts/acceptance-category-product-sync.js",
+    "test": "node --test --test-concurrency=1 \"tests/**/*.test.js\""
   },
   "keywords": [
     "supermarket",
@@ -50,6 +51,7 @@
     "twilio": "^6.0.2"
   },
   "devDependencies": {
+    "mongodb-memory-server": "^10.4.3",
     "nodemon": "^3.1.10"
   }
 }

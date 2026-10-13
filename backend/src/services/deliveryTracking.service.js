@@ -130,25 +130,57 @@ export async function ensureOrderTracking(order) {
 
   order.trackingEnabled = true;
 
+  const driverId = order.assignedDriver._id || order.assignedDriver;
   const existing = await DeliveryTracking.findOne({ orderId: order._id });
-  if (existing?.lat != null && existing?.lng != null) {
-    return existing;
-  }
+  const sameRun = existing
+    && String(existing.driverId) === String(driverId)
+    && existing.status !== 'completed';
+  if (sameRun) return existing;
 
-  const origin = await resolveOrigin(order);
-  const tracking = await DeliveryTracking.findOneAndUpdate(
+  // New run (first dispatch, reassignment, or a reattempt after a closed run): start
+  // with no position. The customer sees "waiting for the driver" until the first
+  // real GPS fix instead of a fake pin parked at the store.
+  return DeliveryTracking.findOneAndUpdate(
     { orderId: order._id },
     {
-      driverId: order.assignedDriver._id || order.assignedDriver,
-      lat: origin.lat,
-      lng: origin.lng,
-      status: 'en_route',
-      updatedAt: new Date(),
+      $set: { driverId, ...EMPTY_TRACKING_RUN },
+      $unset: { routePath: 1 },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   );
+}
 
-  return tracking;
+const EMPTY_TRACKING_RUN = {
+  lat: null,
+  lng: null,
+  heading: null,
+  speed: null,
+  status: 'idle',
+  updatedAt: null,
+  routePolyline: '',
+  routeEtaSeconds: null,
+  routeDistanceText: '',
+  routeDistanceMeters: null,
+  routeComputedAt: null,
+  routeComputedFrom: null,
+  firstLocationSmsSent: false,
+  etaAlertSmsSent: false,
+};
+
+/** Drop the tracking record when an order loses its driver, so no stale pin survives. */
+export async function clearOrderTracking(orderId) {
+  await DeliveryTracking.deleteOne({ orderId });
+}
+
+/**
+ * Remaining route / ETA for the driver's current position, reusing the cached route.
+ * Lighter than `buildTrackingSnapshot` — used on the driver's location ping.
+ */
+export async function estimateRemainingRoute(order, tracking) {
+  if (tracking?.lat == null || tracking?.lng == null) return null;
+  const destination = await resolveDestination(order);
+  if (!destination) return null;
+  return resolveRoute(order, tracking, { lat: tracking.lat, lng: tracking.lng }, destination);
 }
 
 export async function completeOrderTracking(orderId) {

@@ -4,6 +4,7 @@ import { mergeFreeDeliveryBanner, parseFreeDeliveryMethodsFromApi } from '../../
 export const DEFAULT_DRIVER_SETTINGS = {
   autoAssignEnabled: false,
   autoAssignMaxActive: 0,
+  assignDispatchesOrder: true,
   availabilityEnabled: true,
   pickingChecklistEnabled: true,
   cashCalculatorEnabled: true,
@@ -15,6 +16,7 @@ export function normalizeDriverSettings(raw = {}) {
   return {
     autoAssignEnabled: data.autoAssignEnabled === true,
     autoAssignMaxActive: Number.isFinite(maxActive) ? Math.min(50, Math.max(0, maxActive)) : 0,
+    assignDispatchesOrder: data.assignDispatchesOrder !== false,
     availabilityEnabled: data.availabilityEnabled !== false,
     pickingChecklistEnabled: data.pickingChecklistEnabled !== false,
     cashCalculatorEnabled: data.cashCalculatorEnabled !== false,

@@ -57,9 +57,10 @@ export default function OsmDeliveryTrackingMap({
     [routePath],
   );
 
+  // `isolate` keeps Leaflet's internal z-indexes (400–1000) from painting over modals.
   const shellClass = embedded
-    ? className
-    : `overflow-hidden rounded-xl border border-border ${className}`;
+    ? `isolate ${className}`
+    : `isolate overflow-hidden rounded-xl border border-border ${className}`;
 
   return (
     <div className={shellClass} dir="ltr">

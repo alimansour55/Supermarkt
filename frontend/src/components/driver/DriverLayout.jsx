@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../ui/Toast';
 import { orderService } from '../../services/apiServices';
 import DriverAvailabilityToggle from './DriverAvailabilityToggle';
+import UserNotificationBell from '../layout/UserNotificationBell';
 
 function initialsOf(name) {
   return (name || '?')
@@ -51,6 +52,20 @@ export default function DriverLayout() {
 
   const [config, setConfig] = useState(null);
   const [availabilityBusy, setAvailabilityBusy] = useState(false);
+  // Bumped when a new assignment notice arrives so the deliveries list refetches.
+  const [assignmentsVersion, setAssignmentsVersion] = useState(0);
+
+  const handleNewNotifications = useCallback((items) => {
+    const fresh = items.find((n) => !n.isRead && (n.type === 'driver_assignment' || n.type === 'driver_unassigned'));
+    if (!fresh) return;
+    setAssignmentsVersion((v) => v + 1);
+    if (fresh.type === 'driver_assignment') {
+      navigator.vibrate?.([200, 100, 200]);
+      toast.success(isAr ? fresh.titleAr : fresh.titleEn);
+    } else {
+      toast.info(isAr ? fresh.titleAr : fresh.titleEn);
+    }
+  }, [isAr, toast]);
 
   useEffect(() => {
     let mounted = true;
@@ -98,15 +113,22 @@ export default function DriverLayout() {
               </p>
             </div>
           </div>
-          {availabilityEnabled && (
-            <DriverAvailabilityToggle
-              available={config?.driverAvailable !== false}
-              busy={availabilityBusy}
-              onChange={setAvailability}
-              isAr={isAr}
-              variant="header"
+          <div className="flex shrink-0 items-center gap-1.5">
+            <UserNotificationBell
+              buttonClassName="text-white hover:bg-white/15"
+              panelClassName="fixed inset-x-4 top-[4.5rem] sm:absolute sm:inset-x-auto sm:end-0 sm:top-full sm:mt-2 sm:w-96"
+              onNewUnread={handleNewNotifications}
             />
-          )}
+            {availabilityEnabled && (
+              <DriverAvailabilityToggle
+                available={config?.driverAvailable !== false}
+                busy={availabilityBusy}
+                onChange={setAvailability}
+                isAr={isAr}
+                variant="header"
+              />
+            )}
+          </div>
         </div>
 
         {isOffline && (
@@ -119,7 +141,10 @@ export default function DriverLayout() {
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5 pb-28">
-        <Outlet context={{ config, setAvailability, availabilityBusy, isOffline }} />
+        <Outlet context={{
+          config, setAvailability, availabilityBusy, isOffline, assignmentsVersion,
+        }}
+        />
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] backdrop-blur-md">

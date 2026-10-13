@@ -17,16 +17,23 @@ const TYPE_ICONS = {
   order_tracking_live: MapPin,
   order_driver_location: MapPin,
   order_eta_update: Truck,
+  driver_assignment: Truck,
+  driver_unassigned: Package,
 };
 
 function notificationIconClass(type) {
   if (type === 'order_eta_update') return 'bg-emerald-100 text-emerald-700';
   if (type === 'order_tracking_live' || type === 'order_driver_location') return 'bg-indigo-100 text-indigo-700';
-  if (type === 'order_driver_assigned') return 'bg-sky-100 text-sky-700';
+  if (type === 'order_driver_assigned' || type === 'driver_assignment') return 'bg-sky-100 text-sky-700';
+  if (type === 'driver_unassigned') return 'bg-slate-100 text-slate-600';
   return 'bg-primary-100 text-primary-700';
 }
 
-export default function UserNotificationBell() {
+export default function UserNotificationBell({
+  buttonClassName = 'text-text hover:bg-surface',
+  panelClassName = 'absolute end-0 top-full mt-2 w-80 sm:w-96',
+  onNewUnread,
+} = {}) {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const { isAuthenticated } = useAuth();
@@ -36,13 +43,23 @@ export default function UserNotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const panelRef = useRef(null);
+  const lastUnreadRef = useRef(null);
+  const onNewUnreadRef = useRef(onNewUnread);
+  useEffect(() => { onNewUnreadRef.current = onNewUnread; }, [onNewUnread]);
 
   const load = useCallback(() => {
     if (!isAuthenticated) return;
     notificationService.getAll({ limit: 15 })
       .then(({ data }) => {
-        setItems(data.data || []);
-        setUnreadCount(data.unreadCount ?? 0);
+        const nextItems = data.data || [];
+        const nextUnread = data.unreadCount ?? 0;
+        setItems(nextItems);
+        setUnreadCount(nextUnread);
+        // Skip the first load so existing unread items don't count as "new".
+        if (lastUnreadRef.current != null && nextUnread > lastUnreadRef.current) {
+          onNewUnreadRef.current?.(nextItems);
+        }
+        lastUnreadRef.current = nextUnread;
       })
       .catch(() => {});
   }, [isAuthenticated]);
@@ -83,6 +100,7 @@ export default function UserNotificationBell() {
       try {
         await notificationService.markRead(notification._id);
         setUnreadCount((c) => Math.max(0, c - 1));
+        lastUnreadRef.current = Math.max(0, (lastUnreadRef.current ?? 1) - 1);
         setItems((prev) => prev.map((n) => (
           n._id === notification._id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n
         )));
@@ -102,7 +120,7 @@ export default function UserNotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative flex h-11 w-11 items-center justify-center rounded-xl text-text transition-colors hover:bg-surface"
+        className={`relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${buttonClassName}`}
         aria-label={isAr ? 'إشعارات الطلبات' : 'Order notifications'}
         aria-expanded={open}
       >
@@ -115,7 +133,7 @@ export default function UserNotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute end-0 top-full z-[60] mt-2 w-80 overflow-hidden rounded-xl border border-border bg-white shadow-xl sm:w-96">
+        <div className={`z-[60] overflow-hidden rounded-xl border border-border bg-white text-slate-900 shadow-xl ${panelClassName}`}>
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h2 className="text-sm font-semibold text-text">
               {isAr ? 'إشعارات الطلبات' : 'Order updates'}

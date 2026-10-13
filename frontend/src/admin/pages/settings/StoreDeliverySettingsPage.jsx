@@ -289,6 +289,16 @@ export default function StoreDeliverySettingsPage() {
           )}
 
           <SettingToggleCard
+            accent="sky"
+            checked={driver.assignDispatchesOrder !== false}
+            onChange={(v) => updateNested('driverSettings', 'assignDispatchesOrder', v)}
+            title={isAr ? 'التعيين يرسل الطلب للتوصيل' : 'Assigning a driver dispatches the order'}
+            description={isAr
+              ? 'عند التفعيل: تعيين مندوب لطلب قيد الانتظار أو التجهيز يحوّله فوراً إلى «في الطريق». عند الإيقاف: يظهر الطلب للمندوب كطلب قادم حتى تحوّله أنت إلى «في الطريق».'
+              : 'When on: assigning a driver to a pending or preparing order moves it straight to "Out for delivery". When off: the driver sees it as upcoming until you mark it out for delivery.'}
+          />
+
+          <SettingToggleCard
             accent="emerald"
             checked={driver.availabilityEnabled !== false}
             onChange={(v) => updateNested('driverSettings', 'availabilityEnabled', v)}

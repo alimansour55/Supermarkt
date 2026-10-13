@@ -17,7 +17,7 @@ import {
   visibleMessages,
 } from '../services/orderManagement.service.js';
 import { reverseOrderWallet } from '../services/wallet.service.js';
-import { getActiveDeliveryCounts } from '../services/deliveryDispatch.service.js';
+import { getActiveDeliveryCounts, notifyDriver } from '../services/deliveryDispatch.service.js';
 import { notifyOrderCustomerMessage } from '../services/notification.service.js';
 import {
   countUnreadCustomerMessages,
@@ -49,8 +49,12 @@ import {
   notifyOrderStatusChange,
   sendOrderStatusUpdateEmail,
 } from '../utils/sendEmail.js';
-import { canShowOrderTracking, ensureOrderTracking } from '../services/deliveryTracking.service.js';
-import { getGpsDeliveryEnabled } from '../services/storeSettings.service.js';
+import {
+  canShowOrderTracking,
+  clearOrderTracking,
+  ensureOrderTracking,
+} from '../services/deliveryTracking.service.js';
+import { getDriverSettings, getGpsDeliveryEnabled } from '../services/storeSettings.service.js';
 import {
   notifyCustomerDriverAssigned,
   notifyCustomerOrderStatus,
@@ -329,6 +333,10 @@ export const assignDriver = asyncHandler(async (req, res) => {
     }
   }
 
+  const refId = (ref) => (ref ? String(ref._id || ref) : null);
+  const previousDriverId = refId(order.assignedDriver);
+  const previousStatus = order.orderStatus;
+
   if (!driverId) {
     order.assignedDriver = null;
     order.assignedDriverAt = null;
@@ -337,20 +345,36 @@ export const assignDriver = asyncHandler(async (req, res) => {
     if (!driver || driver.role !== 'driver') {
       throw new AppError('Invalid delivery staff member', 400);
     }
-    order.assignedDriver = driver._id;
-    order.assignedDriverAt = new Date();
+    if (previousDriverId !== String(driver._id)) {
+      order.assignedDriver = driver._id;
+      order.assignedDriverAt = new Date();
+    }
 
+    const { assignDispatchesOrder } = await getDriverSettings();
     const shippableStatuses = ['pending', 'confirmed', 'preparing'];
-    if (shippableStatuses.includes(order.orderStatus)) {
+    if (assignDispatchesOrder !== false && shippableStatuses.includes(order.orderStatus)) {
       order.orderStatus = 'out_for_delivery';
+      pushStatusHistory(order, 'out_for_delivery', { changedBy: req.user._id });
     }
   }
 
   if (order.assignedDriver && order.orderStatus === 'out_for_delivery') {
     await ensureOrderTracking(order);
+  } else if (!order.assignedDriver) {
+    await clearOrderTracking(order._id);
   }
 
   await order.save();
+
+  const nextDriverId = refId(order.assignedDriver);
+  if (previousDriverId && previousDriverId !== nextDriverId) {
+    notifyDriver(previousDriverId, order, 'unassigned');
+  }
+  if (nextDriverId && previousDriverId !== nextDriverId) {
+    notifyDriver(nextDriverId, order, order.orderStatus === 'out_for_delivery' ? 'dispatched' : 'assigned');
+  } else if (nextDriverId && previousStatus !== 'out_for_delivery' && order.orderStatus === 'out_for_delivery') {
+    notifyDriver(nextDriverId, order, 'dispatched');
+  }
   await order.populate('assignedDriver', 'name phone');
   await order.populate('fulfillmentLocationId');
 

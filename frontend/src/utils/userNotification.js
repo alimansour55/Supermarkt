@@ -17,7 +17,15 @@ export function resolveNotificationOrderId(notification) {
 }
 
 /** Resolve in-app route for a customer notification */
+const DRIVER_TYPES = new Set(['driver_assignment', 'driver_unassigned']);
+
 export function getUserNotificationHref(notification) {
+  // Driver notices point into the driver app, never the customer order page.
+  if (DRIVER_TYPES.has(notification?.type)) {
+    const stored = notification?.link;
+    return typeof stored === 'string' && stored.startsWith('/driver') ? stored : '/driver';
+  }
+
   const orderId = resolveNotificationOrderId(notification);
   if (orderId) {
     const type = notification?.type;
@@ -37,6 +45,8 @@ export function getUserNotificationHref(notification) {
 
 export function getUserNotificationActionLabel(notification, isAr) {
   const type = notification?.type;
+  if (type === 'driver_assignment') return isAr ? 'فتح الطلب' : 'Open delivery';
+  if (type === 'driver_unassigned') return isAr ? 'طلباتي' : 'My deliveries';
   const status = notification?.data?.status;
   if (TRACKING_TYPES.has(type) || (type === 'order_status' && status === 'out_for_delivery')) {
     return isAr ? 'تتبع التوصيل' : 'Track delivery';

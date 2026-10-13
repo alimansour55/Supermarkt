@@ -70,7 +70,9 @@ async function notifyInApp({
 
 async function sendTrackingSms(phone, templateKey, order, lang, extras = {}) {
   if (!phone) return { skipped: true };
-  return sendOrderSms(phone, templateKey, { ...order, ...extras }, lang);
+  // Spreading a Mongoose document copies its internals, not its fields — use a plain object.
+  const plain = typeof order?.toObject === 'function' ? order.toObject() : order;
+  return sendOrderSms(phone, templateKey, { ...plain, ...extras }, lang);
 }
 
 export async function notifyCustomerOrderStatus(order, user, newStatus, previousStatus, lang = 'ar') {

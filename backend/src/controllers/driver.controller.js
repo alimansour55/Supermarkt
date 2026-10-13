@@ -5,10 +5,10 @@ import {
   assertDriverCanShareLocation,
   completeOrderTracking,
   ensureOrderTracking,
+  estimateRemainingRoute,
   isActiveDriverTrackingStatus,
   updateDriverTrackingLocation,
 } from '../services/deliveryTracking.service.js';
-import { pushStatusHistory } from '../services/orderManagement.service.js';
 import {
   applyDeliveryFailureReason,
   clearDeliveryFailureReason,
@@ -17,12 +17,14 @@ import {
 import { notifyOrderStatusChange } from '../utils/sendEmail.js';
 import { notifyOrderTimeline } from '../services/orderNotification.service.js';
 import { notifyCustomerDriverLocation, notifyCustomerOrderStatus } from '../services/orderTrackingNotify.service.js';
-import { buildTrackingSnapshot } from '../services/deliveryTracking.service.js';
 import { awardPointsForOrder } from '../services/loyalty.service.js';
 import { logAudit } from '../services/auditLog.service.js';
 import { getGpsDeliveryEnabled, getDriverSettings } from '../services/storeSettings.service.js';
 import User from '../models/User.js';
-import { CLOUDINARY_FOLDERS, uploadFileToCloudinary } from '../utils/cloudinaryUpload.js';
+import { CLOUDINARY_FOLDERS, deleteFromCloudinary, uploadFileToCloudinary } from '../utils/cloudinaryUpload.js';
+
+/** Statuses a driver can see before dispatch — assigned ahead of time, not yet on the road. */
+const DRIVER_UPCOMING_STATUSES = ['pending', 'confirmed', 'preparing'];
 
 function formatDriverItems(items = []) {
   return items.map((item) => ({
@@ -120,8 +122,20 @@ async function loadDriverOrder(orderId, driverId) {
   }).populate('user', 'name');
 }
 
-async function finalizeDriverOrderStatus(order, nextStatus, { driverId, failurePayload } = {}) {
+/**
+ * Move a driver's out-for-delivery order to `delivered` / `delivery_failed`.
+ *
+ * The write is a single conditional update (`orderStatus: 'out_for_delivery'`), so a
+ * double tap, a network retry or a concurrent admin change can only apply it once.
+ * Side effects (loyalty, emails, SMS, review request) run only for the request that
+ * actually changed the status. A repeat of an already-applied transition returns
+ * `changed: false` instead of an error, so client retries are safe.
+ */
+async function finalizeDriverOrderStatus(order, nextStatus, { driverId, failurePayload, proofPhoto } = {}) {
   const previousStatus = order.orderStatus;
+  if (previousStatus === nextStatus) {
+    return { previousStatus, nextStatus, changed: false, order };
+  }
   if (previousStatus !== 'out_for_delivery') {
     throw new AppError('Only out-for-delivery orders can be updated by the driver', 400);
   }
@@ -137,32 +151,59 @@ async function finalizeDriverOrderStatus(order, nextStatus, { driverId, failureP
     clearDeliveryFailureReason(order);
   }
 
-  order.orderStatus = nextStatus;
+  const now = new Date();
+  const set = {
+    orderStatus: nextStatus,
+    deliveryFailureReasonKey: order.deliveryFailureReasonKey,
+    deliveryFailureReasonAr: order.deliveryFailureReasonAr,
+    deliveryFailureReasonEn: order.deliveryFailureReasonEn,
+  };
   if (nextStatus === 'delivered') {
-    order.deliveredAt = new Date();
+    set.deliveredAt = now;
     if (order.paymentMethod === 'cod' && order.paymentStatus === 'pending') {
-      order.paymentStatus = 'paid';
+      set.paymentStatus = 'paid';
     }
   }
+  if (proofPhoto) {
+    set.deliveryProofPhoto = proofPhoto;
+  }
 
-  await completeOrderTracking(order._id);
-  pushStatusHistory(order, nextStatus, { changedBy: driverId, note: statusNote });
-  await order.save();
+  const updated = await Order.findOneAndUpdate(
+    { _id: order._id, assignedDriver: driverId, orderStatus: 'out_for_delivery' },
+    {
+      $set: set,
+      $push: {
+        statusHistory: { status: nextStatus, changedAt: now, note: statusNote, changedBy: driverId },
+      },
+    },
+    { new: true, runValidators: true },
+  ).populate('user', 'name');
+
+  if (!updated) {
+    // Another request got there first — idempotent if it reached the same status.
+    const current = await loadDriverOrder(order._id, driverId);
+    if (current?.orderStatus === nextStatus) {
+      return { previousStatus, nextStatus, changed: false, order: current };
+    }
+    throw new AppError('This delivery was already updated — refresh to see its current status', 409);
+  }
+
+  await completeOrderTracking(updated._id);
 
   try {
-    await awardPointsForOrder(order);
+    await awardPointsForOrder(updated);
   } catch (err) {
     console.error('Loyalty award skipped:', err.message);
   }
 
   try {
-    await notifyOrderStatusChange(order._id, nextStatus, previousStatus);
+    await notifyOrderStatusChange(updated._id, nextStatus, previousStatus);
   } catch (err) {
     console.error('Order status email failed:', err.message);
   }
 
   try {
-    const populated = await Order.findById(order._id).populate('user', 'name email phone');
+    const populated = await Order.findById(updated._id).populate('user', 'name email phone');
     await notifyOrderTimeline(populated, populated.user, nextStatus);
     await notifyCustomerOrderStatus(populated, populated.user, nextStatus, previousStatus)
       .catch((err) => console.error('Order tracking notify failed:', err.message));
@@ -176,14 +217,14 @@ async function finalizeDriverOrderStatus(order, nextStatus, { driverId, failureP
     console.error('Order status SMS failed:', err.message);
   }
 
-  return { previousStatus, nextStatus };
+  return { previousStatus, nextStatus, changed: true, order: updated };
 }
 
 export const getDriverDeliveries = asyncHandler(async (req, res) => {
   const flags = await getDriverOrderFlags();
   const orders = await Order.find({
     assignedDriver: req.user._id,
-    orderStatus: 'out_for_delivery',
+    orderStatus: { $in: ['out_for_delivery', ...DRIVER_UPCOMING_STATUSES] },
   })
     .populate('user', 'name')
     .sort({ assignedDriverAt: -1, createdAt: -1 })
@@ -263,38 +304,28 @@ export const updateDriverOrderLocation = asyncHandler(async (req, res) => {
     throw new AppError('Latitude and longitude are required', 400);
   }
 
-  order.trackingEnabled = true;
-  await order.save();
-  await ensureOrderTracking(order);
-
-  const tracking = await updateDriverTrackingLocation(order._id, {
+  const point = {
     lat,
     lng,
     heading,
     speed,
     status: status || 'en_route',
-  });
+  };
+
+  // Hot path (every ~20 s per driver): one write in the common case. The order and
+  // tracking record are only touched again when tracking has not started yet.
+  let tracking = await updateDriverTrackingLocation(order._id, point);
+  if (!tracking) {
+    if (!order.trackingEnabled) {
+      await Order.updateOne({ _id: order._id }, { $set: { trackingEnabled: true } });
+      order.trackingEnabled = true;
+    }
+    await ensureOrderTracking(order);
+    tracking = await updateDriverTrackingLocation(order._id, point);
+  }
 
   if (!tracking) {
     throw new AppError('Tracking record not found for this order', 404);
-  }
-
-  const populated = await Order.findById(order._id)
-    .populate('user', 'name email phone')
-    .populate('assignedDriver', 'name phone')
-    .populate('fulfillmentLocationId');
-
-  if (populated?.user) {
-    const snapshot = await buildTrackingSnapshot(populated, { forCustomer: true });
-    notifyCustomerDriverLocation(
-      populated,
-      populated.user,
-      tracking,
-      {
-        etaText: snapshot?.route?.etaText || '',
-        etaSeconds: snapshot?.route?.etaSeconds || null,
-      },
-    ).catch((err) => console.error('Driver location notify failed:', err.message));
   }
 
   res.json({
@@ -308,32 +339,71 @@ export const updateDriverOrderLocation = asyncHandler(async (req, res) => {
       updatedAt: tracking.updatedAt,
     },
   });
+
+  // Customer notices (throttled in-app update, first-location and "nearby" SMS) run
+  // after the response so a slow route lookup or SMS gateway never delays the driver.
+  notifyCustomerAfterPing(order._id, tracking)
+    .catch((err) => console.error('Driver location notify failed:', err.message));
 });
+
+async function notifyCustomerAfterPing(orderId, tracking) {
+  const order = await Order.findById(orderId).populate('user', 'name email phone');
+  if (!order?.user) return;
+  const route = await estimateRemainingRoute(order, tracking).catch(() => null);
+  await notifyCustomerDriverLocation(order, order.user, tracking, {
+    etaText: route?.etaText || '',
+    etaSeconds: route?.etaSeconds ?? null,
+  });
+}
 
 export const completeDriverDelivery = asyncHandler(async (req, res) => {
   const order = await loadDriverOrder(req.params.id, req.user._id);
   if (!order) throw new AppError('Delivery not found', 404);
 
-  if (req.file) {
-    const uploaded = await uploadFileToCloudinary(req.file, CLOUDINARY_FOLDERS.deliveryProofs);
-    order.deliveryProofPhoto = { url: uploaded.url, publicId: uploaded.publicId };
+  const flags = await getDriverOrderFlags();
+  if (order.orderStatus === 'delivered') {
+    // Retry of a completion that already went through.
+    res.json({ success: true, data: formatDriverOrder(order, flags) });
+    return;
+  }
+  if (order.orderStatus !== 'out_for_delivery') {
+    throw new AppError('Only out-for-delivery orders can be updated by the driver', 400);
   }
 
-  const { previousStatus, nextStatus } = await finalizeDriverOrderStatus(order, 'delivered', {
-    driverId: req.user._id,
-  });
+  // Upload only once the order is known to be completable, and clean up if the
+  // completion does not go through, so failed attempts leave no orphan photos.
+  let proofPhoto = null;
+  if (req.file) {
+    const uploaded = await uploadFileToCloudinary(req.file, CLOUDINARY_FOLDERS.deliveryProofs);
+    proofPhoto = { url: uploaded.url, publicId: uploaded.publicId };
+  }
 
-  await logAudit({
-    req,
-    action: 'driver_complete_delivery',
-    entityType: 'order',
-    entityId: order._id,
-    entityLabel: order.orderNumber,
-    changes: { orderStatus: { from: previousStatus, to: nextStatus } },
-  });
+  let result;
+  try {
+    result = await finalizeDriverOrderStatus(order, 'delivered', {
+      driverId: req.user._id,
+      proofPhoto,
+    });
+  } catch (err) {
+    if (proofPhoto?.publicId) await deleteFromCloudinary(proofPhoto.publicId);
+    throw err;
+  }
+  if (!result.changed && proofPhoto?.publicId) {
+    await deleteFromCloudinary(proofPhoto.publicId);
+  }
 
-  const refreshed = await loadDriverOrder(order._id, req.user._id);
-  res.json({ success: true, data: formatDriverOrder(refreshed) });
+  if (result.changed) {
+    await logAudit({
+      req,
+      action: 'driver_complete_delivery',
+      entityType: 'order',
+      entityId: order._id,
+      entityLabel: order.orderNumber,
+      changes: { orderStatus: { from: result.previousStatus, to: result.nextStatus } },
+    });
+  }
+
+  res.json({ success: true, data: formatDriverOrder(result.order, flags) });
 });
 
 export const failDriverDelivery = asyncHandler(async (req, res) => {
@@ -341,23 +411,25 @@ export const failDriverDelivery = asyncHandler(async (req, res) => {
   if (!order) throw new AppError('Delivery not found', 404);
 
   const { deliveryFailureReasonKey, deliveryFailureReason } = req.body;
-  const { previousStatus, nextStatus } = await finalizeDriverOrderStatus(order, 'delivery_failed', {
+  const result = await finalizeDriverOrderStatus(order, 'delivery_failed', {
     driverId: req.user._id,
     failurePayload: { deliveryFailureReasonKey, deliveryFailureReason },
   });
 
-  await logAudit({
-    req,
-    action: 'driver_fail_delivery',
-    entityType: 'order',
-    entityId: order._id,
-    entityLabel: order.orderNumber,
-    changes: {
-      orderStatus: { from: previousStatus, to: nextStatus },
-      deliveryFailureReason: getDeliveryFailureReasonForLang(order, 'ar'),
-    },
-  });
+  if (result.changed) {
+    await logAudit({
+      req,
+      action: 'driver_fail_delivery',
+      entityType: 'order',
+      entityId: order._id,
+      entityLabel: order.orderNumber,
+      changes: {
+        orderStatus: { from: result.previousStatus, to: result.nextStatus },
+        deliveryFailureReason: getDeliveryFailureReasonForLang(result.order, 'ar'),
+      },
+    });
+  }
 
-  const refreshed = await loadDriverOrder(order._id, req.user._id);
-  res.json({ success: true, data: formatDriverOrder(refreshed) });
+  const flags = await getDriverOrderFlags();
+  res.json({ success: true, data: formatDriverOrder(result.order, flags) });
 });

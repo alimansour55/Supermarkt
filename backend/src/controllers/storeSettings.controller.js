@@ -477,6 +477,7 @@ const pickSettings = (payload) => {
       autoAssignMaxActive: Number.isFinite(maxActive)
         ? Math.min(50, Math.max(0, maxActive))
         : DEFAULT_DRIVER_SETTINGS.autoAssignMaxActive,
+      assignDispatchesOrder: toBool(raw.assignDispatchesOrder, DEFAULT_DRIVER_SETTINGS.assignDispatchesOrder),
       availabilityEnabled: toBool(raw.availabilityEnabled, DEFAULT_DRIVER_SETTINGS.availabilityEnabled),
       pickingChecklistEnabled: toBool(raw.pickingChecklistEnabled, DEFAULT_DRIVER_SETTINGS.pickingChecklistEnabled),
       cashCalculatorEnabled: toBool(raw.cashCalculatorEnabled, DEFAULT_DRIVER_SETTINGS.cashCalculatorEnabled),

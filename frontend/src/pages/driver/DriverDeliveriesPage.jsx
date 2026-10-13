@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
   Banknote, History, ListChecks, LocateFixed, Loader2, Package, RefreshCw, Search, Truck, X,
@@ -34,7 +34,7 @@ function matchesQuery(order, q) {
 export default function DriverDeliveriesPage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
-  const { isOffline } = useOutletContext() || {};
+  const { isOffline, assignmentsVersion = 0 } = useOutletContext() || {};
   const [tab, setTab] = useState('active');
   const [query, setQuery] = useState('');
   const [nearestOn, setNearestOn] = useState(false);
@@ -47,11 +47,28 @@ export default function DriverDeliveriesPage() {
   } = useAsyncData(fetchDeliveries, []);
   const { refreshing } = usePullToRefresh(refetch, { disabled: loading });
 
+  // A new assignment notice arrived (see DriverLayout) — refresh silently.
+  const seenVersionRef = useRef(assignmentsVersion);
+  useEffect(() => {
+    if (assignmentsVersion === seenVersionRef.current) return;
+    seenVersionRef.current = assignmentsVersion;
+    refetch();
+  }, [assignmentsVersion, refetch]);
+
   const {
     data: history, loading: historyLoading, error: historyError, refetch: refetchHistory,
   } = useAsyncData(tab === 'history' ? fetchHistory : () => Promise.resolve([]), [tab]);
 
-  const list = useMemo(() => (deliveries || []).filter((o) => matchesQuery(o, query)), [deliveries, query]);
+  // The API returns on-the-road orders plus ones assigned ahead of dispatch ("upcoming").
+  const activeDeliveries = useMemo(
+    () => (deliveries || []).filter((o) => o.orderStatus === 'out_for_delivery'),
+    [deliveries],
+  );
+  const upcomingList = useMemo(
+    () => (deliveries || []).filter((o) => o.orderStatus !== 'out_for_delivery' && matchesQuery(o, query)),
+    [deliveries, query],
+  );
+  const list = useMemo(() => activeDeliveries.filter((o) => matchesQuery(o, query)), [activeDeliveries, query]);
   const historyList = history || [];
 
   const sortedList = useMemo(() => {
@@ -167,9 +184,9 @@ export default function DriverDeliveriesPage() {
 
       {tab === 'active' && (
         <>
-          {!loading && deliveries?.length > 0 && (
+          {!loading && activeDeliveries.length > 0 && (
             <div className="grid grid-cols-3 gap-2.5">
-              <DriverStatCard icon={Truck} label={isAr ? 'نشطة' : 'Active'} value={deliveries.length} accent="teal" />
+              <DriverStatCard icon={Truck} label={isAr ? 'نشطة' : 'Active'} value={activeDeliveries.length} accent="teal" />
               <DriverStatCard icon={Package} label={isAr ? 'قطع' : 'Items'} value={itemTotal} accent="violet" />
               <DriverStatCard
                 icon={Banknote}
@@ -238,7 +255,7 @@ export default function DriverDeliveriesPage() {
             </div>
           )}
 
-          {!loading && list.length === 0 && !error && (
+          {!loading && list.length === 0 && upcomingList.length === 0 && !error && (
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
                 <Truck className="h-8 w-8" aria-hidden />
@@ -266,6 +283,31 @@ export default function DriverDeliveriesPage() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {upcomingList.length > 0 && (
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-700">
+                  {isAr ? 'طلبات قادمة' : 'Upcoming'}
+                  <span className="ms-1.5 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">
+                    {upcomingList.length}
+                  </span>
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {isAr
+                    ? 'معيّنة لك وما زالت قيد التجهيز — ستنتقل إلى النشطة عند خروجها للتوصيل'
+                    : 'Assigned to you and still being prepared — they move to Active once dispatched'}
+                </p>
+              </div>
+              <ul className="space-y-3 opacity-90">
+                {upcomingList.map((order) => (
+                  <li key={order._id}>
+                    <DriverDeliveryCard order={order} isAr={isAr} />
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </>
       )}
