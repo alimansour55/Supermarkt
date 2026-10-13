@@ -168,7 +168,10 @@ export async function createShipmentsForOrder(order, plan, { lineTotals = [] } =
 }
 
 async function notifySellersOfNewShipments(shipments) {
+  const { sendNewOrderAlerts } = await import('./sellerAlerts.service.js');
   for (const shipment of shipments) {
+    // eslint-disable-next-line no-await-in-loop
+    await sendNewOrderAlerts(shipment);
     // eslint-disable-next-line no-await-in-loop
     const users = await User.find({ seller: shipment.seller, isActive: { $ne: false } }).select('_id').lean();
     const shipsItself = shipment.fulfilledBy === 'seller';

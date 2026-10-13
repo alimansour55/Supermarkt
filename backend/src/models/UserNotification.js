@@ -18,6 +18,10 @@ const USER_NOTIFICATION_TYPES = [
   'seller_listing_review',
   'seller_account',
   'seller_payout',
+  'seller_low_stock',
+  'seller_return',
+  'seller_question',
+  'seller_promotion',
 ];
 
 const userNotificationSchema = new mongoose.Schema(

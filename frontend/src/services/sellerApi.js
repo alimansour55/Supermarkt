@@ -52,6 +52,10 @@ export const sellerApi = {
 
   importProducts: (csv) => api.post('/seller/products/import', { csv }, { timeout: 120_000 }),
   getLedger: (params) => api.get('/seller/finance/ledger', { params }),
+  getPayoutStatement: (id) => api.get(`/seller/finance/payouts/${id}/statement`),
+  downloadPayoutStatement: (id) => api.get(`/seller/finance/payouts/${id}/statement`, { params: { format: 'csv' }, responseType: 'blob' }),
+  listReturns: (params) => api.get('/seller/returns', { params }),
+  noteReturn: (orderId, returnId, note) => api.post(`/seller/returns/${orderId}/${returnId}/note`, { note }),
 
   listShipments: (params) => api.get('/seller/shipments', { params }),
   getShipment: (id) => api.get(`/seller/shipments/${id}`),

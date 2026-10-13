@@ -125,6 +125,7 @@ export default function SellerInventoryPage() {
       ...(row.price !== undefined ? { price: Number(row.price) } : {}),
       ...(row.oldPrice !== undefined ? { oldPrice: row.oldPrice === '' ? null : Number(row.oldPrice) } : {}),
       ...(row.stock !== undefined ? { stock: Number(row.stock) } : {}),
+      ...(row.lowStockThreshold !== undefined ? { lowStockThreshold: row.lowStockThreshold === '' ? null : Number(row.lowStockThreshold) } : {}),
       ...(row.variants ? {
         variants: Object.entries(row.variants).map(([vid, v]) => ({
           _id: vid,
@@ -233,6 +234,7 @@ export default function SellerInventoryPage() {
                   <th className="px-3 py-3 text-start">{isAr ? 'السعر' : 'Price'}</th>
                   <th className="px-3 py-3 text-start">{isAr ? 'قبل الخصم' : 'Was'}</th>
                   <th className="px-3 py-3 text-start">{isAr ? 'المخزون' : 'Stock'}</th>
+                  <th className="px-3 py-3 text-start" title={isAr ? 'نرسل لك تنبيهاً عندما يصل المخزون لهذا الرقم' : 'We alert you when stock reaches this'}>{isAr ? 'نبّهني عند' : 'Alert at'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -276,6 +278,9 @@ export default function SellerInventoryPage() {
                           <input type="number" min="0" value={shown(e.stock, p.stock)} onChange={(ev) => edit(p, 'stock', ev.target.value)} disabled={storeHeld} title={storeHeld ? (isAr ? 'في مخزننا — يتغير عند استلام شحناتك' : 'Held in our warehouse') : undefined} className={`${cellCls} ${e.stock !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" aria-label={isAr ? 'المخزون' : 'Stock'} />
                         )}
                       </td>
+                      <td className="px-3 py-2.5">
+                        <input type="number" min="0" value={shown(e.lowStockThreshold, p.lowStockThreshold ?? '')} onChange={(ev) => edit(p, 'lowStockThreshold', ev.target.value)} placeholder="5" className={`${cellCls} w-20 ${e.lowStockThreshold !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" aria-label={isAr ? 'نبّهني عند' : 'Alert at'} />
+                      </td>
                     </tr>,
                     ...(hasVariants && open ? p.variants.map((v) => {
                       const ve = e.variants?.[v._id] || {};
@@ -288,6 +293,7 @@ export default function SellerInventoryPage() {
                           <td className="px-3 py-2"><input type="number" min="0" step="0.01" value={shown(ve.price, v.price)} onChange={(ev) => edit(p, 'price', ev.target.value, v._id)} className={`${cellCls} ${ve.price !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" /></td>
                           <td />
                           <td className="px-3 py-2"><input type="number" min="0" value={shown(ve.stock, v.stock)} onChange={(ev) => edit(p, 'stock', ev.target.value, v._id)} disabled={storeHeld} className={`${cellCls} ${ve.stock !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" /></td>
+                          <td />
                         </tr>
                       );
                     }) : []),

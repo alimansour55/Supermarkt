@@ -114,6 +114,9 @@ const orderReturnSchema = new mongoose.Schema(
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     reviewedAt: { type: Date, default: null },
     adminNote: { type: String, trim: true, default: '' },
+    /** Marketplace seller's response to a return of their item (shown to staff). */
+    sellerNote: { type: String, trim: true, default: '', maxlength: 1000 },
+    sellerNoteAt: { type: Date, default: null },
     returnMethod: {
       type: String,
       enum: ['store_dropoff', 'home_pickup'],

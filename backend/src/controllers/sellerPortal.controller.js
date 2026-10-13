@@ -108,6 +108,13 @@ export const updateSellerProfile = asyncHandler(async (req, res) => {
     seller.defaultFulfillment = body.defaultFulfillment;
   }
 
+  const notificationPrefs = typeof body.notificationPrefs === 'string' ? JSON.parse(body.notificationPrefs) : body.notificationPrefs;
+  if (notificationPrefs && typeof notificationPrefs === 'object') {
+    ['emailOrders', 'whatsappOrders', 'emailLowStock', 'shipByReminders'].forEach((k) => {
+      if (notificationPrefs[k] !== undefined) seller.set(`notificationPrefs.${k}`, notificationPrefs[k] === true);
+    });
+  }
+
   if (seller.status !== 'active') {
     ['nameAr', 'nameEn'].forEach((f) => {
       if (body[f] !== undefined && str(body[f], 120).length >= 2) seller[f] = str(body[f], 120);
@@ -272,6 +279,7 @@ export function formatSellerProduct(product) {
     fulfilledBy: product.fulfilledBy || 'store',
     reservedStock: product.reservedStock || 0,
     sellerCategories: (product.sellerCategories || []).map((c) => String(c?._id ?? c)),
+    lowStockThreshold: product.lowStockThreshold ?? null,
     hasMarketplaceCategory: Boolean(product.category),
     categorySuggestion: product.categorySuggestion || '',
   };
@@ -759,6 +767,12 @@ export const bulkUpdateSellerInventory = asyncHandler(async (req, res) => {
       if (row.price !== undefined) input.price = row.price;
       if (row.oldPrice !== undefined) input.oldPrice = row.oldPrice;
       if (row.stock !== undefined && !product.variants?.length) input.stock = row.stock;
+      if (row.lowStockThreshold !== undefined) {
+        const t = row.lowStockThreshold === null || row.lowStockThreshold === '' ? null : Math.floor(Number(row.lowStockThreshold));
+        if (t !== null && (!Number.isFinite(t) || t < 0 || t > 100000)) throw new AppError('Invalid low-stock alert level', 400);
+        product.lowStockThreshold = t;
+        product.lowStockAlertedAt = null;
+      }
       if (Array.isArray(row.variants) && product.variants?.length) {
         const patch = new Map(row.variants.map((v) => [String(v._id), v]));
         input.variants = product.variants.map((v) => {

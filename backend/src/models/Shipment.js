@@ -81,6 +81,8 @@ const shipmentSchema = new mongoose.Schema(
     carrier: { type: String, trim: true, default: '' },
     trackingNumber: { type: String, trim: true, default: '' },
     confirmedAt: { type: Date, default: null },
+    /** "Ship within a few hours" reminder already sent to the seller. */
+    shipByReminderAt: { type: Date, default: null },
     shippedAt: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },

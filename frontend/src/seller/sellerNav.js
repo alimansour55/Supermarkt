@@ -1,5 +1,5 @@
 import {
-  BarChart3, Bell, Boxes, History, Lock, ClipboardList, FileText, Gauge, HelpCircle, LayoutDashboard, Landmark, Package, PackagePlus,
+  BarChart3, Bell, Boxes, History, Lock, RotateCcw, BellRing, ClipboardList, FileText, Gauge, HelpCircle, LayoutDashboard, Landmark, Package, PackagePlus,
   Settings, Star, Store, Tags, Truck, Upload, Users, Wallet, Warehouse,
 } from 'lucide-react';
 
@@ -33,6 +33,7 @@ export const SELLER_NAV = [
       { to: '/seller-center/orders', ar: 'كل الطلبات', en: 'Manage orders', Icon: ClipboardList, exactQuery: true, perm: 'orders' },
       { to: '/seller-center/orders?status=pending', ar: 'بانتظار التأكيد', en: 'To confirm', Icon: Bell, badge: 'toConfirm', badgeTone: 'red', perm: 'orders' },
       { to: '/seller-center/orders?status=confirmed', ar: 'جاهزة للشحن', en: 'To ship', Icon: Truck, badge: 'toShip', badgeTone: 'indigo', perm: 'orders' },
+      { to: '/seller-center/returns', ar: 'المرتجعات', en: 'Returns', Icon: RotateCcw, badge: 'pendingReturns', badgeTone: 'amber', perm: 'orders' },
       { to: '/seller-center/inbound', ar: 'شحنات لمخزننا', en: 'Send stock to us', Icon: Warehouse, storeOnly: true, perm: 'products' },
     ],
   },
@@ -66,6 +67,7 @@ export const SELLER_NAV = [
       { to: '/seller-center/store', end: true, ar: 'بيانات وواجهة المتجر', en: 'Store profile', Icon: Store, perm: 'store' },
       { to: '/seller-center/store/documents', ar: 'المستندات', en: 'Documents', Icon: FileText, perm: 'store' },
       { to: '/seller-center/store/team', ar: 'فريق العمل', en: 'Team & logins', Icon: Users, ownerOnly: true },
+      { to: '/seller-center/store/alerts', ar: 'التنبيهات', en: 'Alerts & emails', Icon: BellRing, perm: 'store' },
       { to: '/seller-center/store/security', ar: 'الأمان وتسجيل الدخول', en: 'Login & security', Icon: Lock },
       { to: '/seller-center/activity', ar: 'سجل النشاط', en: 'Activity log', Icon: History, ownerOnly: true },
     ],

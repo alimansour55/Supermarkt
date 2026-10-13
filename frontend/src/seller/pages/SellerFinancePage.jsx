@@ -88,6 +88,7 @@ export default function SellerFinancePage() {
                 {p.referenceNumber && <span className="text-xs text-slate-500" dir="ltr">{p.referenceNumber}</span>}
                 <span className="ms-auto font-bold tabular-nums">{formatPrice(p.amount)}</span>
                 <StatusBadge map={PAYOUT_STATUS} value={p.status} isAr={isAr} />
+                <Link to={`/seller-center/finance/statements/${p._id}`} className="text-xs font-semibold text-indigo-700 hover:underline">{isAr ? 'الكشف' : 'Statement'}</Link>
               </li>
             ))}
           </ul>

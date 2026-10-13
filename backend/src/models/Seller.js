@@ -95,6 +95,13 @@ const sellerSchema = new mongoose.Schema(
     deliveryZones: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryZone' }],
     /** Typical handling time before a seller-shipped order leaves, in days. */
     handlingDays: { type: Number, min: 0, max: 30, default: 2 },
+    /** How the seller wants to hear about orders and stock (in-app notifications are always on). */
+    notificationPrefs: {
+      emailOrders: { type: Boolean, default: true },
+      whatsappOrders: { type: Boolean, default: false },
+      emailLowStock: { type: Boolean, default: true },
+      shipByReminders: { type: Boolean, default: true },
+    },
     /** Approved sellers can publish listings without staff review. */
     autoApproveListings: { type: Boolean, default: false },
 

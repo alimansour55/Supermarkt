@@ -53,6 +53,7 @@ import {
   deleteMyCategory,
   reorderMyCategories,
 } from '../controllers/sellerCategory.controller.js';
+import { listSellerReturns, noteSellerReturn, getPayoutStatement } from '../controllers/sellerReturns.controller.js';
 import {
   getMySecurity,
   changeMyPassword,
@@ -68,7 +69,7 @@ router.use(...sellerOnly);
 
 // Staff permissions by area — owners pass every check.
 router.use(['/products', '/categories', '/inbound'], sellerCan('products'));
-router.use('/shipments', sellerCan('orders'));
+router.use(['/shipments', '/returns'], sellerCan('orders'));
 router.use('/reports', sellerCan('reports'));
 router.use('/finance', sellerCan('finance'));
 
@@ -93,6 +94,7 @@ router.get('/search', sellerQuickSearch);
 
 router.get('/finance', getMyFinance);
 router.get('/finance/ledger', getMyLedger);
+router.get('/finance/payouts/:id/statement', getPayoutStatement);
 router.get('/reviews', listMyReviews);
 
 router.get('/team', sellerOwnerOnly, listTeam);
@@ -124,6 +126,9 @@ router.post('/products/:id/pause', pauseSellerProduct);
 router.post('/products/:id/unpause', sellerCanEditCatalog, unpauseSellerProduct);
 router.post('/products/:id/discard-changes', discardSellerProductChanges);
 router.delete('/products/:id', deleteSellerProduct);
+
+router.get('/returns', listSellerReturns);
+router.post('/returns/:orderId/:returnId/note', noteSellerReturn);
 
 router.get('/shipments', listSellerShipments);
 router.get('/shipments/export', exportSellerShipments);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useOutletContext, useSearchParams } from '../../app/router';
-import { AlarmClock, CheckCheck, ClipboardList, Download, PackageCheck, Search, X } from 'lucide-react';
+import { Link, useNavigate, useOutletContext, useSearchParams } from '../../app/router';
+import { AlarmClock, CheckCheck, ClipboardList, Download, PackageCheck, Printer, Search, X } from 'lucide-react';
 import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
@@ -47,6 +47,7 @@ function ShipBy({ shipment, handlingDays, isAr }) {
 export default function SellerOrdersPage() {
   const { isAr, seller, refreshSummary } = useOutletContext();
   const toast = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const status = searchParams.get('status') || 'open';
   const fulfilledBy = searchParams.get('fulfilledBy') || '';
@@ -198,6 +199,9 @@ export default function SellerOrdersPage() {
           </button>
           <button type="button" disabled={busy} onClick={() => bulk('packed')} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold ring-1 ring-white/30 disabled:opacity-40">
             <PackageCheck className="h-4 w-4" />{isAr ? 'تم التغليف' : 'Mark packed'}
+          </button>
+          <button type="button" onClick={() => navigate(`/seller-center/orders/print?ids=${[...selected].join(',')}`)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold ring-1 ring-white/30">
+            <Printer className="h-4 w-4" />{isAr ? 'طباعة البوالص' : 'Print labels'}
           </button>
           <button type="button" onClick={() => setSelected(new Set())} className="ms-auto rounded-lg p-1.5 hover:bg-white/10" aria-label={isAr ? 'إلغاء التحديد' : 'Clear selection'}><X className="h-4 w-4" /></button>
         </div>

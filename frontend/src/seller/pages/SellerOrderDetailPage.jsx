@@ -69,9 +69,9 @@ export default function SellerOrderDetailPage() {
         <StatusBadge map={SHIPMENT_STATUS} value={s.status} isAr={isAr} />
         <span className="text-sm text-slate-500">{label(FULFILLMENT, s.fulfilledBy, isAr)}</span>
         {sellerShips && s.customer && (
-          <button type="button" onClick={() => window.print()} className="ms-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ring-1 ring-slate-200 hover:bg-white">
-            <Printer className="h-4 w-4" />{isAr ? 'طباعة بوليصة التعبئة' : 'Print packing slip'}
-          </button>
+          <Link to={`/seller-center/orders/print?ids=${s._id}`} className="ms-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold ring-1 ring-slate-200 hover:bg-white">
+            <Printer className="h-4 w-4" />{isAr ? 'طباعة البوليصة وقائمة التعبئة' : 'Print label & packing slip'}
+          </Link>
         )}
       </div>
 

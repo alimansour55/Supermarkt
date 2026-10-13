@@ -245,6 +245,12 @@ export function formatSellerPrivate(seller, { revealBank = false } = {}) {
     defaultFulfillment: s.defaultFulfillment || 'seller',
     deliveryZones: s.deliveryZones || [],
     autoApproveListings: s.autoApproveListings === true,
+    notificationPrefs: {
+      emailOrders: s.notificationPrefs?.emailOrders !== false,
+      whatsappOrders: s.notificationPrefs?.whatsappOrders === true,
+      emailLowStock: s.notificationPrefs?.emailLowStock !== false,
+      shipByReminders: s.notificationPrefs?.shipByReminders !== false,
+    },
     intendedCategories: s.intendedCategories || [],
     applicationNote: s.applicationNote || '',
     termsAcceptedAt: s.termsAcceptedAt,

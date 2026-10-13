@@ -4,6 +4,7 @@
  */
 import Product from '../models/Product.js';
 import Shipment from '../models/Shipment.js';
+import Order from '../models/Order.js';
 import SellerCategory from '../models/SellerCategory.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { AppError } from '../utils/AppError.js';
@@ -127,7 +128,7 @@ function parseRange(query) {
 
 export const getSellerSummary = asyncHandler(async (req, res) => {
   const sellerId = req.seller._id;
-  const [shipments, listings, unread, outOfStock] = await Promise.all([
+  const [shipments, listings, unread, outOfStock, pendingReturns] = await Promise.all([
     Shipment.aggregate([
       { $match: { seller: sellerId, fulfilledBy: 'seller', status: { $in: ['pending', 'confirmed', 'packed'] } } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
@@ -138,6 +139,8 @@ export const getSellerSummary = asyncHandler(async (req, res) => {
     ]),
     getUserUnreadCount(req.user._id),
     Product.countDocuments({ seller: sellerId, listingStatus: 'approved', variants: { $size: 0 }, stock: { $lte: 0 } }),
+    // Orders with a pending return — exact per-item matching happens on the Returns page.
+    Order.countDocuments({ sellerIds: sellerId, returns: { $elemMatch: { status: 'pending' } } }),
   ]);
   const ship = Object.fromEntries(shipments.map((r) => [r._id, r.count]));
   const list = Object.fromEntries(listings.map((r) => [r._id, r.count]));
@@ -150,6 +153,7 @@ export const getSellerSummary = asyncHandler(async (req, res) => {
       drafts: list.draft || 0,
       outOfStock,
       unreadNotifications: unread,
+      pendingReturns,
     },
   });
 });
