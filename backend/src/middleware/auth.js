@@ -1,31 +1,53 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import RevokedToken from '../models/RevokedToken.js';
 import { AppError } from '../utils/AppError.js';
 import { STAFF_ROLES } from '../constants/roles.js';
 import { hasUserPermission } from '../constants/permissions.js';
 
+const extractToken = (req) => {
+  if (req.headers.authorization?.startsWith('Bearer ')) {
+    return req.headers.authorization.split(' ')[1];
+  }
+  return req.cookies?.token || null;
+};
+
+/**
+ * Verify a session token and load its user.
+ * Rejects tokens that were revoked (logout), invalidated (token version bump)
+ * or that belong to a suspended account.
+ */
+export const resolveSessionUser = async (token) => {
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+  const [user, revoked] = await Promise.all([
+    User.findById(decoded.id),
+    decoded.jti ? RevokedToken.exists({ jti: decoded.jti }) : null,
+  ]);
+
+  if (!user) {
+    throw new AppError('User not found', 401);
+  }
+  if (revoked || (decoded.tv || 0) !== (user.tokenVersion || 0)) {
+    throw new AppError('Session expired — please sign in again', 401);
+  }
+  if (user.isActive === false) {
+    throw new AppError('This account has been suspended. Please contact support.', 401);
+  }
+
+  user.$locals.session = { jti: decoded.jti, exp: decoded.exp };
+  return user;
+};
+
 export const protect = async (req, res, next) => {
   try {
-    let token;
-
-    if (req.headers.authorization?.startsWith('Bearer ')) {
-      token = req.headers.authorization.split(' ')[1];
-    } else if (req.cookies?.token) {
-      token = req.cookies.token;
-    }
+    const token = extractToken(req);
 
     if (!token) {
       throw new AppError('Not authorized — no token provided', 401);
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      throw new AppError('User not found', 401);
-    }
-
-    req.user = user;
+    req.user = await resolveSessionUser(token);
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
@@ -35,29 +57,20 @@ export const protect = async (req, res, next) => {
   }
 };
 
+/**
+ * Optional auth: a missing/expired/invalid/revoked token must never block a public
+ * route — just continue as an anonymous visitor.
+ */
 export const optionalProtect = async (req, res, next) => {
   try {
-    let token;
-    if (req.headers.authorization?.startsWith('Bearer ')) {
-      token = req.headers.authorization.split(' ')[1];
-    } else if (req.cookies?.token) {
-      token = req.cookies.token;
-    }
-
-    if (!token) return next();
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    // Optional auth: a missing/expired/invalid token must never block a public
-    // route — just continue as an anonymous visitor.
-    if (user) req.user = user;
-    next();
+    const token = extractToken(req);
+    if (token) req.user = await resolveSessionUser(token);
   } catch (error) {
-    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-      return next();
+    if (!(error instanceof AppError) && error.name !== 'JsonWebTokenError' && error.name !== 'TokenExpiredError') {
+      return next(error);
     }
-    next(error);
   }
+  next();
 };
 
 export const restrictTo = (...roles) => (req, res, next) => {
@@ -87,10 +100,3 @@ export const requirePermission = (permission) => [
     next();
   },
 ];
-
-export const requireVerified = (req, res, next) => {
-  if (!req.user.isEmailVerified) {
-    return next(new AppError('Please verify your email before continuing', 403));
-  }
-  next();
-};

@@ -149,6 +149,21 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    /** Rolling 24h window of OTP SMS sent to this phone (anti SMS-pumping) */
+    otpSendCount: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
+    otpSendWindowStart: {
+      type: Date,
+      select: false,
+    },
+    /** Bumped to invalidate every issued session token (e.g. password reset) */
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
     // Legacy email fields — kept for backward compatibility
     isEmailVerified: {
       type: Boolean,
@@ -227,6 +242,21 @@ userSchema.methods.comparePassword = async function comparePassword(candidate) {
   return bcrypt.compare(candidate, this.password);
 };
 
+const OTP_DAILY_LIMIT = 10;
+const OTP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Count one OTP send against the phone's 24h quota. Returns false when the quota is exhausted. */
+userSchema.methods.consumeOtpQuota = function consumeOtpQuota() {
+  const now = Date.now();
+  if (!this.otpSendWindowStart || now - this.otpSendWindowStart.getTime() > OTP_WINDOW_MS) {
+    this.otpSendWindowStart = new Date(now);
+    this.otpSendCount = 0;
+  }
+  if (this.otpSendCount >= OTP_DAILY_LIMIT) return false;
+  this.otpSendCount += 1;
+  return true;
+};
+
 userSchema.methods.createPhoneOtp = function createPhoneOtp() {
   const code = String(crypto.randomInt(100000, 999999));
   this.phoneOtpHash = crypto.createHash('sha256').update(code).digest('hex');
@@ -247,8 +277,9 @@ userSchema.methods.verifyPhoneOtp = function verifyPhoneOtp(code) {
 
   this.phoneOtpAttempts += 1;
 
-  const hash = crypto.createHash('sha256').update(String(code).trim()).digest('hex');
-  if (hash !== this.phoneOtpHash) {
+  const hash = crypto.createHash('sha256').update(String(code).trim()).digest();
+  const expected = Buffer.from(this.phoneOtpHash, 'hex');
+  if (expected.length !== hash.length || !crypto.timingSafeEqual(hash, expected)) {
     return { ok: false, reason: 'invalid' };
   }
 

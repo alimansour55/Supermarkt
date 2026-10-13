@@ -30,9 +30,13 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await authService.getMe();
       setUser(data.user);
-    } catch {
-      removeToken();
-      setUser(null);
+    } catch (err) {
+      // Only drop the session when the server rejects it — a network blip or
+      // a 5xx must not sign the customer out.
+      if (err.response?.status === 401) {
+        removeToken();
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -41,6 +45,14 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     fetchUser();
   }, [fetchUser]);
+
+  // Session kept through an outage — restore the user once the connection is back.
+  useEffect(() => {
+    if (!token || user) return undefined;
+    const retry = () => fetchUser();
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [token, user, fetchUser]);
 
   const sendOtp = async (payload) => {
     setError(null);

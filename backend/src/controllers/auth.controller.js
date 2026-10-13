@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import RevokedToken from '../models/RevokedToken.js';
 import { AppError } from '../utils/AppError.js';
 import { generateToken } from '../utils/generateToken.js';
 import { normalizePhone, formatPhoneDisplay } from '../utils/phone.js';
@@ -95,7 +96,7 @@ function applyAddressPayload(address, payload) {
 }
 
 const sendAuthResponse = (user, res, statusCode = 200) => {
-  const token = generateToken(user._id);
+  const token = generateToken(user);
 
   res.status(statusCode).json({
     success: true,
@@ -105,7 +106,30 @@ const sendAuthResponse = (user, res, statusCode = 200) => {
 };
 
 const findUserWithOtp = async (phone) =>
-  User.findOne({ phone }).select('+phoneOtpHash +phoneOtpExpires +phoneOtpAttempts +lastOtpSentAt');
+  User.findOne({ phone }).select('+phoneOtpHash +phoneOtpExpires +phoneOtpAttempts +lastOtpSentAt +otpSendCount +otpSendWindowStart');
+
+/** Enforce resend cooldown + daily per-phone quota, then generate, store and SMS a fresh code. */
+const issuePhoneOtp = async (user, phone, lang) => {
+  if (!isDevDemoPhone(phone)) {
+    if (user.lastOtpSentAt) {
+      const elapsed = (Date.now() - user.lastOtpSentAt.getTime()) / 1000;
+      if (elapsed < OTP_RESEND_SECONDS) {
+        throw new AppError(
+          `Please wait ${Math.ceil(OTP_RESEND_SECONDS - elapsed)} seconds before requesting a new code`,
+          429,
+        );
+      }
+    }
+    if (!user.consumeOtpQuota()) {
+      throw new AppError('Too many verification codes requested for this number today. Please try again tomorrow.', 429);
+    }
+  }
+
+  const code = user.createPhoneOtp();
+  await user.save({ validateBeforeSave: false });
+  await sendSmsOtp(phone, code, lang === 'en' ? 'en' : 'ar');
+  return code;
+};
 
 /**
  * Step 1 — Request SMS OTP (register with name, or login with phone only).
@@ -136,7 +160,9 @@ export const sendOtp = asyncHandler(async (req, res) => {
       role: 'user',
     });
     isNewUser = true;
-  } else if (name?.trim() && user.name !== name.trim()) {
+  } else if (!user.isPhoneVerified && name?.trim()) {
+    // Only a registration that was never completed may change its name here —
+    // otherwise anyone knowing a customer's phone could rename their account.
     user.name = name.trim();
   }
 
@@ -144,21 +170,7 @@ export const sendOtp = asyncHandler(async (req, res) => {
     throw new AppError('This account has been suspended. Please contact support.', 403);
   }
 
-  if (user.lastOtpSentAt && !isDevDemoPhone(phone)) {
-    const elapsed = (Date.now() - user.lastOtpSentAt.getTime()) / 1000;
-    if (elapsed < OTP_RESEND_SECONDS) {
-      throw new AppError(
-        `Please wait ${Math.ceil(OTP_RESEND_SECONDS - elapsed)} seconds before requesting a new code`,
-        429,
-      );
-    }
-  }
-
-  const code = user.createPhoneOtp();
-  await user.save({ validateBeforeSave: false });
-
-  const lang = req.body.lang === 'en' ? 'en' : 'ar';
-  await sendSmsOtp(phone, code, lang);
+  const code = await issuePhoneOtp(user, phone, req.body.lang);
 
   res.json({
     success: true,
@@ -191,7 +203,8 @@ export const verifyOtp = asyncHandler(async (req, res) => {
 
   const user = await findUserWithOtp(phone);
   if (!user) {
-    throw new AppError('No account found for this phone number', 404);
+    // Same response as a wrong code — don't reveal which numbers are registered.
+    throw new AppError('Invalid verification code', 401);
   }
 
   if (user.isActive === false) {
@@ -226,28 +239,14 @@ export const resendOtp = asyncHandler(async (req, res) => {
 
   const user = await findUserWithOtp(phone);
   if (!user) {
-    throw new AppError('No account found. Enter your name to create an account.', 404);
+    throw new AppError('Please start again and request a new verification code.', 400);
   }
 
   if (user.isActive === false) {
     throw new AppError('This account has been suspended. Please contact support.', 403);
   }
 
-  if (user.lastOtpSentAt && !isDevDemoPhone(phone)) {
-    const elapsed = (Date.now() - user.lastOtpSentAt.getTime()) / 1000;
-    if (elapsed < OTP_RESEND_SECONDS) {
-      throw new AppError(
-        `Please wait ${Math.ceil(OTP_RESEND_SECONDS - elapsed)} seconds before requesting a new code`,
-        429,
-      );
-    }
-  }
-
-  const code = user.createPhoneOtp();
-  await user.save({ validateBeforeSave: false });
-
-  const lang = req.body.lang === 'en' ? 'en' : 'ar';
-  await sendSmsOtp(phone, code, lang);
+  const code = await issuePhoneOtp(user, phone, req.body.lang);
 
   res.json({
     success: true,
@@ -348,7 +347,15 @@ export const driverLogin = asyncHandler(async (req, res) => {
   sendAuthResponse(driverUser, res);
 });
 
-export const logout = asyncHandler(async (_req, res) => {
+export const logout = asyncHandler(async (req, res) => {
+  const session = req.user.$locals.session;
+  if (session?.jti && session.exp) {
+    await RevokedToken.updateOne(
+      { jti: session.jti },
+      { $setOnInsert: { user: req.user._id, expiresAt: new Date(session.exp * 1000) } },
+      { upsert: true },
+    );
+  }
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 });
 

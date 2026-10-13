@@ -24,9 +24,10 @@ import WalletTopUpRequest from './WalletTopUpRequest.js';
 import Counter from './Counter.js';
 import CallbackRequest from './CallbackRequest.js';
 import SupportConversation from './SupportConversation.js';
+import RevokedToken from './RevokedToken.js';
 
 export {
-  User, Product, Category, Cart, Order, Coupon, Banner, StoreSettings, HomepageSection, DeliveryZone, SearchEvent, ContentPage, NotificationTemplate, RecurringDeliverySubscription, Brand, Promotion, FulfillmentLocation, DeliveryTracking, UserNotification, PartnerPayout, PartnerLedgerEntry, WalletTransaction, WalletTopUpRequest, Counter, CallbackRequest, SupportConversation,
+  User, Product, Category, Cart, Order, Coupon, Banner, StoreSettings, HomepageSection, DeliveryZone, SearchEvent, ContentPage, NotificationTemplate, RecurringDeliverySubscription, Brand, Promotion, FulfillmentLocation, DeliveryTracking, UserNotification, PartnerPayout, PartnerLedgerEntry, WalletTransaction, WalletTopUpRequest, Counter, CallbackRequest, SupportConversation, RevokedToken,
 };
 
 export default {
@@ -56,4 +57,5 @@ export default {
   Counter,
   CallbackRequest,
   SupportConversation,
+  RevokedToken,
 };
