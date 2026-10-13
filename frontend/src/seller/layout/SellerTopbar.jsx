@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from '../../app/router';
 import {
-  Bell, ChevronDown, ClipboardList, HelpCircle, Languages, LogOut, Menu, Package, Plus, Search, Settings, Users,
+  Bell, ChevronDown, ClipboardList, HelpCircle, Keyboard, Languages, LogOut, Menu, Package, Plus, Search, Settings, Users,
 } from 'lucide-react';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
@@ -150,7 +150,7 @@ function NotificationsMenu({ isAr, unread, onRead }) {
                   <span className="min-w-0">
                     <span className="block font-semibold">{isAr ? n.titleAr : n.titleEn}</span>
                     <span className="line-clamp-2 block text-slate-600">{isAr ? n.messageAr : n.messageEn}</span>
-                    <span className="mt-0.5 block text-[11px] text-slate-400">{new Date(n.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-400">{new Date(n.createdAt).toLocaleString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                   </span>
                 </Link>
               </li>
@@ -192,6 +192,7 @@ function AccountMenu({ me, seller, isAr, onSignOut, onToggleLanguage }) {
             <Link to="/seller-center/store" onClick={() => setOpen(false)} className={item}><Settings className="h-4 w-4 text-slate-400" />{isAr ? 'إعدادات المتجر' : 'Store settings'}</Link>
             {isOwner && <Link to="/seller-center/store/team" onClick={() => setOpen(false)} className={item}><Users className="h-4 w-4 text-slate-400" />{isAr ? 'فريق العمل' : 'Team & logins'}</Link>}
             <Link to="/seller-center/help" onClick={() => setOpen(false)} className={item}><HelpCircle className="h-4 w-4 text-slate-400" />{isAr ? 'مركز المساعدة' : 'Help center'}</Link>
+            <button type="button" onClick={() => { setOpen(false); window.dispatchEvent(new KeyboardEvent('keydown', { key: '?' })); }} className={item}><Keyboard className="h-4 w-4 text-slate-400" />{isAr ? 'اختصارات لوحة المفاتيح' : 'Keyboard shortcuts'}<kbd className="ms-auto rounded border border-slate-200 px-1 text-[10px] text-slate-400">?</kbd></button>
             <button type="button" onClick={() => { setOpen(false); onToggleLanguage(); }} className={item}><Languages className="h-4 w-4 text-slate-400" />{isAr ? 'English' : 'العربية'}</button>
           </div>
           <div className="border-t border-slate-100 pt-1">

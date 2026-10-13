@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext, useParams } from '../../app/router';
 import { ArrowLeft, ArrowRight, Download, Printer } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { LEDGER_TYPE, PAYOUT_STATUS, apiError, label } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
 import { fmtDate, saveBlob } from '../sellerUtils';
+import { PageSkeleton } from '../ui';
 
 /** Printable statement of one payout: what was sold, every fee and deduction, the total paid. */
 export default function SellerStatementPage() {
@@ -28,7 +28,7 @@ export default function SellerStatementPage() {
     }
   };
 
-  if (data === null) return <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (data === null) return <PageSkeleton />;
   if (!data) return <p className="rounded-2xl bg-white p-6 text-sm">{isAr ? 'الكشف غير موجود.' : 'Statement not found.'}</p>;
   const Back = isAr ? ArrowRight : ArrowLeft;
   const { payout, seller, totals, entries } = data;

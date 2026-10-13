@@ -64,7 +64,7 @@ export default function TeamSettings({ isAr }) {
     }
   };
 
-  const fmt = (d) => (d ? new Date(d).toLocaleString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : (isAr ? 'لم يسجّل دخولاً بعد' : 'Never signed in'));
+  const fmt = (d) => (d ? new Date(d).toLocaleString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : (isAr ? 'لم يسجّل دخولاً بعد' : 'Never signed in'));
 
   return (
     <div className="space-y-5">

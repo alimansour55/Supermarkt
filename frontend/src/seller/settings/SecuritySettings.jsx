@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, LogOut, Monitor, ShieldCheck, Smartphone } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../../context/AuthContext';
 import { sellerApi } from '../../services/sellerApi';
 import { apiError } from '../sellerLabels';
 import PasswordStrength, { passwordIsStrong } from '../PasswordStrength';
+import { PageSkeleton } from '../ui';
 
 const inputCls = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100';
 
@@ -72,7 +72,7 @@ export default function SecuritySettings({ isAr }) {
     });
   };
 
-  if (!data) return <div className="flex min-h-[20vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (!data) return <PageSkeleton />;
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
@@ -135,7 +135,7 @@ export default function SecuritySettings({ isAr }) {
                   <span className="font-medium">{d.label}</span>
                   <span className="text-xs text-slate-500" dir="ltr">{h.ip || '—'}</span>
                   {i === 0 && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{isAr ? 'الأحدث' : 'Latest'}</span>}
-                  <span className="ms-auto text-xs text-slate-500">{new Date(h.at).toLocaleString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="ms-auto text-xs text-slate-500">{new Date(h.at).toLocaleString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </li>
               );
             })}

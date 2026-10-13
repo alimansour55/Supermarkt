@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from '../../app/router';
 import { MessageSquare, Star } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { sellerApi } from '../../services/sellerApi';
-import { Card, EmptyState, PageHeader, Segmented } from '../ui';
+import { Card, EmptyState, PageHeader, PageSkeleton, Segmented } from '../ui';
 import ProductReviewsPanel from '../ProductReviewsPanel';
 
 function Stars({ value, size = 'h-4 w-4' }) {
@@ -29,7 +28,7 @@ export default function SellerReviewsPage() {
       .catch(() => setData({ data: [], distribution: [], performance: null, pagination: { pages: 1 } }));
   }, [page, rating]);
 
-  if (!data) return <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (!data) return <PageSkeleton />;
   const perf = data.performance || {};
   const total = (data.distribution || []).reduce((n, d) => n + d.count, 0);
   const pick = (r) => { setPage(1); setSearchParams(r && r !== rating ? { rating: String(r) } : {}); };
@@ -81,7 +80,7 @@ export default function SellerReviewsPage() {
                 <li key={r._id} className="px-5 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <Stars value={r.rating} />
-                    <span className="text-xs text-slate-500">{r.userName} · {new Date(r.createdAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                    <span className="text-xs text-slate-500">{r.userName} · {new Date(r.createdAt).toLocaleDateString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                   </div>
                   {r.comment ? <p className="mt-1.5 text-sm">{r.comment}</p> : <p className="mt-1.5 text-xs text-slate-400">{isAr ? 'بدون تعليق' : 'No comment'}</p>}
                 </li>

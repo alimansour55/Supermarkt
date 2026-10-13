@@ -5,6 +5,7 @@ import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { apiError } from '../sellerLabels';
+import { PageSkeleton } from '../ui';
 
 const inputCls = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100';
 
@@ -23,7 +24,7 @@ export default function StorefrontDesign({ seller, isAr }) {
     sellerApi.listProducts({ listingStatus: 'approved', limit: 100 }).then(({ data: d }) => setProducts(d.data || [])).catch(() => {});
   }, []);
 
-  if (!data) return <div className="flex min-h-[20vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (!data) return <PageSkeleton />;
 
   const set = (k, v) => setData((d) => ({ ...d, [k]: v }));
   const move = (list, i, dir) => {

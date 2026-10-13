@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from '../../app/router';
 import { PackagePlus, Plus, Trash2, Warehouse } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { INBOUND_STATUS, apiError } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
+import { PageSkeleton } from '../ui';
 
 const inputCls = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm';
 
 function fmtDate(value, isAr) {
-  return value ? new Date(value).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  return value ? new Date(value).toLocaleDateString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 }
 
 /** Seller sends stock of its store-fulfilled products to the store's warehouse. */
@@ -63,7 +63,7 @@ export default function SellerInboundPage() {
     }
   };
 
-  if (!data) return <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (!data) return <PageSkeleton />;
 
   return (
     <div className="space-y-6">

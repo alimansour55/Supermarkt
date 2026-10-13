@@ -1,7 +1,7 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatPrice } from '../utils/formatters';
 
-const dayLabel = (date, isAr, opts) => new Date(`${date}T12:00:00`).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', opts);
+const dayLabel = (date, isAr, opts) => new Date(`${date}T12:00:00`).toLocaleDateString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', opts);
 
 function ChartTooltip({ active, payload, isAr }) {
   const point = active && payload?.[0]?.payload;

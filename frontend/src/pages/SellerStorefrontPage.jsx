@@ -124,7 +124,7 @@ export default function SellerStorefrontPage() {
   }, [slug]);
 
   const joined = useMemo(() => (seller?.joinedAt
-    ? new Date(seller.joinedAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', { month: 'long', year: 'numeric' })
+    ? new Date(seller.joinedAt).toLocaleDateString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { month: 'long', year: 'numeric' })
     : ''), [seller?.joinedAt, isAr]);
 
   if (notFound) {
@@ -331,7 +331,7 @@ export default function SellerStorefrontPage() {
               <li key={r._id} className="rounded-xl bg-slate-50 p-4">
                 <div className="flex items-center justify-between gap-2">
                   <Stars rating={r.rating} />
-                  <span className="text-xs text-text-muted">{new Date(r.createdAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB')}</span>
+                  <span className="text-xs text-text-muted">{new Date(r.createdAt).toLocaleDateString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB')}</span>
                 </div>
                 {r.comment && <p className="mt-2 text-sm">{r.comment}</p>}
                 <p className="mt-2 text-xs font-semibold text-text-muted">{r.userName}</p>

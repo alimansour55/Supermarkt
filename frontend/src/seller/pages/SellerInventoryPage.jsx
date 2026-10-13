@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from '../../app/router';
 import { ChevronDown, Percent, RotateCcw, Save, Search, Warehouse } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { LISTING_STATUS, apiError } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
-import { EmptyState, PageHeader } from '../ui';
+import { EmptyState, PageHeader, TableSkeleton } from '../ui';
 
 const cellCls = 'w-24 rounded-lg border px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-50 disabled:text-slate-400';
 const dirtyCls = 'border-amber-400 bg-amber-50';
@@ -219,11 +218,48 @@ export default function SellerInventoryPage() {
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <div className="flex min-h-[240px] items-center justify-center"><Loader size="lg" /></div>
+          <TableSkeleton />
         ) : items.length === 0 ? (
           <EmptyState icon={Warehouse} title={isAr ? 'لا توجد منتجات هنا' : 'Nothing here'} text={stock ? (isAr ? 'رائع — لا توجد منتجات بهذا المخزون.' : 'Great — no products in this state.') : undefined} />
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-slate-100 md:hidden">
+            {items.map((p) => {
+              const e = edits[p._id] || {};
+              const storeHeld = p.fulfilledBy === 'store';
+              const locked = Boolean(p.sellerPromotion);
+              return (
+                <li key={p._id} className={`space-y-2 p-3 ${errors[p._id] ? 'bg-red-50/60' : edits[p._id] ? 'bg-amber-50/40' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    {typeof p.image === 'string' && p.image.startsWith('http')
+                      ? <img src={p.image} alt="" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" />
+                      : <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100">{p.emoji || '🛍️'}</span>}
+                    <div className="min-w-0 flex-1">
+                      <Link to={`/seller-center/products/${p._id}`} className="line-clamp-1 text-sm font-semibold">{isAr ? p.nameAr : p.nameEn}</Link>
+                      <div className="flex items-center gap-2 text-xs">{availability(p)}<StatusBadge map={LISTING_STATUS} value={p.listingStatus} isAr={isAr} /></div>
+                    </div>
+                  </div>
+                  {p.variants?.length ? (
+                    <Link to={`/seller-center/products/${p._id}`} className="block text-xs font-semibold text-indigo-700">{isAr ? `${p.variants.length} أنواع — عدّلها من صفحة المنتج` : `${p.variants.length} variants — edit on the product page`}</Link>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="text-[11px] text-slate-500">{isAr ? 'السعر' : 'Price'}
+                        <input type="number" min="0" step="0.01" inputMode="decimal" value={shown(e.price, p.price)} onChange={(ev) => edit(p, 'price', ev.target.value)} disabled={locked} className={`${cellCls} w-full ${e.price !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" />
+                      </label>
+                      <label className="text-[11px] text-slate-500">{isAr ? 'قبل الخصم' : 'Was'}
+                        <input type="number" min="0" step="0.01" inputMode="decimal" value={shown(e.oldPrice, p.oldPrice || '')} onChange={(ev) => edit(p, 'oldPrice', ev.target.value)} disabled={locked} className={`${cellCls} w-full ${e.oldPrice !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" />
+                      </label>
+                      <label className="text-[11px] text-slate-500">{isAr ? 'المخزون' : 'Stock'}
+                        <input type="number" min="0" inputMode="numeric" value={shown(e.stock, p.stock)} onChange={(ev) => edit(p, 'stock', ev.target.value)} disabled={storeHeld} className={`${cellCls} w-full ${e.stock !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" />
+                      </label>
+                    </div>
+                  )}
+                  {errors[p._id] && <p className="text-xs font-medium text-red-600">{errors[p._id]}</p>}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[900px] text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500">
                 <tr>
@@ -302,6 +338,7 @@ export default function SellerInventoryPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

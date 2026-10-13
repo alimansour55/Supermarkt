@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useOutletContext } from '../../app/router';
 import { History } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
-import { EmptyState, PageHeader, Segmented } from '../ui';
+import { EmptyState, PageHeader, Segmented, TableSkeleton } from '../ui';
 
 const ACTIONS = {
   'product.create': { ar: 'أضاف منتجاً', en: 'added a product' },
@@ -82,7 +81,7 @@ export default function SellerActivityPage() {
         />
       </div>
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {!data ? <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div> : data.data.length === 0 ? (
+        {!data ? <TableSkeleton /> : data.data.length === 0 ? (
           <EmptyState icon={History} title={isAr ? 'لا يوجد نشاط بعد' : 'No activity yet'} />
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -97,7 +96,7 @@ export default function SellerActivityPage() {
                     <p><span className="font-semibold">{a.actorName || (isAr ? 'النظام' : 'System')}</span> {meta ? (isAr ? meta.ar : meta.en) : a.action} {label}</p>
                     <Details details={a.details} isAr={isAr} />
                   </div>
-                  <span className="shrink-0 text-xs text-slate-400">{new Date(a.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="shrink-0 text-xs text-slate-400">{new Date(a.createdAt).toLocaleString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                 </li>
               );
             })}

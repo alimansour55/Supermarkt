@@ -3,13 +3,13 @@ import { Link, useNavigate, useOutletContext, useSearchParams } from '../../app/
 import {
   Copy, FileDown, FileUp, FolderMinus, FolderPlus, PackageOpen, Pause, Pencil, Play, Plus, Search, Send, Tags, Trash2, X,
 } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { FULFILLMENT, LISTING_STATUS, apiError, label } from '../sellerLabels';
 import { saveBlob } from '../sellerUtils';
 import StatusBadge from '../StatusBadge';
+import { TableSkeleton } from '../ui';
 
 const TABS = ['', 'approved', 'pending_review', 'draft', 'rejected', 'paused'];
 
@@ -402,7 +402,7 @@ export default function SellerProductsPage() {
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div>
+          <TableSkeleton />
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center gap-3 p-10 text-center text-sm text-slate-500">
             <PackageOpen className="h-10 w-10 text-slate-300" aria-hidden />
@@ -410,7 +410,43 @@ export default function SellerProductsPage() {
             <Link to="/seller-center/products/new" className="font-semibold text-indigo-700 hover:underline">{isAr ? 'أضف منتجاً' : 'Add a product'}</Link>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="divide-y divide-slate-100 md:hidden">
+            {items.map((p) => (
+              <li key={p._id} className={`flex gap-3 p-3 ${selected.has(p._id) ? 'bg-indigo-50/50' : ''}`}>
+                <input type="checkbox" checked={selected.has(p._id)} onChange={() => toggle(p._id)} aria-label={isAr ? 'تحديد' : 'Select'} className="mt-1 h-4 w-4 shrink-0 rounded" />
+                <Link to={`/seller-center/products/${p._id}`} className="shrink-0">
+                  {typeof p.image === 'string' && p.image.startsWith('http')
+                    ? <img src={p.image} alt="" className="h-16 w-16 rounded-xl object-cover ring-1 ring-slate-200" />
+                    : <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-slate-100 text-2xl">{p.emoji || '🛍️'}</span>}
+                </Link>
+                <div className="min-w-0 flex-1">
+                  <Link to={`/seller-center/products/${p._id}`} className="line-clamp-2 text-sm font-semibold">{isAr ? p.nameAr : p.nameEn}</Link>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold">{formatPrice(p.price)}</span>
+                    <StatusBadge map={LISTING_STATUS} value={p.listingStatus} isAr={isAr} />
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {isAr ? 'المخزون: ' : 'Stock: '}{p.hasVariants ? (isAr ? 'حسب النوع' : 'per variant') : p.stock ?? 0}
+                    {p.pendingChangesAt && <span className="text-amber-700">{isAr ? ' · تعديلات بانتظار المراجعة' : ' · edits in review'}</span>}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {['draft', 'rejected'].includes(p.listingStatus) && (
+                      <button type="button" disabled={busyId === p._id} onClick={() => act(p, 'submit')} className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-50">{isAr ? 'إرسال' : 'Submit'}</button>
+                    )}
+                    {p.listingStatus === 'approved' && (
+                      <button type="button" disabled={busyId === p._id} onClick={() => act(p, 'pause')} className="rounded-lg px-2.5 py-1 text-xs font-semibold ring-1 ring-slate-200 disabled:opacity-50">{isAr ? 'إيقاف' : 'Pause'}</button>
+                    )}
+                    {p.listingStatus === 'paused' && (
+                      <button type="button" disabled={busyId === p._id} onClick={() => act(p, 'unpause')} className="rounded-lg px-2.5 py-1 text-xs font-semibold ring-1 ring-slate-200 disabled:opacity-50">{isAr ? 'تشغيل' : 'Resume'}</button>
+                    )}
+                    <button type="button" disabled={busyId === p._id} onClick={() => act(p, 'duplicate')} className="rounded-lg px-2.5 py-1 text-xs font-semibold ring-1 ring-slate-200 disabled:opacity-50">{isAr ? 'نسخ' : 'Duplicate'}</button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-slate-50 text-start text-xs uppercase text-slate-500">
                 <tr>
@@ -505,6 +541,7 @@ export default function SellerProductsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 

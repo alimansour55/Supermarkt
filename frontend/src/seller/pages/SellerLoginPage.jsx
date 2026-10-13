@@ -176,16 +176,16 @@ export default function SellerLoginPage() {
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={fieldClass} dir="ltr" autoComplete="username" required />
           </span>
         </label>
-        <label className="block">
-          <span className="mb-1.5 flex items-center justify-between text-sm font-medium text-slate-800">
-            {isAr ? 'كلمة المرور' : 'Password'}
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label htmlFor="seller-password" className="text-sm font-medium text-slate-800">{isAr ? 'كلمة المرور' : 'Password'}</label>
             <button type="button" onClick={() => { setError(''); setMode('forgot'); }} className="text-xs font-semibold text-indigo-700 hover:underline">{isAr ? 'نسيت كلمة المرور؟' : 'Forgot password?'}</button>
-          </span>
+          </div>
           <span className="relative block">
             <Lock className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={fieldClass} dir="ltr" autoComplete="current-password" required />
+            <input id="seller-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={fieldClass} dir="ltr" autoComplete="current-password" required />
           </span>
-        </label>
+        </div>
         <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700" disabled={submitting || !email || !password}>
           {submitting ? (isAr ? 'جاري الدخول...' : 'Signing in...') : (isAr ? 'دخول' : 'Sign in')}
         </Button>

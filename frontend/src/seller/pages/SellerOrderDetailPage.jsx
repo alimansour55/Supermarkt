@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext, useParams } from '../../app/router';
 import { ArrowLeft, ArrowRight, Banknote, MapPin, Phone, Printer, Truck } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { FULFILLMENT, SHIPMENT_STATUS, apiError, label } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
+import { PageSkeleton } from '../ui';
 
 const inputCls = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100';
 
 function fmtDate(value, isAr) {
-  return value ? new Date(value).toLocaleString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+  return value ? new Date(value).toLocaleString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 }
 
 function formatAddress(a) {
@@ -54,7 +54,7 @@ export default function SellerOrderDetailPage() {
     }
   };
 
-  if (!shipment) return <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (!shipment) return <PageSkeleton />;
 
   const s = shipment;
   const sellerShips = s.fulfilledBy === 'seller';

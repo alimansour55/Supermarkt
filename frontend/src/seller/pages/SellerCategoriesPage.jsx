@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from '../../app/router';
 import { ArrowDown, ArrowUp, Check, CornerDownRight, Eye, EyeOff, FolderPlus, Pencil, Tags, Trash2, X } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { apiError } from '../sellerLabels';
+import { PageSkeleton } from '../ui';
 
 const inputCls = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100';
 
@@ -138,7 +138,7 @@ export default function SellerCategoriesPage() {
     </li>
   );
 
-  if (loading) return <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (loading) return <PageSkeleton />;
 
   return (
     <div className="space-y-5">

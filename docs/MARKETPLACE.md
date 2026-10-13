@@ -103,6 +103,34 @@ A sidebar on the start side (right in Arabic) groups everything like Amazon Sell
 | Store settings | `/store`, `/store/documents`, `/store/payout`, `/store/team` |
 | Notifications, Help center | Full notification list; fees, guides and FAQ |
 
+## Seller Center tools (security, operations, growth)
+
+- **Security**: forgot / reset password by email, change password, optional 2-step sign-in
+  (emailed code), new-sign-in alert emails and sign-in history. Tokens carry a session
+  version (`sv`); password change / reset, "sign out everywhere" and deactivating a staff
+  login bump `User.sessionVersion`, which ends every other session.
+- **Staff permissions** per area: `products`, `orders`, `reports`, `finance`, `store`
+  (`SELLER_PERMISSIONS`; owners have all). Enforced by `sellerCan()` on the API and mirrored
+  in the menu. **Activity log** (`SellerActivity`, owner-only, kept one year).
+- **Returns** of the seller's items (read from `Order.returns`; staff still decide) with a
+  seller note. **Shipping labels** (Code 128) + packing slips, printable in bulk.
+- **Alerts** (`sellerAlerts.service.js`, run by `jobs/sellerJobs.js` every 5 min): new-order
+  email/WhatsApp, ship-by reminders 6 h before the deadline, low-stock alerts with a
+  per-product level. Preferences in `Seller.notificationPrefs`.
+- **Payout statements** (printable + CSV). **Catalog export → Excel → import** updates
+  existing products by `id` or `sku` (price, old price, stock, alert level, sections).
+- **Product Q&A** (`ProductQuestion`, marketplace products only) and **seller replies to
+  product reviews** (`adminReply.byRole = 'seller'`).
+- **Vacation mode**: `Seller.vacation` + `Product.sellerAway` mirror hide every listing;
+  ends automatically on the return date.
+- **Seller promotions** (`SellerPromotion`): staff approve, the job applies them as price
+  markdowns, prices are locked while running and restored from a snapshot afterwards; one
+  promotion per product at a time.
+- **Store page design** (`Seller.storefront`: tagline, banners, featured products) and
+  **traffic** (`ProductStat`: daily views / add-to-cart per product, `POST /product-events`).
+- E2E: `e2e/seller.spec.js` walks sign-in → section → product → approval → storefront →
+  inventory → promotion in a real browser.
+
 ## Code map
 
 - Models: `Seller`, `SellerCategory`, `MarketplaceSettings`, `Shipment`, `SellerLedgerEntry`, `SellerPayout`,
@@ -113,7 +141,7 @@ A sidebar on the start side (right in Arabic) groups everything like Amazon Sell
   `sellerCategory.service.js` (store sections).
 - Routes: `/api/sellers` (public), `/api/seller` (portal, always scoped to the signed-in seller),
   `/api/admin/marketplace` (staff).
-- Tests: `backend/test/marketplace.*.test.js` (onboarding, orders, finance, storefront, ops, catalog, insights).
+- Tests: `backend/test/marketplace.*.test.js` (onboarding, orders, finance, storefront, ops, catalog, insights, security, alerts, tools, growth).
 
 ## Local demo
 

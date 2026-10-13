@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext } from '../../app/router';
 import { CheckCircle2, Clock, Gauge, Lightbulb, Star, XCircle } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { sellerApi } from '../../services/sellerApi';
 import { ACCOUNT_HEALTH } from '../sellerLabels';
-import { Card, PageHeader } from '../ui';
+import { Card, PageHeader, PageSkeleton } from '../ui';
 
 /** One metric vs its target, like Seller Central's account health tiles. */
 function Metric({ icon: Icon, title, value, suffix = '%', target, good, detail, isAr, explain }) {
@@ -32,7 +31,7 @@ export default function SellerPerformancePage() {
     sellerApi.getMyReviews({ limit: 1 }).then(({ data }) => setPerf(data.performance || {})).catch(() => setPerf({}));
   }, []);
 
-  if (!perf) return <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (!perf) return <PageSkeleton />;
   const health = ACCOUNT_HEALTH[perf.health] || ACCOUNT_HEALTH.good;
   const ratingGood = !(perf.ratingCount >= 5 && perf.rating < 3.5);
 

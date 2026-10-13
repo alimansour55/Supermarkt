@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from '../../app/router';
 import { ArrowLeft, ArrowRight, Printer } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import Barcode128 from '../Barcode128';
+import { PageSkeleton } from '../ui';
 
 const addressLines = (a) => (a ? [
   [a.street, a.building && `مبنى ${a.building}`, a.floor && `دور ${a.floor}`, a.apartment && `شقة ${a.apartment}`].filter(Boolean).join('، '),
@@ -127,7 +127,7 @@ export default function SellerPrintPage() {
           <Printer className="h-4 w-4" />{isAr ? 'طباعة' : 'Print'}
         </button>
       </div>
-      {!items ? <div className="flex min-h-[30vh] items-center justify-center"><Loader size="lg" /></div> : items.length === 0 ? (
+      {!items ? <PageSkeleton /> : items.length === 0 ? (
         <p className="rounded-2xl bg-white p-6 text-center text-sm text-slate-500">{isAr ? 'لا توجد طلبات للطباعة.' : 'Nothing to print.'}</p>
       ) : (
         <div id="seller-print" className="space-y-6">

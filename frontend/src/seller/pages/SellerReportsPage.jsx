@@ -8,7 +8,7 @@ import { formatPrice } from '../../utils/formatters';
 import { apiError } from '../sellerLabels';
 import SalesChart from '../SalesChart';
 import TrafficReport from '../TrafficReport';
-import { Card, KpiCard, PageHeader, Segmented } from '../ui';
+import { Card, KpiCard, PageHeader, PageSkeleton, Segmented } from '../ui';
 import { fmtNumber, saveBlob } from '../sellerUtils';
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
@@ -89,7 +89,7 @@ export default function SellerReportsPage() {
       </div>
 
       {!data ? (
-        <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>
+        <PageSkeleton />
       ) : (
         <div className="space-y-6">
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -202,7 +202,7 @@ export default function SellerReportsPage() {
                   <tbody className="divide-y divide-slate-100">
                     {[...data.series].reverse().map((d) => (
                       <tr key={d.date} className={d.orders ? '' : 'text-slate-400'}>
-                        <td className="px-5 py-2">{new Date(`${d.date}T12:00:00`).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                        <td className="px-5 py-2">{new Date(`${d.date}T12:00:00`).toLocaleDateString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</td>
                         <td className="px-3 py-2 text-end tabular-nums">{d.orders}</td>
                         <td className="px-3 py-2 text-end tabular-nums">{d.units}</td>
                         <td className="px-5 py-2 text-end font-semibold tabular-nums">{formatPrice(d.gross)}</td>

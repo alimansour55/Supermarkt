@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext } from '../../app/router';
 import { Bell, CheckCheck } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { sellerApi } from '../../services/sellerApi';
-import { EmptyState, PageHeader, Segmented } from '../ui';
+import { EmptyState, PageHeader, PageSkeleton, Segmented } from '../ui';
 
 function dayGroup(date, isAr) {
   const d = new Date(date);
@@ -66,7 +65,7 @@ export default function SellerNotificationsPage() {
         />
       </div>
 
-      {!items ? <div className="flex min-h-[30vh] items-center justify-center"><Loader size="lg" /></div> : items.length === 0 ? (
+      {!items ? <PageSkeleton /> : items.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white"><EmptyState icon={Bell} title={isAr ? 'لا توجد إشعارات' : 'No notifications'} /></div>
       ) : (
         <div className="space-y-5">
@@ -82,7 +81,7 @@ export default function SellerNotificationsPage() {
                         <span className="block font-semibold">{isAr ? n.titleAr : n.titleEn}</span>
                         <span className="block text-sm text-slate-600">{isAr ? n.messageAr : n.messageEn}</span>
                       </span>
-                      <span className="shrink-0 text-xs text-slate-400">{new Date(n.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="shrink-0 text-xs text-slate-400">{new Date(n.createdAt).toLocaleString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                     </Link>
                   </li>
                 ))}

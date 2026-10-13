@@ -8,6 +8,8 @@ import { sellerApi } from '../services/sellerApi';
 import { visibleNav } from './sellerNav';
 import SellerSidebar from './layout/SellerSidebar';
 import SellerTopbar from './layout/SellerTopbar';
+import SellerShortcuts from './layout/SellerShortcuts';
+import { PageSkeleton } from './ui';
 
 const SELLER_ROLES = ['seller_owner', 'seller_staff'];
 const COLLAPSE_KEY = 'sellerCenter.sidebarCollapsed';
@@ -147,6 +149,7 @@ export default function SellerShell() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900" dir={isAr ? 'rtl' : 'ltr'}>
+      {me && <SellerShortcuts isAr={isAr} />}
       {me && (
         <SellerSidebar
           nav={nav}
@@ -176,7 +179,7 @@ export default function SellerShell() {
           {loadError && !me ? (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{loadError}</div>
           ) : !me ? (
-            <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>
+            <PageSkeleton />
           ) : (
             <>
               <StatusBanner seller={seller} isAr={isAr} />

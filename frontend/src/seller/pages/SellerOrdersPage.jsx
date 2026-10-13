@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useOutletContext, useSearchParams } from '../../app/router';
 import { AlarmClock, CheckCheck, ClipboardList, Download, PackageCheck, Printer, Search, X } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { FULFILLMENT, SHIPMENT_STATUS, apiError, label } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
-import { EmptyState, PageHeader } from '../ui';
+import { EmptyState, PageHeader, TableSkeleton } from '../ui';
 import { saveBlob } from '../sellerUtils';
 
 const TABS = [
@@ -24,7 +23,7 @@ const TABS = [
 const DAY = 86400000;
 
 function fmtDate(value, isAr) {
-  return value ? new Date(value).toLocaleString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  return value ? new Date(value).toLocaleString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 }
 
 /** "Ship by" for seller-shipped orders still waiting — overdue ones are red. */
@@ -39,7 +38,7 @@ function ShipBy({ shipment, handlingDays, isAr }) {
       <AlarmClock className="h-3 w-3" aria-hidden />
       {overdue
         ? (isAr ? 'متأخر عن موعد الشحن' : 'Past ship-by date')
-        : (isAr ? `اشحن قبل ${due.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })}` : `Ship by ${due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`)}
+        : (isAr ? `اشحن قبل ${due.toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'short' })}` : `Ship by ${due.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`)}
     </span>
   );
 }
@@ -209,7 +208,7 @@ export default function SellerOrdersPage() {
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
-          <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div>
+          <TableSkeleton />
         ) : items.length === 0 ? (
           <EmptyState icon={ClipboardList} title={isAr ? 'لا توجد طلبات هنا' : 'No orders here'} text={status === 'pending' ? (isAr ? 'لا توجد طلبات جديدة بانتظارك.' : 'No new orders waiting for you.') : undefined} />
         ) : (

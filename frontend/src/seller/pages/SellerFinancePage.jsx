@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext } from '../../app/router';
 import { Clock, Landmark, Wallet, CheckCircle2, Info } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { LEDGER_TYPE, PAYOUT_STATUS, label } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
+import { PageSkeleton } from '../ui';
 
 function fmtDate(value, isAr) {
-  return value ? new Date(value).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  return value ? new Date(value).toLocaleDateString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 }
 
 function Card({ icon: Icon, tone, title, value, hint }) {
@@ -42,7 +42,7 @@ export default function SellerFinancePage() {
   }, [page]);
   useEffect(() => { loadLedger(); }, [loadLedger]);
 
-  if (!finance) return <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (!finance) return <PageSkeleton />;
   const { balance } = finance;
   const hasPayoutDetails = Boolean(seller.bank?.accountNumber || seller.bank?.iban || seller.bank?.walletPhone);
 

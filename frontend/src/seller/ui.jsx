@@ -90,3 +90,40 @@ export function Segmented({ options, value, onChange }) {
     </div>
   );
 }
+
+/** Grey placeholder blocks while a page loads — keeps the layout steady instead of a spinner. */
+export function Skeleton({ className = '' }) {
+  return <span className={`block animate-pulse rounded-lg bg-slate-200/80 ${className}`} aria-hidden />;
+}
+
+export function TableSkeleton({ rows = 6 }) {
+  return (
+    <div className="divide-y divide-slate-100" role="status" aria-label="Loading">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-4 px-5 py-4">
+          <Skeleton className="h-11 w-11 shrink-0 rounded-xl" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-3.5 w-2/5" />
+            <Skeleton className="h-3 w-1/4" />
+          </div>
+          <Skeleton className="hidden h-6 w-20 rounded-full sm:block" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PageSkeleton() {
+  return (
+    <div className="space-y-6" role="status" aria-label="Loading">
+      <div className="space-y-2">
+        <Skeleton className="h-7 w-56" />
+        <Skeleton className="h-4 w-80 max-w-full" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white"><TableSkeleton rows={5} /></div>
+    </div>
+  );
+}

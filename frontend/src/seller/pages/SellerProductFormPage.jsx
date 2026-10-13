@@ -3,7 +3,6 @@ import { Link, useNavigate, useOutletContext, useParams } from '../../app/router
 import {
   ArrowLeft, ArrowRight, Copy, DollarSign, ExternalLink, FileText, FolderTree, Image as ImageIcon, Info, Layers, ListChecks,
 } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { categoryService } from '../../services/apiServices';
 import { fetchBrands } from '../../services/brandApi';
@@ -18,6 +17,7 @@ import CategoriesSection from '../product-form/CategoriesSection';
 import DetailsSection from '../product-form/DetailsSection';
 import PreviewPanel from '../product-form/PreviewPanel';
 import { qualityChecks } from '../product-form/productQuality';
+import { PageSkeleton } from '../ui';
 
 const EMPTY = {
   nameAr: '', nameEn: '', descriptionAr: '', descriptionEn: '',
@@ -317,7 +317,7 @@ export default function SellerProductFormPage() {
     }
   };
 
-  if (loading) return <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (loading) return <PageSkeleton />;
 
   const Back = isAr ? ArrowRight : ArrowLeft;
   const Next = isAr ? ArrowLeft : ArrowRight;

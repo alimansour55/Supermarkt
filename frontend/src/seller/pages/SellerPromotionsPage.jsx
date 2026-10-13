@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from '../../app/router';
 import { BadgePercent, Plus, X } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { apiError } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
-import { Card, EmptyState, PageHeader, Segmented } from '../ui';
+import { Card, EmptyState, PageHeader, Segmented, TableSkeleton } from '../ui';
 import { fmtDateTime } from '../sellerUtils';
 
 const STATUS = {
@@ -170,7 +169,7 @@ export default function SellerPromotionsPage() {
       {creating && <CreatePromotion isAr={isAr} onClose={() => setCreating(false)} onCreated={() => { setCreating(false); load(); }} />}
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {!items ? <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div> : items.length === 0 ? (
+        {!items ? <TableSkeleton /> : items.length === 0 ? (
           <EmptyState icon={BadgePercent} title={isAr ? 'لا توجد عروض بعد' : 'No promotions yet'} text={isAr ? 'العروض تزيد الظهور في صفحة العروض والمبيعات.' : 'Promotions show up on the offers page and boost sales.'} />
         ) : (
           <ul className="divide-y divide-slate-100">

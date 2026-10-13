@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext, useSearchParams } from '../../app/router';
 import { Eye, EyeOff, MessageCircleQuestion, Send } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { apiError } from '../sellerLabels';
-import { EmptyState, PageHeader, Segmented } from '../ui';
+import { EmptyState, PageHeader, Segmented, TableSkeleton } from '../ui';
 import { fmtDateTime } from '../sellerUtils';
 
 /** Customer questions on the seller's products — answer them; answers show on the product page. */
@@ -67,7 +66,7 @@ export default function SellerQuestionsPage() {
         />
       </div>
 
-      {!data ? <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div> : data.data.length === 0 ? (
+      {!data ? <TableSkeleton /> : data.data.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white"><EmptyState icon={MessageCircleQuestion} title={state === 'unanswered' ? (isAr ? 'لا توجد أسئلة بانتظارك' : 'No questions waiting') : (isAr ? 'لا شيء هنا' : 'Nothing here')} /></div>
       ) : (
         <ul className="space-y-3">

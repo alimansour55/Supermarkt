@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from '../../app/router';
 import { MessageSquareReply, RotateCcw } from 'lucide-react';
-import Loader from '../../components/ui/Loader';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { apiError } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
-import { EmptyState, PageHeader } from '../ui';
+import { EmptyState, PageHeader, TableSkeleton } from '../ui';
 import { fmtDateTime } from '../sellerUtils';
 
 const RETURN_STATUS = {
@@ -79,7 +78,7 @@ export default function SellerReturnsPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {!data ? <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div> : data.data.length === 0 ? (
+        {!data ? <TableSkeleton /> : data.data.length === 0 ? (
           <EmptyState icon={RotateCcw} title={isAr ? 'لا توجد مرتجعات' : 'No returns'} text={isAr ? 'رائع — لا توجد طلبات إرجاع هنا.' : 'Great — no return requests here.'} />
         ) : (
           <ul className="divide-y divide-slate-100">

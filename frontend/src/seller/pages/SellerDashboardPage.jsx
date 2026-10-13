@@ -8,7 +8,7 @@ import Loader from '../../components/ui/Loader';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import SalesChart from '../SalesChart';
-import { Card, KpiCard, Segmented } from '../ui';
+import { Card, KpiCard, PageSkeleton, Segmented } from '../ui';
 import { fmtNumber } from '../sellerUtils';
 import { ACCOUNT_HEALTH as HEALTH } from '../sellerLabels';
 
@@ -126,7 +126,7 @@ export default function SellerDashboardPage() {
   }, [days]);
 
   if (error && !data) return <p className="rounded-2xl bg-red-50 p-4 text-sm text-red-800">{isAr ? 'تعذّر تحميل لوحة التحكم' : 'Could not load the dashboard'}</p>;
-  if (!data) return <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>;
+  if (!data) return <PageSkeleton />;
 
   const { sales, balance, performance, listings } = data;
   const health = HEALTH[performance?.health] || HEALTH.good;
