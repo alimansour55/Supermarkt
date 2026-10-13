@@ -88,6 +88,56 @@ export function buildProductSchema(isAr, categories = []) {
       }
     }
 
+    const seenVariants = new Set();
+    const seenVariantSkus = new Set();
+    const seenVariantBarcodes = new Set();
+    (data.variants || []).forEach((v, idx) => {
+      const path = (field) => ['variants', idx, field];
+      const valueAr = String(v.valueAr || '').trim();
+      const valueEn = String(v.valueEn || '').trim();
+      if (!valueAr && !valueEn) {
+        ctx.addIssue({ code: 'custom', message: msg('أدخل قيمة المتغير (عربي أو إنجليزي)', 'Enter the variant value (Arabic or English)'), path: path('valueAr') });
+      } else {
+        const key = `${v.type}|${(valueEn || valueAr).toLowerCase()}`;
+        if (seenVariants.has(key)) {
+          ctx.addIssue({ code: 'custom', message: msg('هذا المتغير مكرر', 'This variant is a duplicate'), path: path('valueAr') });
+        }
+        seenVariants.add(key);
+      }
+
+      const hasPrice = v.price !== '' && v.price != null;
+      const variantPrice = hasPrice ? Number(v.price) : Number(data.price);
+      if (hasPrice && Number(v.price) < 0) {
+        ctx.addIssue({ code: 'custom', message: msg('سعر المتغير لا يمكن أن يكون سالباً', 'Variant price cannot be negative'), path: path('price') });
+      }
+      if (v.wholesalePrice !== '' && v.wholesalePrice != null) {
+        const wholesale = Number(v.wholesalePrice);
+        if (wholesale < 0) {
+          ctx.addIssue({ code: 'custom', message: msg('سعر جملة المتغير لا يمكن أن يكون سالباً', 'Variant wholesale price cannot be negative'), path: path('wholesalePrice') });
+        } else if (!Number.isNaN(variantPrice) && wholesale > variantPrice) {
+          ctx.addIssue({ code: 'custom', message: msg('سعر جملة المتغير يجب ألا يتجاوز سعر بيعه', 'Variant wholesale price must be at or below its selling price'), path: path('wholesalePrice') });
+        }
+      }
+      if (v.stock !== '' && v.stock != null && Number(v.stock) < 0) {
+        ctx.addIssue({ code: 'custom', message: msg('مخزون المتغير لا يمكن أن يكون سالباً', 'Variant stock cannot be negative'), path: path('stock') });
+      }
+
+      const sku = String(v.sku || '').trim().toUpperCase();
+      if (sku) {
+        if (seenVariantSkus.has(sku)) {
+          ctx.addIssue({ code: 'custom', message: msg('SKU مكرر بين المتغيرات', 'Duplicate SKU across variants'), path: path('sku') });
+        }
+        seenVariantSkus.add(sku);
+      }
+      const barcode = String(v.barcode || '').trim();
+      if (barcode) {
+        if (seenVariantBarcodes.has(barcode)) {
+          ctx.addIssue({ code: 'custom', message: msg('باركود مكرر بين المتغيرات', 'Duplicate barcode across variants'), path: path('barcode') });
+        }
+        seenVariantBarcodes.add(barcode);
+      }
+    });
+
     const leafError = validateProductCategoryLeaf(data.subCategory, categories, isAr);
     if (leafError) {
       ctx.addIssue({ code: 'custom', message: leafError, path: ['subCategory'] });
