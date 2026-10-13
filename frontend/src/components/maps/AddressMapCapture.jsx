@@ -6,7 +6,7 @@ import { parseGeocodeResult, parseGooglePlace, normalizeGpsAddress } from '../..
 import { getGeolocationErrorMessage, getGeolocationProgressMessage, getGeolocationAccuracyWarning, useCurrentGeolocation } from '../../hooks/useCurrentGeolocation';
 import Input from '../ui/Input';
 import AddressSearchInput from './AddressSearchInput';
-import { InteractiveMapCanvas } from './InteractiveGoogleMap';
+import InteractiveGoogleMap from './InteractiveGoogleMap';
 import CurrentLocationButton from './CurrentLocationButton';
 import GeoErrorNotice from '../location/GeoErrorNotice';
 
@@ -393,7 +393,7 @@ export default function AddressMapCapture({
       />
 
       <div>
-        <InteractiveMapCanvas
+        <InteractiveGoogleMap
           center={center}
           zoom={zoom}
           position={position}
