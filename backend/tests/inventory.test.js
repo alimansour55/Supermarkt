@@ -18,6 +18,7 @@ async function insertProduct(fields = {}) {
   const _id = oid();
   await Product.collection.insertOne({
     _id,
+    slug: `product-${_id}`,
     nameAr: 'منتج',
     nameEn: 'Product',
     isActive: true,
