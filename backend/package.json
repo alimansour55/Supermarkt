@@ -14,6 +14,7 @@
     "migrate:category-tree": "node scripts/migrate-category-tree.js",
     "migrate:drop-subcategory": "node scripts/migrate-drop-product-subcategory.js",
     "repair:brands": "node scripts/repair-product-brands.js",
+    "check:barcodes": "node scripts/check-duplicate-barcodes.js",
     "repair:superadmin": "node scripts/repair-superadmin-login.js",
     "repair:user-indexes": "node scripts/repair-user-indexes.js",
     "check:maps": "node scripts/check-google-maps.js",

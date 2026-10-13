@@ -68,6 +68,8 @@ export const adminApi = {
   suggestProductSku: (body) => api.post('/products/admin/sku/suggest', body),
   checkProductSku: (sku, excludeId) =>
     api.get('/products/admin/sku/check', { params: { sku, excludeId } }),
+  checkProductBarcode: (barcode, excludeId) =>
+    api.get('/products/admin/barcode/check', { params: { barcode, excludeId } }),
 
   getCategories: (params) => api.get('/categories/admin', { params }),
   bulkCategories: (ids, action) => api.post('/categories/admin/bulk', { ids, action }),

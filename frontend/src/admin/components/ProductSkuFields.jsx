@@ -7,6 +7,7 @@ import {
   RefreshCw,
   ScanBarcode,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { adminApi } from '../adminApi';
 import { buildLocalSkuCandidates } from '../utils/productSkuUtils';
 
@@ -22,6 +23,7 @@ export default function ProductSkuFields({
   const [loadingSku, setLoadingSku] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showBarcode, setShowBarcode] = useState(Boolean(form.barcode?.trim()));
+  const [barcodeOwner, setBarcodeOwner] = useState(null);
   const skuManual = useRef(Boolean(form.sku?.trim()));
   const debounceRef = useRef(null);
 
@@ -76,6 +78,23 @@ export default function ProductSkuFields({
   useEffect(() => {
     if (form.barcode?.trim()) setShowBarcode(true);
   }, [form.barcode]);
+
+  useEffect(() => {
+    const barcode = (form.barcode || '').trim();
+    setBarcodeOwner(null);
+    if (!barcode) return undefined;
+
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await adminApi.checkProductBarcode(barcode, productId);
+        setBarcodeOwner(data?.available === false ? data.owner : null);
+      } catch {
+        setBarcodeOwner(null);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [form.barcode, productId]);
 
   useEffect(() => {
     const sku = (form.sku || '').trim();
@@ -242,7 +261,7 @@ export default function ProductSkuFields({
             </p>
             <div className="flex gap-2">
               <input
-                className="min-w-0 flex-1 rounded-lg border border-border bg-white px-3 py-2 font-mono text-sm tracking-wider focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                className={`min-w-0 flex-1 rounded-lg border bg-white px-3 ${barcodeOwner ? 'border-red-400' : 'border-border'} py-2 font-mono text-sm tracking-wider focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100`}
                 value={form.barcode || ''}
                 onChange={(e) => set('barcode', e.target.value.replace(/\D/g, ''))}
                 placeholder="6220000000000"
@@ -256,6 +275,19 @@ export default function ProductSkuFields({
                 {isAr ? 'إنشاء' : 'Generate'}
               </button>
             </div>
+            {barcodeOwner && (
+              <p className="text-xs text-red-600">
+                {isAr ? 'هذا الباركود مستخدم بالفعل في: ' : 'This barcode is already used by: '}
+                <Link
+                  to={`/admin/products/${barcodeOwner._id}/edit`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold underline"
+                >
+                  {(isAr ? barcodeOwner.nameAr : barcodeOwner.nameEn) || barcodeOwner.nameEn || barcodeOwner.nameAr}
+                </Link>
+              </p>
+            )}
             {form.barcode && (
               <button
                 type="button"
