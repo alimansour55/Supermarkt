@@ -165,6 +165,7 @@ export const formatProduct = (product) => {
           message: review.adminReply.message,
           repliedAt: review.adminReply.repliedAt,
           adminName: review.adminReply.repliedBy?.name || null,
+          byRole: review.adminReply.byRole || 'staff',
         }
         : null,
       createdAt: review.createdAt,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, Outlet, useLocation, useNavigate } from '../app/router';
-import { AlertTriangle, Clock } from 'lucide-react';
+import { Link, Navigate, Outlet, useLocation, useNavigate } from '../app/router';
+import { AlertTriangle, Clock, Palmtree } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import Loader from '../components/ui/Loader';
@@ -11,6 +11,17 @@ import SellerTopbar from './layout/SellerTopbar';
 
 const SELLER_ROLES = ['seller_owner', 'seller_staff'];
 const COLLAPSE_KEY = 'sellerCenter.sidebarCollapsed';
+
+function VacationBanner({ seller, isAr }) {
+  if (!seller?.vacation?.enabled) return null;
+  return (
+    <Link to="/seller-center/store/vacation" className="mb-5 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 hover:bg-emerald-100">
+      <Palmtree className="h-5 w-5 shrink-0" aria-hidden />
+      <span className="flex-1">{isAr ? 'متجرك في وضع الإجازة — منتجاتك مخفية عن العملاء.' : 'Your store is on vacation — your products are hidden from customers.'}</span>
+      <span className="font-semibold">{isAr ? 'إدارة' : 'Manage'}</span>
+    </Link>
+  );
+}
 
 function StatusBanner({ seller, isAr }) {
   if (!seller || seller.status === 'active') return null;
@@ -169,6 +180,7 @@ export default function SellerShell() {
           ) : (
             <>
               <StatusBanner seller={seller} isAr={isAr} />
+              <VacationBanner seller={seller} isAr={isAr} />
               <Outlet context={{ me, seller, reload, isAr, summary, refreshSummary }} />
             </>
           )}

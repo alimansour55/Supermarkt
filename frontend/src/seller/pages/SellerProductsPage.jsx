@@ -8,6 +8,7 @@ import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { FULFILLMENT, LISTING_STATUS, apiError, label } from '../sellerLabels';
+import { saveBlob } from '../sellerUtils';
 import StatusBadge from '../StatusBadge';
 
 const TABS = ['', 'approved', 'pending_review', 'draft', 'rejected', 'paused'];
@@ -53,32 +54,52 @@ function CsvImport({ isAr, onDone }) {
     }
   };
 
+  const exportCatalog = async () => {
+    try {
+      saveBlob(await sellerApi.exportCatalog(), 'catalog.csv');
+    } catch (err) {
+      toast.error(apiError(err, isAr ? 'تعذّر التصدير' : 'Export failed'));
+    }
+  };
+
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm">
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 font-semibold text-white disabled:opacity-50">
-          <FileUp className="h-4 w-4" />{busy ? (isAr ? 'جاري الاستيراد...' : 'Importing...') : (isAr ? 'استيراد ملف CSV' : 'Import CSV')}
-        </button>
-        <button type="button" onClick={downloadTemplate} className="inline-flex items-center gap-1.5 font-semibold text-indigo-700 hover:underline">
+    <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 text-sm shadow-sm md:grid-cols-2">
+      <div className="rounded-xl bg-slate-50 p-4">
+        <p className="font-bold">{isAr ? '١. إضافة منتجات جديدة' : '1. Add new products'}</p>
+        <p className="mt-1 text-xs text-slate-500">{isAr ? 'حمّل النموذج واملأه. storeCategory: أقسامك مفصولة بـ | (تُنشأ تلقائياً). تُنشأ كمسودات — أضف الصور ثم أرسلها. حتى 500 صف.' : 'Download the template and fill it in. storeCategory: your sections separated by | (created automatically). Created as drafts — add photos, then submit. Up to 500 rows.'}</p>
+        <button type="button" onClick={downloadTemplate} className="mt-3 inline-flex items-center gap-1.5 font-semibold text-indigo-700 hover:underline">
           <FileDown className="h-4 w-4" />{isAr ? 'تحميل النموذج' : 'Download template'}
         </button>
-        <span className="text-xs text-slate-500">{isAr ? 'storeCategory: أقسام متجرك مفصولة بـ | (تُنشأ تلقائياً). category: قسم المنصة (اختياري). تُنشأ المنتجات كمسودات — أضف الصور ثم أرسلها. حتى 500 صف.' : 'storeCategory: your sections separated by | (created automatically). category: marketplace category (optional). Products are created as drafts — add photos, then submit. Up to 500 rows.'}</span>
-        <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={onFile} />
       </div>
-      {result && (
-        <div className="mt-3">
-          <p className="font-semibold">
-            {isAr ? `تم إنشاء ${result.created} — فشل ${result.failed}` : `${result.created} created — ${result.failed} failed`}
-          </p>
-          {result.results?.some((r) => !r.ok) && (
-            <ul className="mt-1 max-h-40 overflow-y-auto text-xs text-red-700">
-              {result.results.filter((r) => !r.ok).map((r) => (
-                <li key={r.line}>{isAr ? `السطر ${r.line}` : `Line ${r.line}`}{r.nameEn ? ` (${r.nameEn})` : ''}: {r.error}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <div className="rounded-xl bg-slate-50 p-4">
+        <p className="font-bold">{isAr ? '٢. تحديث منتجاتك من Excel' : '2. Update your products in Excel'}</p>
+        <p className="mt-1 text-xs text-slate-500">{isAr ? 'صدّر الكتالوج، عدّل السعر أو المخزون أو الأقسام في Excel، ثم ارفعه. الصفوف التي بها id أو SKU موجود تُحدّث، والخانات الفارغة لا تتغير.' : 'Export your catalog, change price, stock or sections in Excel, then upload it. Rows with an existing id or SKU are updated; empty cells stay as they are.'}</p>
+        <button type="button" onClick={exportCatalog} className="mt-3 inline-flex items-center gap-1.5 font-semibold text-indigo-700 hover:underline">
+          <FileDown className="h-4 w-4" />{isAr ? 'تصدير الكتالوج' : 'Export catalog'}
+        </button>
+      </div>
+      <div className="md:col-span-2">
+        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 font-semibold text-white disabled:opacity-50">
+          <FileUp className="h-4 w-4" />{busy ? (isAr ? 'جاري الرفع...' : 'Uploading...') : (isAr ? 'رفع ملف CSV' : 'Upload CSV file')}
+        </button>
+        <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={onFile} />
+        {result && (
+          <div className="mt-3">
+            <p className="font-semibold">
+              {isAr
+                ? `تم إنشاء ${result.created || 0} — تحديث ${result.updated || 0} — فشل ${result.failed}`
+                : `${result.created || 0} created — ${result.updated || 0} updated — ${result.failed} failed`}
+            </p>
+            {result.results?.some((r) => !r.ok) && (
+              <ul className="mt-1 max-h-40 overflow-y-auto text-xs text-red-700">
+                {result.results.filter((r) => !r.ok).map((r) => (
+                  <li key={r.line}>{isAr ? `السطر ${r.line}` : `Line ${r.line}`}{r.nameEn ? ` (${r.nameEn})` : ''}: {r.error}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -316,7 +337,7 @@ export default function SellerProductsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setShowImport((v) => !v)} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ring-1 ring-slate-300 hover:bg-white">
-            <FileUp className="h-4 w-4" aria-hidden />{isAr ? 'استيراد CSV' : 'Import CSV'}
+            <FileUp className="h-4 w-4" aria-hidden />{isAr ? 'استيراد / تصدير Excel' : 'Excel import / export'}
           </button>
           <Link to="/seller-center/categories" className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ring-1 ring-slate-300 hover:bg-white">
             <Tags className="h-4 w-4" aria-hidden />{isAr ? 'أقسام متجري' : 'My sections'}

@@ -132,6 +132,7 @@ export default [
       route('help', 'seller/pages/SellerHelpPage.jsx'),
       route('activity', 'seller/pages/SellerActivityPage.jsx'),
       route('returns', 'seller/pages/SellerReturnsPage.jsx'),
+      route('questions', 'seller/pages/SellerQuestionsPage.jsx'),
       route('orders/print', 'seller/pages/SellerPrintPage.jsx'),
       route('finance/statements/:id', 'seller/pages/SellerStatementPage.jsx'),
     ]),

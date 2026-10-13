@@ -149,6 +149,18 @@ export default function SellerStorefrontPage() {
           </div>
         </div>
         {about && <p className="whitespace-pre-line border-t border-border px-5 py-4 text-sm text-text-muted">{about}</p>}
+        {seller.vacation && (
+          <div className="flex items-start gap-3 border-t border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
+            <span aria-hidden>🌴</span>
+            <p>
+              <span className="font-semibold">{isAr ? 'المتجر في إجازة' : 'This store is on a break'}</span>
+              {seller.vacation.until && (isAr
+                ? ` — يعود ${new Date(seller.vacation.until).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'long' })}`
+                : ` — back ${new Date(seller.vacation.until).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`)}
+              {(isAr ? seller.vacation.messageAr : seller.vacation.messageEn) && <span className="block">{isAr ? seller.vacation.messageAr : seller.vacation.messageEn}</span>}
+            </p>
+          </div>
+        )}
       </section>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">

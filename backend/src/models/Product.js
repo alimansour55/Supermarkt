@@ -82,6 +82,8 @@ const reviewSchema = new mongoose.Schema(
         ref: 'User',
         default: null,
       },
+      /** 'seller' when a marketplace seller answered their own product's review. */
+      byRole: { type: String, enum: ['staff', 'seller'], default: 'staff' },
     },
   },
   { timestamps: true },
@@ -415,6 +417,8 @@ const productSchema = new mongoose.Schema(
     sellerSlug: { type: String, trim: true, default: '' },
     /** Mirror of the seller's suspension, so visibility needs no join. */
     sellerSuspended: { type: Boolean, default: false },
+    /** Mirror of the seller's vacation mode — listings are hidden while it's on. */
+    sellerAway: { type: Boolean, default: false },
     reviewNote: { type: String, trim: true, default: '' },
     submittedAt: { type: Date, default: null },
     reviewedAt: { type: Date, default: null },
@@ -468,7 +472,7 @@ productSchema.pre('validate', async function enforceCategoryIntegrity() {
  * a caller wrote to `isActive`. Store-owned products keep their manual `isActive` toggle.
  */
 export function sellerListingIsVisible(doc) {
-  return doc.listingStatus === 'approved' && !doc.sellerSuspended;
+  return doc.listingStatus === 'approved' && !doc.sellerSuspended && !doc.sellerAway;
 }
 
 productSchema.pre('validate', function enforceSellerListingVisibility(next) {

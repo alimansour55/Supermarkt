@@ -72,7 +72,7 @@ export default function ProductReviewsSection({ product, isAr, onSubmitted }) {
               {review.adminReply?.message && (
                 <div className="mt-4 rounded-xl border border-primary-100 bg-primary-50/50 p-3">
                   <p className="text-xs font-bold text-primary-800">
-                    {isAr ? 'رد المتجر' : 'Store reply'}
+                    {review.adminReply.byRole === 'seller' ? (isAr ? 'رد البائع' : 'Seller reply') : (isAr ? 'رد المتجر' : 'Store reply')}
                   </p>
                   <p className="mt-1 whitespace-pre-line text-sm leading-6 text-text">{review.adminReply.message}</p>
                 </div>

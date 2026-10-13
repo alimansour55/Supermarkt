@@ -4,11 +4,13 @@
  * promotion schedules. Each task guards itself so one failure never stops the others.
  */
 import { runShipByReminders, runLowStockCheck } from '../services/sellerAlerts.service.js';
+import { endExpiredVacations } from '../controllers/sellerCatalog.controller.js';
 
 const EVERY_MS = 5 * 60 * 1000;
 const tasks = [
   ['ship-by reminders', runShipByReminders],
   ['low-stock alerts', runLowStockCheck],
+  ['vacation end', endExpiredVacations],
 ];
 let timer = null;
 

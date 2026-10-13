@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useOutletContext, useParams } from '../../app/router';
-import { BellRing, FileText, FileUp, Landmark, Lock, Send, Store, Trash2, Users } from 'lucide-react';
+import { BellRing, FileText, Palmtree, FileUp, Landmark, Lock, Send, Store, Trash2, Users } from 'lucide-react';
 import TeamSettings from '../settings/TeamSettings';
 import AlertSettings from '../settings/AlertSettings';
+import VacationSettings from '../settings/VacationSettings';
 import SecuritySettings from '../settings/SecuritySettings';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
@@ -233,6 +234,7 @@ const TABS = [
   { id: 'documents', ar: 'المستندات', en: 'Documents', Icon: FileText },
   { id: 'payout', ar: 'بيانات استلام الأرباح', en: 'Payout details', Icon: Landmark, ownerOnly: true },
   { id: 'team', ar: 'فريق العمل', en: 'Team & logins', Icon: Users, ownerOnly: true },
+  { id: 'vacation', ar: 'وضع الإجازة', en: 'Vacation mode', Icon: Palmtree },
   { id: 'alerts', ar: 'التنبيهات', en: 'Alerts & emails', Icon: BellRing },
   { id: 'security', ar: 'الأمان وتسجيل الدخول', en: 'Login & security', Icon: Lock },
 ];
@@ -291,6 +293,7 @@ export default function SellerStorePage() {
       {active === 'documents' && <DocumentsSection seller={seller} isAr={isAr} reload={reload} />}
       {active === 'payout' && <BankSection key={`bank-${seller.updatedAt}`} seller={seller} isAr={isAr} reload={reload} />}
       {active === 'team' && <TeamSettings isAr={isAr} />}
+      {active === 'vacation' && <VacationSettings key={seller.updatedAt} seller={seller} isAr={isAr} reload={reload} />}
       {active === 'alerts' && <AlertSettings key={seller.updatedAt} seller={seller} isAr={isAr} reload={reload} />}
       {active === 'security' && <SecuritySettings isAr={isAr} />}
     </div>

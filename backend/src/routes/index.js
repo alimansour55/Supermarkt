@@ -31,6 +31,7 @@ import supportChatRoutes from './supportChat.routes.js';
 import whatsappRoutes from './whatsapp.routes.js';
 import sellerRoutes from './seller.routes.js';
 import sellersRoutes from './sellers.routes.js';
+import productQuestionsRoutes from './productQuestions.routes.js';
 import marketplaceAdminRoutes from './marketplaceAdmin.routes.js';
 
 const router = Router();
@@ -69,5 +70,6 @@ router.use('/support-chat', supportChatRoutes);
 router.use('/whatsapp', whatsappRoutes);
 router.use('/seller', sellerRoutes);
 router.use('/sellers', sellersRoutes);
+router.use('/product-questions', productQuestionsRoutes);
 
 export default router;

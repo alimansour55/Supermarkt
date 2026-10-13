@@ -102,15 +102,16 @@ export async function uniqueProductSlug(nameEn, excludeId = null) {
  * Query updates skip the Product validate hook, so isActive is written explicitly here.
  */
 export async function syncSellerProductVisibility(sellerId) {
-  const seller = await Seller.findById(sellerId).select('status').lean();
+  const seller = await Seller.findById(sellerId).select('status vacation').lean();
   const suspended = seller?.status !== 'active';
-  await Product.updateMany({ seller: sellerId }, { $set: { sellerSuspended: suspended } });
+  const away = seller?.vacation?.enabled === true;
+  await Product.updateMany({ seller: sellerId }, { $set: { sellerSuspended: suspended, sellerAway: away } });
   await Product.updateMany(
-    { seller: sellerId, listingStatus: 'approved', sellerSuspended: false },
+    { seller: sellerId, listingStatus: 'approved', sellerSuspended: false, sellerAway: { $ne: true } },
     { $set: { isActive: true } },
   );
   await Product.updateMany(
-    { seller: sellerId, $or: [{ listingStatus: { $ne: 'approved' } }, { sellerSuspended: true }] },
+    { seller: sellerId, $or: [{ listingStatus: { $ne: 'approved' } }, { sellerSuspended: true }, { sellerAway: true }] },
     { $set: { isActive: false } },
   );
 }
@@ -205,6 +206,11 @@ export function formatSellerPublic(seller) {
     handlingDays: seller.handlingDays ?? 2,
     city: seller.address?.city || '',
     joinedAt: seller.approvedAt || seller.createdAt,
+    vacation: seller.vacation?.enabled ? {
+      until: seller.vacation.until || null,
+      messageAr: seller.vacation.messageAr || '',
+      messageEn: seller.vacation.messageEn || '',
+    } : null,
   };
 }
 
@@ -245,6 +251,13 @@ export function formatSellerPrivate(seller, { revealBank = false } = {}) {
     defaultFulfillment: s.defaultFulfillment || 'seller',
     deliveryZones: s.deliveryZones || [],
     autoApproveListings: s.autoApproveListings === true,
+    vacation: {
+      enabled: s.vacation?.enabled === true,
+      startedAt: s.vacation?.startedAt || null,
+      until: s.vacation?.until || null,
+      messageAr: s.vacation?.messageAr || '',
+      messageEn: s.vacation?.messageEn || '',
+    },
     notificationPrefs: {
       emailOrders: s.notificationPrefs?.emailOrders !== false,
       whatsappOrders: s.notificationPrefs?.whatsappOrders === true,

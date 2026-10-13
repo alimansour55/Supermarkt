@@ -55,6 +55,13 @@ export const sellerApi = {
   getPayoutStatement: (id) => api.get(`/seller/finance/payouts/${id}/statement`),
   downloadPayoutStatement: (id) => api.get(`/seller/finance/payouts/${id}/statement`, { params: { format: 'csv' }, responseType: 'blob' }),
   listReturns: (params) => api.get('/seller/returns', { params }),
+  setVacation: (data) => api.put('/seller/me/vacation', data),
+  exportCatalog: () => api.get('/seller/products/export', { responseType: 'blob' }),
+  listQuestions: (params) => api.get('/seller/questions', { params }),
+  answerQuestion: (id, answer) => api.post(`/seller/questions/${id}/answer`, { answer }),
+  setQuestionVisibility: (id, hidden) => api.post(`/seller/questions/${id}/visibility`, { hidden }),
+  listProductReviews: (params) => api.get('/seller/product-reviews', { params }),
+  replyProductReview: (productId, reviewId, message) => api.post(`/seller/product-reviews/${productId}/${reviewId}/reply`, { message }),
   noteReturn: (orderId, returnId, note) => api.post(`/seller/returns/${orderId}/${returnId}/note`, { note }),
 
   listShipments: (params) => api.get('/seller/shipments', { params }),

@@ -3,7 +3,8 @@ import { Link, useOutletContext, useSearchParams } from '../../app/router';
 import { MessageSquare, Star } from 'lucide-react';
 import Loader from '../../components/ui/Loader';
 import { sellerApi } from '../../services/sellerApi';
-import { Card, EmptyState, PageHeader } from '../ui';
+import { Card, EmptyState, PageHeader, Segmented } from '../ui';
+import ProductReviewsPanel from '../ProductReviewsPanel';
 
 function Stars({ value, size = 'h-4 w-4' }) {
   return (
@@ -18,6 +19,7 @@ export default function SellerReviewsPage() {
   const { isAr } = useOutletContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const rating = Number(searchParams.get('rating')) || 0;
+  const tab = searchParams.get('tab') === 'products' ? 'products' : 'store';
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
 
@@ -40,6 +42,12 @@ export default function SellerReviewsPage() {
         description={isAr ? 'يقيّمك العملاء بعد استلام طلباتهم. التقييم يظهر في صفحة متجرك ويؤثر على صحة حسابك.' : 'Customers rate you after delivery. Your rating shows on your store page and counts toward account health.'}
         actions={<Link to="/seller-center/performance" className="text-sm font-semibold text-indigo-700 hover:underline">{isAr ? 'صحة الحساب ←' : 'Account health →'}</Link>}
       />
+      <Segmented
+        options={[{ value: 'store', label: isAr ? 'تقييم المتجر' : 'Store feedback' }, { value: 'products', label: isAr ? 'تقييمات المنتجات' : 'Product reviews' }]}
+        value={tab}
+        onChange={(v) => setSearchParams(v === 'products' ? { tab: 'products' } : {})}
+      />
+      {tab === 'products' ? <ProductReviewsPanel isAr={isAr} /> : (
 
       <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <Card>
@@ -89,6 +97,7 @@ export default function SellerReviewsPage() {
           )}
         </Card>
       </div>
+      )}
     </div>
   );
 }

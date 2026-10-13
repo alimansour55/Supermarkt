@@ -491,6 +491,7 @@ export async function createProductForSeller(seller, user, body, { submit = fals
     sellerNameEn: seller.nameEn,
     sellerSlug: seller.slug,
     sellerSuspended: seller.status !== 'active',
+    sellerAway: seller.vacation?.enabled === true,
     fulfilledBy,
     listingStatus: submit ? (publishNow ? 'approved' : 'pending_review') : 'draft',
     submittedAt: submit ? now : null,
@@ -511,6 +512,37 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
 });
 
 const CSV_COLUMNS = ['nameAr', 'nameEn', 'price'];
+const CSV_UPDATE_KEYS = ['id', 'sku'];
+
+/**
+ * A row that names an existing product (by `id`, or by `sku`) updates it instead of creating
+ * one: price, oldPrice, stock, lowStockThreshold and storeCategory — the fields sellers
+ * change in bulk. Empty cells are left untouched.
+ */
+async function updateProductFromRow(req, product, row) {
+  const has = (k) => row[k] !== undefined && String(row[k]).trim() !== '';
+  const input = {};
+  if (has('price')) input.price = row.price;
+  if (row.oldPrice !== undefined) input.oldPrice = String(row.oldPrice).trim() === '' ? null : row.oldPrice;
+  if (has('stock') && !product.variants?.length && product.fulfilledBy !== 'store') input.stock = row.stock;
+  if (has('storeCategory') || has('storeCategories')) {
+    input.sellerCategories = await resolveSellerCategoryNames(req.seller._id, row.storeCategory || row.storeCategories);
+  }
+  const { operational } = sanitizeSellerProductInput(input, req.seller);
+  if (operational.price !== undefined && !(operational.price > 0)) throw new AppError('A price above zero is required', 400);
+  if (operational.sellerCategories) operational.sellerCategories = await ownSellerCategoryIds(req.seller._id, operational.sellerCategories);
+  const nextPrice = operational.price ?? product.price;
+  if (operational.oldPrice != null && operational.oldPrice <= nextPrice) operational.oldPrice = null;
+  if (has('lowStockThreshold')) {
+    const t = Math.floor(Number(row.lowStockThreshold));
+    if (!Number.isFinite(t) || t < 0) throw new AppError('Invalid lowStockThreshold', 400);
+    product.lowStockThreshold = t;
+    product.lowStockAlertedAt = null;
+  }
+  applyOperational(product, operational);
+  await product.save();
+  return product;
+}
 const MAX_IMPORT_ROWS = 500;
 
 /**
@@ -522,7 +554,8 @@ const MAX_IMPORT_ROWS = 500;
  */
 export const importSellerProducts = asyncHandler(async (req, res) => {
   const { records, headers } = parseCsv(String(req.body?.csv || '').replace(/^﻿/, ''));
-  const missing = CSV_COLUMNS.filter((c) => !headers.includes(c));
+  const updating = CSV_UPDATE_KEYS.some((k) => headers.includes(k));
+  const missing = updating ? [] : CSV_COLUMNS.filter((c) => !headers.includes(c));
   if (missing.length) throw new AppError(`Missing columns: ${missing.join(', ')}`, 400);
   if (!records.length) throw new AppError('The file has no product rows', 400);
   if (records.length > MAX_IMPORT_ROWS) throw new AppError(`Up to ${MAX_IMPORT_ROWS} rows per file`, 400);
@@ -538,9 +571,28 @@ export const importSellerProducts = asyncHandler(async (req, res) => {
   }
 
   const results = [];
+  // Existing products the file may update, by id and by SKU.
+  const own = updating
+    ? await Product.find({ seller: req.seller._id }).select('_id sku')
+    : [];
+  const ownById = new Map(own.map((p) => [String(p._id), p._id]));
+  const ownBySku = new Map(own.filter((p) => p.sku).map((p) => [String(p.sku).toLowerCase(), p._id]));
+  let updatedCount = 0;
+
   for (const [i, row] of records.entries()) {
     const line = i + 2; // header is line 1
     try {
+      const existingId = ownById.get(String(row.id || '').trim()) || ownBySku.get(String(row.sku || '').trim().toLowerCase());
+      if (existingId || String(row.id || '').trim()) {
+        if (!existingId) throw new AppError('No product of yours has this id', 400);
+        // eslint-disable-next-line no-await-in-loop
+        const product = await Product.findOne({ _id: existingId, seller: req.seller._id });
+        // eslint-disable-next-line no-await-in-loop
+        await updateProductFromRow(req, product, row);
+        updatedCount += 1;
+        results.push({ line, ok: true, updated: true, productId: product._id, nameEn: product.nameEn });
+        continue;
+      }
       const wanted = String(row.category || row.categorySlug || '').trim();
       const category = wanted ? categoryByKey.get(wanted.toLowerCase()) : null;
       if (wanted && !category) throw new AppError(`Unknown category "${wanted}"`, 400);
@@ -558,9 +610,10 @@ export const importSellerProducts = asyncHandler(async (req, res) => {
       results.push({ line, ok: false, nameEn: row.nameEn || '', error: err.message });
     }
   }
-  const created = results.filter((r) => r.ok).length;
-  if (created) await logSellerActivity(req, { action: 'product.import', label: `${created} products`, details: { created, failed: results.length - created } });
-  res.status(created ? 201 : 400).json({ success: created > 0, created, failed: results.length - created, results });
+  const ok = results.filter((r) => r.ok).length;
+  const created = ok - updatedCount;
+  if (ok) await logSellerActivity(req, { action: 'product.import', label: `${ok} products`, details: { created, updated: updatedCount, failed: results.length - ok } });
+  res.status(ok ? (created ? 201 : 200) : 400).json({ success: ok > 0, created, updated: updatedCount, failed: results.length - ok, results });
 });
 
 /**

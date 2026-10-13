@@ -95,6 +95,14 @@ const sellerSchema = new mongoose.Schema(
     deliveryZones: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryZone' }],
     /** Typical handling time before a seller-shipped order leaves, in days. */
     handlingDays: { type: Number, min: 0, max: 30, default: 2 },
+    /** Vacation mode: every listing is hidden until the seller returns (or `until` passes). */
+    vacation: {
+      enabled: { type: Boolean, default: false },
+      startedAt: { type: Date, default: null },
+      until: { type: Date, default: null },
+      messageAr: { type: String, trim: true, default: '', maxlength: 300 },
+      messageEn: { type: String, trim: true, default: '', maxlength: 300 },
+    },
     /** How the seller wants to hear about orders and stock (in-app notifications are always on). */
     notificationPrefs: {
       emailOrders: { type: Boolean, default: true },

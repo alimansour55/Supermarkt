@@ -1,5 +1,5 @@
 import {
-  BarChart3, Bell, Boxes, History, Lock, RotateCcw, BellRing, ClipboardList, FileText, Gauge, HelpCircle, LayoutDashboard, Landmark, Package, PackagePlus,
+  BarChart3, Bell, Boxes, History, Lock, RotateCcw, BellRing, MessageCircleQuestion, Palmtree, ClipboardList, FileText, Gauge, HelpCircle, LayoutDashboard, Landmark, Package, PackagePlus,
   Settings, Star, Store, Tags, Truck, Upload, Users, Wallet, Warehouse,
 } from 'lucide-react';
 
@@ -56,6 +56,7 @@ export const SELLER_NAV = [
     children: [
       { to: '/seller-center/performance', ar: 'صحة الحساب', en: 'Account health', Icon: Gauge },
       { to: '/seller-center/reviews', ar: 'تقييمات العملاء', en: 'Customer feedback', Icon: Star },
+      { to: '/seller-center/questions', ar: 'أسئلة العملاء', en: 'Customer questions', Icon: MessageCircleQuestion, badge: 'unansweredQuestions', badgeTone: 'red', perm: 'products' },
     ],
   },
   {
@@ -67,6 +68,7 @@ export const SELLER_NAV = [
       { to: '/seller-center/store', end: true, ar: 'بيانات وواجهة المتجر', en: 'Store profile', Icon: Store, perm: 'store' },
       { to: '/seller-center/store/documents', ar: 'المستندات', en: 'Documents', Icon: FileText, perm: 'store' },
       { to: '/seller-center/store/team', ar: 'فريق العمل', en: 'Team & logins', Icon: Users, ownerOnly: true },
+      { to: '/seller-center/store/vacation', ar: 'وضع الإجازة', en: 'Vacation mode', Icon: Palmtree, perm: 'store' },
       { to: '/seller-center/store/alerts', ar: 'التنبيهات', en: 'Alerts & emails', Icon: BellRing, perm: 'store' },
       { to: '/seller-center/store/security', ar: 'الأمان وتسجيل الدخول', en: 'Login & security', Icon: Lock },
       { to: '/seller-center/activity', ar: 'سجل النشاط', en: 'Activity log', Icon: History, ownerOnly: true },

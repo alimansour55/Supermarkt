@@ -55,6 +55,15 @@ import {
 } from '../controllers/sellerCategory.controller.js';
 import { listSellerReturns, noteSellerReturn, getPayoutStatement } from '../controllers/sellerReturns.controller.js';
 import {
+  setVacation,
+  exportSellerCatalog,
+  listSellerQuestions,
+  answerQuestion,
+  setQuestionVisibility,
+  listSellerProductReviews,
+  replyToProductReview,
+} from '../controllers/sellerCatalog.controller.js';
+import {
   getMySecurity,
   changeMyPassword,
   setMyTwoFactor,
@@ -68,7 +77,7 @@ const router = Router();
 router.use(...sellerOnly);
 
 // Staff permissions by area — owners pass every check.
-router.use(['/products', '/categories', '/inbound'], sellerCan('products'));
+router.use(['/products', '/categories', '/inbound', '/questions', '/product-reviews'], sellerCan('products'));
 router.use(['/shipments', '/returns'], sellerCan('orders'));
 router.use('/reports', sellerCan('reports'));
 router.use('/finance', sellerCan('finance'));
@@ -79,6 +88,7 @@ router.put('/me/bank', sellerOwnerOnly, updateSellerBank);
 router.post('/me/documents', sellerCan('store'), uploadSingle('file'), uploadSellerDocument);
 router.delete('/me/documents/:docId', sellerCan('store'), deleteSellerDocument);
 
+router.put('/me/vacation', sellerCan('store'), setVacation);
 router.get('/me/security', getMySecurity);
 router.put('/me/password', changeMyPassword);
 router.put('/me/two-factor', setMyTwoFactor);
@@ -111,7 +121,14 @@ router.put('/categories/reorder', sellerCanEditCatalog, reorderMyCategories);
 router.put('/categories/:id', sellerCanEditCatalog, updateMyCategory);
 router.delete('/categories/:id', sellerCanEditCatalog, deleteMyCategory);
 
+router.get('/questions', listSellerQuestions);
+router.post('/questions/:id/answer', sellerCanEditCatalog, answerQuestion);
+router.post('/questions/:id/visibility', setQuestionVisibility);
+router.get('/product-reviews', listSellerProductReviews);
+router.post('/product-reviews/:productId/:reviewId/reply', replyToProductReview);
+
 router.get('/products', listSellerProducts);
+router.get('/products/export', exportSellerCatalog);
 router.post('/products/media', sellerCanEditCatalog, uploadProductMediaMultiple('images', 10), uploadSellerProductMedia);
 router.post('/products', sellerCanEditCatalog, createSellerProduct);
 router.post('/products/import', sellerCanEditCatalog, importSellerProducts);

@@ -19,6 +19,7 @@ import SecondItemPriceHighlight from '../components/promo/SecondItemPriceHighlig
 import { getUnitLabel } from '../constants/productUnits';
 
 const ProductReviewsSection = lazy(() => import('../components/product/ProductReviewsSection'));
+const ProductQuestionsSection = lazy(() => import('../components/product/ProductQuestionsSection'));
 
 function getGalleryMedia(product) {
   const raw = product.images?.length
@@ -342,6 +343,12 @@ export default function ProductDetailsPage() {
       <Suspense fallback={<Skeleton className="mt-14 h-48 rounded-2xl" />}>
         <ProductReviewsSection product={product} isAr={isAr} onSubmitted={refetch} />
       </Suspense>
+
+      {product.soldBy && (
+        <Suspense fallback={null}>
+          <ProductQuestionsSection product={product} isAr={isAr} />
+        </Suspense>
+      )}
 
       <div
         className="fixed inset-x-0 z-40 border-t border-border bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-md lg:hidden"
