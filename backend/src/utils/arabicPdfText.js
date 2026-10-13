@@ -19,6 +19,7 @@ export const PDF_FONT_PATH = path.join(FONTS_DIR, 'IBMPlexSansArabic-Regular.ttf
 export const PDF_FONT_BOLD_PATH = path.join(FONTS_DIR, 'IBMPlexSansArabic-Bold.ttf');
 export const ARABIC_FONT_PATH = PDF_FONT_PATH; // back-compat alias
 
+// eslint-disable-next-line no-irregular-whitespace -- the range intentionally includes U+FEFF
 const ARABIC_RE = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
 const STRONG_LTR_RE = /[A-Za-zÀ-ɏ]/;
 const DIGIT_RE = /[0-9٠-٩]/;

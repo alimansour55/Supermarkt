@@ -116,6 +116,7 @@ export async function createRecurringSubscription({
   preferredDayOfMonth,
   paymentMethod,
   notes,
+  session = null,
 }) {
   const start = new Date(startDate);
   const nextDeliveryDate = addRecurringInterval(start, frequency);
@@ -132,7 +133,7 @@ export async function createRecurringSubscription({
     deliveryTimeSlot,
   }, 'en');
 
-  return RecurringDeliverySubscription.create({
+  const [subscription] = await RecurringDeliverySubscription.create([{
     user: userId,
     sourceOrder: sourceOrderId,
     items,
@@ -157,7 +158,8 @@ export async function createRecurringSubscription({
     lastFulfilledAt: null,
     deliveriesCount: 0,
     adminNotes: '',
-  });
+  }], { session });
+  return subscription;
 }
 
 export async function getSubscriptionsForUser(userId, { includeInactive = false } = {}) {

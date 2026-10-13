@@ -12,36 +12,106 @@ import { formatInsufficientStockMessage } from '../utils/stockMessages.js';
 
 const reservationExpiry = () => new Date(Date.now() + RESERVATION_TTL_MINUTES * 60 * 1000);
 
-async function cleanupExpired() {
-  const expired = await StockReservation.find({ expiresAt: { $lt: new Date() } });
+const toObjectId = (id) => (id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(String(id)));
+
+/** True when the item should hit a variant row rather than the product-level stock. */
+const usesVariant = (product, variantId) => Boolean(
+  variantId && product?.variants?.length && product.variants.id(variantId),
+);
+
+async function cleanupExpired(session = null) {
+  const expired = await StockReservation.find({ expiresAt: { $lt: new Date() } }).session(session);
   for (const row of expired) {
-    await releaseReservationRow(row);
+    await releaseReservationRow(row, session);
   }
 }
 
-async function adjustReserved(productId, variantId, delta) {
-  const product = await Product.findById(productId);
-  if (!product) return;
+/**
+ * Atomically shift reservedStock by `delta`, clamped at 0. Single-document update
+ * pipeline, so concurrent holds/releases can't overwrite each other.
+ */
+async function adjustReserved(productId, variantId, delta, session = null) {
+  const clamp = (field) => ({ $max: [0, { $add: [{ $ifNull: [field, 0] }, delta] }] });
 
   if (variantId) {
-    const variant = product.variants.id(variantId);
-    if (variant) {
-      variant.reservedStock = Math.max(0, (variant.reservedStock || 0) + delta);
-    }
-  } else {
-    product.reservedStock = Math.max(0, (product.reservedStock || 0) + delta);
+    const vid = toObjectId(variantId);
+    const res = await Product.updateOne(
+      { _id: productId, 'variants._id': vid },
+      [{
+        $set: {
+          variants: {
+            $map: {
+              input: '$variants',
+              as: 'v',
+              in: {
+                $cond: [
+                  { $eq: ['$$v._id', vid] },
+                  { $mergeObjects: ['$$v', { reservedStock: clamp('$$v.reservedStock') }] },
+                  '$$v',
+                ],
+              },
+            },
+          },
+        },
+      }],
+      { session },
+    );
+    if (res.matchedCount) return;
   }
-  await product.save({ validateBeforeSave: false });
+
+  await Product.updateOne(
+    { _id: productId },
+    [{ $set: { reservedStock: clamp('$reservedStock') } }],
+    { session },
+  );
 }
 
-async function releaseReservationRow(row) {
-  await adjustReserved(row.product, row.variantId, -row.quantity);
-  await row.deleteOne();
+async function releaseReservationRow(row, session = null) {
+  await adjustReserved(row.product, row.variantId, -row.quantity, session);
+  await row.deleteOne({ session });
 }
 
-export async function releaseUserReservations(userId) {
-  const rows = await StockReservation.find({ user: userId });
-  await Promise.all(rows.map(releaseReservationRow));
+export async function releaseUserReservations(userId, session = null) {
+  const rows = await StockReservation.find({ user: userId }).session(session);
+  for (const row of rows) {
+    await releaseReservationRow(row, session);
+  }
+}
+
+/**
+ * Take `qty` units of physical stock. The `stock >= qty` guard lives in the update
+ * filter, so two concurrent checkouts can never sell the same last unit.
+ * Returns false when there isn't enough stock.
+ */
+export async function decrementLineStock(product, variantId, qty, session = null) {
+  const filter = usesVariant(product, variantId)
+    ? { _id: product._id, variants: { $elemMatch: { _id: toObjectId(variantId), stock: { $gte: qty } } } }
+    : { _id: product._id, stock: { $gte: qty } };
+  const field = usesVariant(product, variantId) ? 'variants.$.stock' : 'stock';
+
+  const res = await Product.updateOne(
+    filter,
+    { $inc: { [field]: -qty, soldCount: qty } },
+    { session },
+  );
+  return res.modifiedCount === 1;
+}
+
+/** Put `qty` units back (order cancelled / checkout rolled back). */
+export async function incrementLineStock(product, variantId, qty, session = null) {
+  const variant = usesVariant(product, variantId);
+  const filter = variant
+    ? { _id: product._id, 'variants._id': toObjectId(variantId) }
+    : { _id: product._id };
+  const field = variant ? 'variants.$.stock' : 'stock';
+
+  await Product.updateOne(filter, { $inc: { [field]: qty } }, { session });
+  // soldCount floors at 0 for legacy rows that were never counted.
+  await Product.updateOne(
+    { _id: product._id },
+    [{ $set: { soldCount: { $max: [0, { $subtract: [{ $ifNull: ['$soldCount', 0] }, qty] }] } } }],
+    { session },
+  );
 }
 
 /**
@@ -88,46 +158,46 @@ export async function syncInventoryReservations(userId, items = [], lang = 'ar')
   return { reserved: normalized.length, expiresAt: reservationExpiry() };
 }
 
-/** Decrement physical stock and clear reservations after order placed. */
-export async function commitOrderInventory(userId, orderItems) {
-  await cleanupExpired();
+/**
+ * Decrement physical stock and clear reservations after an order is placed.
+ * Throws 409 (and leaves already-taken lines for the caller's rollback) when any line
+ * no longer has enough stock. Pass `session` to run inside a transaction; without one,
+ * every decrement registers its own undo via `onRollback`.
+ */
+export async function commitOrderInventory(
+  userId,
+  orderItems,
+  { session = null, onRollback = () => {}, lang = 'ar' } = {},
+) {
+  await cleanupExpired(session);
 
   for (const item of orderItems) {
     const productId = item.product || item.productId;
     const variantId = item.variantId ? normalizeVariantId(item.variantId) : null;
     const qty = item.quantity;
 
+    const product = await Product.findById(productId).session(session);
+    if (!product) continue;
+
+    const taken = await decrementLineStock(product, variantId, qty, session);
+    if (!taken) {
+      const line = resolveProductLine(product, variantId) || product;
+      throw new AppError(formatInsufficientStockMessage(line, lang), 409);
+    }
+    onRollback(() => incrementLineStock(product, variantId, qty));
+
     const reservation = await StockReservation.findOne({
       user: userId,
       product: productId,
       ...(variantId ? { variantId } : { $or: [{ variantId: null }, { variantId: { $exists: false } }] }),
-    });
-
-    const product = await Product.findById(productId);
-    if (!product) continue;
-
-    if (variantId && product.variants?.length) {
-      const variant = product.variants.id(variantId);
-      if (variant) {
-        variant.stock = Math.max(0, (variant.stock || 0) - qty);
-        if (reservation) {
-          variant.reservedStock = Math.max(0, (variant.reservedStock || 0) - qty);
-        }
-      }
-    } else {
-      product.stock = Math.max(0, (product.stock || 0) - qty);
-      if (reservation) {
-        product.reservedStock = Math.max(0, (product.reservedStock || 0) - qty);
-      }
+    }).session(session);
+    if (reservation) {
+      await adjustReserved(productId, usesVariant(product, variantId) ? variantId : null, -qty, session);
+      await reservation.deleteOne({ session });
     }
-
-    product.soldCount = (product.soldCount || 0) + qty;
-    await product.save({ validateBeforeSave: false });
-
-    if (reservation) await reservation.deleteOne();
   }
 
-  await releaseUserReservations(userId);
+  await releaseUserReservations(userId, session);
 }
 
 export async function checkLineStock(product, variantId, quantity, excludeUserId = null, lang = 'ar') {

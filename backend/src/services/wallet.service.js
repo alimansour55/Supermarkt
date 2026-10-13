@@ -61,6 +61,7 @@ export async function applyWalletMovement({
   order = null,
   topUpRequest = null,
   createdBy = null,
+  session = null,
 }) {
   const delta = roundMoney(amount);
   if (!delta) return null;
@@ -71,13 +72,13 @@ export async function applyWalletMovement({
   const user = await User.findOneAndUpdate(
     filter,
     { $inc: { walletBalance: delta } },
-    { new: true },
+    { new: true, session },
   ).select('walletBalance');
 
   if (!user) return null;
 
   const balanceAfter = roundMoney(user.walletBalance);
-  const txn = await WalletTransaction.create({
+  const [txn] = await WalletTransaction.create([{
     user: userId,
     type,
     amount: delta,
@@ -87,7 +88,7 @@ export async function applyWalletMovement({
     method,
     note,
     createdBy,
-  });
+  }], { session });
 
   return { balanceAfter, transaction: txn };
 }
@@ -126,9 +127,12 @@ export function calculateWalletRedemption({
   return { walletApplied: roundMoney(walletApplied), rules };
 }
 
-export async function spendWalletForOrder({ userId, order, walletApplied }) {
+export async function spendWalletForOrder({
+  userId, order, walletApplied, session = null,
+}) {
   if (!walletApplied || walletApplied <= 0) return null;
   return debitWallet({
+    session,
     userId,
     amount: walletApplied,
     type: 'spend',

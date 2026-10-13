@@ -126,7 +126,9 @@ export function calculatePointsRedemption({
   return { pointsRedeemed, pointsDiscount, rules };
 }
 
-export async function redeemPointsForOrder({ userId, order, pointsRedeemed, pointsDiscount }) {
+export async function redeemPointsForOrder({
+  userId, order, pointsRedeemed, pointsDiscount, session = null,
+}) {
   if (!pointsRedeemed || pointsRedeemed <= 0) return null;
 
   return User.findOneAndUpdate(
@@ -143,7 +145,7 @@ export async function redeemPointsForOrder({ userId, order, pointsRedeemed, poin
         },
       },
     },
-    { new: true },
+    { new: true, session },
   );
 }
 
