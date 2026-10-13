@@ -33,10 +33,19 @@ import {
   importSellerProducts,
   duplicateSellerProduct,
   bulkSellerProductCategories,
+  bulkUpdateSellerInventory,
+  exportSellerShipments,
+  bulkUpdateSellerShipments,
   listSellerShipments,
   getSellerShipment,
   updateSellerShipmentStatus,
 } from '../controllers/sellerPortal.controller.js';
+import {
+  getSellerSummary,
+  getSellerHome,
+  getSalesReport,
+  sellerQuickSearch,
+} from '../controllers/sellerInsights.controller.js';
 import {
   listMyCategories,
   createMyCategory,
@@ -58,6 +67,10 @@ router.delete('/me/documents/:docId', deleteSellerDocument);
 router.post('/me/resubmit', sellerOwnerOnly, resubmitApplication);
 
 router.get('/dashboard', getSellerDashboard);
+router.get('/summary', getSellerSummary);
+router.get('/home', getSellerHome);
+router.get('/reports/sales', getSalesReport);
+router.get('/search', sellerQuickSearch);
 
 router.get('/finance', getMyFinance);
 router.get('/finance/ledger', getMyLedger);
@@ -82,6 +95,7 @@ router.post('/products/media', sellerCanEditCatalog, uploadProductMediaMultiple(
 router.post('/products', sellerCanEditCatalog, createSellerProduct);
 router.post('/products/import', sellerCanEditCatalog, importSellerProducts);
 router.post('/products/bulk-categories', sellerCanEditCatalog, bulkSellerProductCategories);
+router.put('/products/bulk-inventory', sellerCanEditCatalog, bulkUpdateSellerInventory);
 router.get('/products/:id', getSellerProduct);
 router.put('/products/:id', sellerCanEditCatalog, updateSellerProduct);
 router.put('/products/:id/stock', sellerCanEditCatalog, updateSellerProductStock);
@@ -93,6 +107,8 @@ router.post('/products/:id/discard-changes', discardSellerProductChanges);
 router.delete('/products/:id', deleteSellerProduct);
 
 router.get('/shipments', listSellerShipments);
+router.get('/shipments/export', exportSellerShipments);
+router.post('/shipments/bulk-status', bulkUpdateSellerShipments);
 router.get('/shipments/:id', getSellerShipment);
 // Suspended sellers still finish shipments already sold — the customer has paid.
 router.post('/shipments/:id/status', updateSellerShipmentStatus);

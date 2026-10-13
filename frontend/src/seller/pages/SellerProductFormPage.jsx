@@ -325,7 +325,7 @@ export default function SellerProductFormPage() {
   const sellerName = isAr ? seller.nameAr : seller.nameEn;
 
   return (
-    <div ref={topRef} className="scroll-mt-20 space-y-4 pb-28">
+    <div ref={topRef} className="scroll-mt-20 space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <Link to="/seller-center/products" className="rounded-lg p-2 ring-1 ring-slate-200 hover:bg-white" aria-label={isAr ? 'رجوع' : 'Back'}>
           <Back className="h-4 w-4" />
@@ -471,8 +471,8 @@ export default function SellerProductFormPage() {
         </aside>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2 px-4 py-3">
+      <div className="sticky bottom-3 z-20 rounded-2xl border border-slate-200 bg-white/95 shadow-xl backdrop-blur">
+        <div className="flex flex-wrap items-center justify-end gap-2 px-4 py-3">
           <span className="me-auto flex items-center gap-1.5 text-xs text-slate-500">
             <FileText className="h-3.5 w-3.5" aria-hidden />
             {dirty ? (isAr ? 'تغييرات غير محفوظة · Ctrl+S للحفظ' : 'Unsaved changes · Ctrl+S to save') : (isAr ? 'لا توجد تغييرات' : 'All changes saved')}

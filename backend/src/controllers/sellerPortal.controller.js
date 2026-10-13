@@ -35,7 +35,7 @@ import {
 } from '../services/marketplace.service.js';
 import { SELLER_DOCUMENT_TYPES, LISTING_STATUSES } from '../constants/marketplace.js';
 import { normalizePhone } from '../utils/phone.js';
-import { parseCsv } from '../utils/csvExport.js';
+import { parseCsv, toCsv, sendCsv } from '../utils/csvExport.js';
 import {
   ownSellerCategoryIds,
   resolveSellerCategoryNames,
@@ -61,6 +61,9 @@ export const getSellerMe = asyncHandler(async (req, res) => {
         defaultCommissionRate: settings.defaultCommissionRate,
         payoutHoldDays: settings.payoutHoldDays,
         reviewContentEdits: settings.reviewContentEdits,
+        minPayoutAmount: settings.minPayoutAmount,
+        storeFulfillmentFeePerItem: settings.storeFulfillmentFeePerItem,
+        sellerShipmentDeliveryFee: settings.sellerShipmentDeliveryFee,
       },
     },
   });
@@ -704,22 +707,96 @@ export const updateSellerProductStock = asyncHandler(async (req, res) => {
   res.json({ success: true, data: formatSellerProduct(product) });
 });
 
+const MAX_BULK_ROWS = 200;
+
+/**
+ * Inventory manager "Save all": price / old price / stock for many products at once, variants
+ * patched by id. Each row runs through the same rules as the editor (store-held stock is read
+ * only, prices above zero). Returns a result per row so one bad row never blocks the rest.
+ */
+export const bulkUpdateSellerInventory = asyncHandler(async (req, res) => {
+  const rows = (Array.isArray(req.body?.items) ? req.body.items : []).slice(0, MAX_BULK_ROWS);
+  if (!rows.length) throw new AppError('Nothing to update', 400);
+  const ids = rows.map((r) => String(r?.id || '')).filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const products = await Product.find({ _id: { $in: ids }, seller: req.seller._id });
+  const byId = new Map(products.map((p) => [String(p._id), p]));
+
+  const results = [];
+  for (const row of rows) {
+    const product = byId.get(String(row?.id));
+    if (!product) {
+      results.push({ id: row?.id, ok: false, error: 'Product not found' });
+      continue;
+    }
+    try {
+      const input = {};
+      if (row.price !== undefined) input.price = row.price;
+      if (row.oldPrice !== undefined) input.oldPrice = row.oldPrice;
+      if (row.stock !== undefined && !product.variants?.length) input.stock = row.stock;
+      if (Array.isArray(row.variants) && product.variants?.length) {
+        const patch = new Map(row.variants.map((v) => [String(v._id), v]));
+        input.variants = product.variants.map((v) => {
+          const p = patch.get(String(v._id)) || {};
+          return {
+            ...v.toObject(),
+            price: p.price !== undefined ? p.price : v.price,
+            stock: p.stock !== undefined ? p.stock : v.stock,
+          };
+        });
+      }
+      const { operational } = sanitizeSellerProductInput(input, req.seller);
+      if (operational.price !== undefined && !(operational.price > 0)) throw new AppError('A price above zero is required', 400);
+      if (operational.variants?.some((v) => !(v.price > 0))) throw new AppError('Every variant needs a price above zero', 400);
+      // Old price must stay above the price it's compared with.
+      const nextPrice = operational.price ?? product.price;
+      if (operational.oldPrice != null && operational.oldPrice <= nextPrice) operational.oldPrice = null;
+      if (product.fulfilledBy === 'store') {
+        delete operational.stock;
+        if (operational.variants) {
+          const held = new Map(product.variants.map((v) => [String(v._id), v.stock || 0]));
+          operational.variants = operational.variants.map((v) => ({ ...v, stock: held.get(String(v._id)) ?? 0 }));
+        }
+      }
+      applyOperational(product, operational);
+      // eslint-disable-next-line no-await-in-loop
+      await product.save();
+      results.push({ id: product._id, ok: true, data: formatSellerProduct(product) });
+    } catch (err) {
+      results.push({ id: product._id, ok: false, error: err.message });
+    }
+  }
+  const saved = results.filter((r) => r.ok).length;
+  res.status(saved ? 200 : 400).json({ success: saved > 0, saved, failed: results.length - saved, results });
+});
+
 // ── Orders (shipments) ──
 
 const OPEN_SHIPMENT = ['pending', 'confirmed', 'packed', 'shipped'];
 
 const ORDER_CONTACT_FIELDS = 'user phone alternatePhone shippingAddress notes deliveryMethod scheduledDate';
 
+/** Fulfillment, search and date filters shared by the order list and its CSV export. */
+function applyShipmentFilters(filter, query) {
+  if (['seller', 'store'].includes(query.fulfilledBy)) filter.fulfilledBy = query.fulfilledBy;
+  if (query.q) {
+    const q = escapeRegex(String(query.q).slice(0, 60));
+    filter.$or = [{ shipmentNumber: { $regex: q, $options: 'i' } }, { orderNumber: { $regex: q, $options: 'i' } }];
+  }
+  const from = query.from ? new Date(`${query.from}T00:00:00+02:00`) : null;
+  const to = query.to ? new Date(`${query.to}T23:59:59.999+02:00`) : null;
+  if ((from && !Number.isNaN(from.getTime())) || (to && !Number.isNaN(to.getTime()))) {
+    filter.createdAt = {};
+    if (from && !Number.isNaN(from.getTime())) filter.createdAt.$gte = from;
+    if (to && !Number.isNaN(to.getTime())) filter.createdAt.$lte = to;
+  }
+}
+
 export const listSellerShipments = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query, 100);
   const filter = { seller: req.seller._id };
   if (req.query.status === 'open') filter.status = { $in: OPEN_SHIPMENT };
   else if (SHIPMENT_STATUSES.includes(req.query.status)) filter.status = req.query.status;
-  if (['seller', 'store'].includes(req.query.fulfilledBy)) filter.fulfilledBy = req.query.fulfilledBy;
-  if (req.query.q) {
-    const q = escapeRegex(String(req.query.q).slice(0, 60));
-    filter.$or = [{ shipmentNumber: { $regex: q, $options: 'i' } }, { orderNumber: { $regex: q, $options: 'i' } }];
-  }
+  applyShipmentFilters(filter, req.query);
   const [items, total, counts] = await Promise.all([
     Shipment.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     Shipment.countDocuments(filter),
@@ -753,4 +830,50 @@ export const updateSellerShipmentStatus = asyncHandler(async (req, res) => {
   });
   const order = await Order.findById(shipment.order).select(ORDER_CONTACT_FIELDS).populate('user', 'name');
   res.json({ success: true, data: formatShipmentForSeller(shipment, order) });
+});
+
+export const exportSellerShipments = asyncHandler(async (req, res) => {
+  const filter = { seller: req.seller._id };
+  if (req.query.status === 'open') filter.status = { $in: OPEN_SHIPMENT };
+  else if (SHIPMENT_STATUSES.includes(req.query.status)) filter.status = req.query.status;
+  applyShipmentFilters(filter, req.query);
+  const rows = await Shipment.find(filter).sort({ createdAt: -1 }).limit(5000).lean();
+  const csv = toCsv(rows, [
+    { header: 'shipment', value: (r) => r.shipmentNumber },
+    { header: 'order', value: (r) => r.orderNumber },
+    { header: 'date', value: (r) => new Date(r.createdAt).toISOString() },
+    { header: 'status', value: (r) => r.status },
+    { header: 'fulfilledBy', value: (r) => r.fulfilledBy },
+    { header: 'items', value: (r) => (r.items || []).map((i) => `${i.quantity}x ${i.nameEn || i.nameAr}`).join(' | ') },
+    { header: 'units', value: (r) => (r.items || []).reduce((n, i) => n + (i.quantity || 0), 0) },
+    { header: 'subtotal', value: (r) => r.subtotal },
+    { header: 'deliveryFee', value: (r) => r.deliveryFee },
+    { header: 'commission', value: (r) => r.commissionTotal },
+    { header: 'fulfillmentFee', value: (r) => r.fulfillmentFee },
+    { header: 'net', value: (r) => r.sellerNet },
+    { header: 'payment', value: (r) => r.paymentMethod || '' },
+    { header: 'tracking', value: (r) => r.trackingNumber || '' },
+  ]);
+  sendCsv(res, `orders-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+});
+
+/** Confirm / mark packed many seller-shipped orders at once. Result per shipment. */
+export const bulkUpdateSellerShipments = asyncHandler(async (req, res) => {
+  const status = String(req.body?.status || '');
+  if (!['confirmed', 'packed'].includes(status)) throw new AppError('Bulk updates support confirm and packed only', 400);
+  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : [])
+    .map(String).filter((id) => mongoose.Types.ObjectId.isValid(id)).slice(0, 100);
+  if (!ids.length) throw new AppError('Select at least one order', 400);
+  const results = [];
+  for (const id of ids) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await updateShipmentStatus(id, status, { scope: { sellerId: req.seller._id }, actor: req.user, role: 'seller' });
+      results.push({ id, ok: true });
+    } catch (err) {
+      results.push({ id, ok: false, error: err.message });
+    }
+  }
+  const updated = results.filter((r) => r.ok).length;
+  res.status(updated ? 200 : 400).json({ success: updated > 0, updated, failed: results.length - updated, results });
 });

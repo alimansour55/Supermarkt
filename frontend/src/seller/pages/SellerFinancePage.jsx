@@ -51,7 +51,7 @@ export default function SellerFinancePage() {
       <h1 className="text-2xl font-bold">{isAr ? 'الأرباح والمدفوعات' : 'Earnings & payouts'}</h1>
 
       {!hasPayoutDetails && (
-        <Link to="/seller-center/store" className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 hover:bg-amber-100">
+        <Link to="/seller-center/store/payout" className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 hover:bg-amber-100">
           <Landmark className="h-5 w-5 shrink-0" aria-hidden />
           {isAr ? 'أضف بيانات حسابك البنكي أو محفظتك لتصلك أرباحك ←' : 'Add your bank account or wallet so we can pay you →'}
         </Link>

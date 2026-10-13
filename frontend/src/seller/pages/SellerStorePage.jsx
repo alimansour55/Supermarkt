@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useOutletContext } from '../../app/router';
-import { FileUp, Send, Trash2 } from 'lucide-react';
+import { Link, useOutletContext, useParams } from '../../app/router';
+import { FileText, FileUp, Landmark, Send, Store, Trash2, Users } from 'lucide-react';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { DOCUMENT_STATUS, DOCUMENT_TYPES, FULFILLMENT, apiError, label } from '../sellerLabels';
@@ -287,11 +287,21 @@ function TeamSection({ isAr }) {
   );
 }
 
+const TABS = [
+  { id: '', ar: 'بيانات وواجهة المتجر', en: 'Store profile', Icon: Store },
+  { id: 'documents', ar: 'المستندات', en: 'Documents', Icon: FileText },
+  { id: 'payout', ar: 'بيانات استلام الأرباح', en: 'Payout details', Icon: Landmark, ownerOnly: true },
+  { id: 'team', ar: 'فريق العمل', en: 'Team & logins', Icon: Users, ownerOnly: true },
+];
+
 export default function SellerStorePage() {
   const { seller, me, isAr, reload } = useOutletContext();
+  const { tab = '' } = useParams();
   const toast = useToast();
   const isOwner = me.user.role === 'seller_owner';
   const [busy, setBusy] = useState(false);
+  const tabs = TABS.filter((t) => !t.ownerOnly || isOwner);
+  const active = tabs.some((t) => t.id === tab) ? tab : '';
 
   const resubmit = async () => {
     setBusy(true);
@@ -309,7 +319,10 @@ export default function SellerStorePage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">{isAr ? 'بيانات المتجر' : 'Store profile'}</h1>
+        <div>
+          <h1 className="text-2xl font-bold">{isAr ? 'إعدادات المتجر' : 'Store settings'}</h1>
+          <p className="text-sm text-slate-500">{isAr ? 'بيانات متجرك العامة والقانونية وطريقة استلام أرباحك.' : 'Your public store, legal details and how you get paid.'}</p>
+        </div>
         {isOwner && ['applied', 'rejected'].includes(seller.status) && (
           <button type="button" disabled={busy} onClick={resubmit} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
             <Send className="h-4 w-4" />
@@ -317,10 +330,23 @@ export default function SellerStorePage() {
           </button>
         )}
       </div>
-      <ProfileSection key={seller.updatedAt} seller={seller} isAr={isAr} reload={reload} />
-      <DocumentsSection seller={seller} isAr={isAr} reload={reload} />
-      {isOwner && <BankSection key={`bank-${seller.updatedAt}`} seller={seller} isAr={isAr} reload={reload} />}
-      {isOwner && <TeamSection isAr={isAr} />}
+
+      <nav className="flex gap-1 overflow-x-auto border-b border-slate-200" aria-label={isAr ? 'أقسام الإعدادات' : 'Settings sections'}>
+        {tabs.map((t) => (
+          <Link
+            key={t.id || 'profile'}
+            to={t.id ? `/seller-center/store/${t.id}` : '/seller-center/store'}
+            className={`-mb-px inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold ${active === t.id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          >
+            <t.Icon className="h-4 w-4" aria-hidden />{isAr ? t.ar : t.en}
+          </Link>
+        ))}
+      </nav>
+
+      {active === '' && <ProfileSection key={seller.updatedAt} seller={seller} isAr={isAr} reload={reload} />}
+      {active === 'documents' && <DocumentsSection seller={seller} isAr={isAr} reload={reload} />}
+      {active === 'payout' && <BankSection key={`bank-${seller.updatedAt}`} seller={seller} isAr={isAr} reload={reload} />}
+      {active === 'team' && <TeamSection isAr={isAr} />}
     </div>
   );
 }

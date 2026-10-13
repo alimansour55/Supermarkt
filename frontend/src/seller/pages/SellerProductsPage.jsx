@@ -179,7 +179,7 @@ export default function SellerProductsPage() {
   const sellerCategory = searchParams.get('sellerCategory') || '';
   const stockFilter = searchParams.get('stock') || '';
   const sort = searchParams.get('sort') || 'updated';
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(() => searchParams.get('q') || '');
   const [items, setItems] = useState([]);
   const [sections, setSections] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
@@ -188,7 +188,11 @@ export default function SellerProductsPage() {
   const [busyId, setBusyId] = useState('');
   const [selected, setSelected] = useState(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const urlQ = searchParams.get('q');
+  // The top-bar search lands here with ?q= — follow it even when already on this page.
+  useEffect(() => { if (urlQ !== null) setQ(urlQ); }, [urlQ]);
+  const showImport = searchParams.get('import') === '1';
+  const setShowImport = (fn) => setParam('import', fn(showImport) ? '1' : '');
 
   const setParam = (key, value) => {
     const next = new URLSearchParams(searchParams);

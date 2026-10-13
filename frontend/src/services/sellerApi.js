@@ -25,11 +25,17 @@ export const sellerApi = {
   resubmit: () => api.post('/seller/me/resubmit'),
 
   getDashboard: () => api.get('/seller/dashboard'),
+  getSummary: () => api.get('/seller/summary'),
+  getHome: (params) => api.get('/seller/home', { params }),
+  getSalesReport: (params) => api.get('/seller/reports/sales', { params }),
+  downloadSalesReport: (params) => api.get('/seller/reports/sales', { params: { ...params, format: 'csv' }, responseType: 'blob' }),
+  search: (q) => api.get('/seller/search', { params: { q } }),
 
   getFinance: () => api.get('/seller/finance'),
   getMyReviews: (params) => api.get('/seller/reviews', { params }),
   getNotifications: (params) => api.get('/my-notifications', { params }),
   markNotificationsRead: () => api.patch('/my-notifications/read-all'),
+  markNotificationRead: (id) => api.patch(`/my-notifications/${id}/read`),
 
   listTeam: () => api.get('/seller/team'),
   addTeamMember: (data) => api.post('/seller/team', data),
@@ -45,6 +51,8 @@ export const sellerApi = {
   listShipments: (params) => api.get('/seller/shipments', { params }),
   getShipment: (id) => api.get(`/seller/shipments/${id}`),
   updateShipmentStatus: (id, data) => api.post(`/seller/shipments/${id}/status`, data),
+  bulkShipmentStatus: (data) => api.post('/seller/shipments/bulk-status', data),
+  exportShipments: (params) => api.get('/seller/shipments/export', { params, responseType: 'blob' }),
 
   listCategories: () => api.get('/seller/categories'),
   createCategory: (data) => api.post('/seller/categories', data),
@@ -55,6 +63,7 @@ export const sellerApi = {
   listProducts: (params) => api.get('/seller/products', { params }),
   duplicateProduct: (id) => api.post(`/seller/products/${id}/duplicate`),
   bulkProductCategories: (data) => api.post('/seller/products/bulk-categories', data),
+  bulkInventory: (items) => api.put('/seller/products/bulk-inventory', { items }),
   getProduct: (id) => api.get(`/seller/products/${id}`),
   createProduct: (data) => api.post('/seller/products', data),
   updateProduct: (id, data) => api.put(`/seller/products/${id}`, data),

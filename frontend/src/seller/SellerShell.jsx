@@ -1,25 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Navigate, NavLink, Outlet, useLocation, useNavigate } from '../app/router';
-import { LayoutDashboard, LogOut, Package, Store, AlertTriangle, Clock, ClipboardList, Wallet, Star, Warehouse, Tags } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, Outlet, useLocation, useNavigate } from '../app/router';
+import { AlertTriangle, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import Loader from '../components/ui/Loader';
 import { sellerApi } from '../services/sellerApi';
-import { SELLER_STATUS } from './sellerLabels';
-import StatusBadge from './StatusBadge';
+import { visibleNav } from './sellerNav';
+import SellerSidebar from './layout/SellerSidebar';
+import SellerTopbar from './layout/SellerTopbar';
 
 const SELLER_ROLES = ['seller_owner', 'seller_staff'];
-
-const NAV = [
-  { to: '/seller-center', end: true, ar: 'الرئيسية', en: 'Dashboard', Icon: LayoutDashboard },
-  { to: '/seller-center/orders', ar: 'الطلبات', en: 'Orders', Icon: ClipboardList },
-  { to: '/seller-center/products', ar: 'منتجاتي', en: 'Products', Icon: Package },
-  { to: '/seller-center/categories', ar: 'أقسام متجري', en: 'My sections', Icon: Tags },
-  { to: '/seller-center/inbound', ar: 'شحنات للمخزن', en: 'Inbound stock', Icon: Warehouse, storeOnly: true },
-  { to: '/seller-center/finance', ar: 'الأرباح والمدفوعات', en: 'Earnings & payouts', Icon: Wallet },
-  { to: '/seller-center/reviews', ar: 'التقييمات والأداء', en: 'Ratings', Icon: Star },
-  { to: '/seller-center/store', ar: 'بيانات المتجر', en: 'Store profile', Icon: Store },
-];
+const COLLAPSE_KEY = 'sellerCenter.sidebarCollapsed';
 
 function StatusBanner({ seller, isAr }) {
   if (!seller || seller.status === 'active') return null;
@@ -66,6 +57,14 @@ export default function SellerShell() {
 
   const [me, setMe] = useState(null);
   const [loadError, setLoadError] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; }
+  });
+  const lastSummaryAt = useRef(0);
+  // <Navigate> re-runs whenever `state` changes identity — keep it stable or it loops.
+  const loginState = useMemo(() => ({ from: location.pathname }), [location.pathname]);
 
   const isSeller = SELLER_ROLES.includes(user?.role);
 
@@ -79,21 +78,55 @@ export default function SellerShell() {
     }
   }, []);
 
+  /** Menu badges — refreshed on navigation (at most every 20 s) and every 2 minutes. */
+  const refreshSummary = useCallback(async ({ force = true } = {}) => {
+    if (!force && Date.now() - lastSummaryAt.current < 20_000) return;
+    lastSummaryAt.current = Date.now();
+    try {
+      const { data } = await sellerApi.getSummary();
+      setSummary(data.data);
+    } catch { /* badges are optional */ }
+  }, []);
+
   useEffect(() => {
     if (isSeller) reload();
   }, [isSeller, reload]);
+
+  useEffect(() => {
+    if (!isSeller) return undefined;
+    refreshSummary({ force: false });
+    return undefined;
+  }, [isSeller, refreshSummary, location.pathname]);
+
+  useEffect(() => {
+    if (!isSeller) return undefined;
+    const timer = setInterval(() => { if (!document.hidden) refreshSummary(); }, 120_000);
+    return () => clearInterval(timer);
+  }, [isSeller, refreshSummary]);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((v) => {
+      try { localStorage.setItem(COLLAPSE_KEY, v ? '0' : '1'); } catch { /* private mode */ }
+      return !v;
+    });
+  }, []);
+  const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   if (loading) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-50"><Loader size="lg" /></div>;
   }
   if (!isAuthenticated) {
-    return <Navigate to="/seller-center/login" state={{ from: location.pathname }} replace />;
+    return <Navigate to="/seller-center/login" state={loginState} replace />;
   }
   if (!isSeller) {
     return <Navigate to="/seller-center/login" replace />;
   }
 
   const seller = me?.seller;
+  const nav = visibleNav({
+    isOwner: me?.user?.role === 'seller_owner',
+    storeFulfillment: Boolean(seller?.allowedFulfillment?.includes('store')),
+  });
 
   const signOut = async () => {
     await logout();
@@ -102,74 +135,44 @@ export default function SellerShell() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900" dir={isAr ? 'rtl' : 'ltr'}>
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            {seller?.logoUrl ? (
-              <img src={seller.logoUrl} alt="" className="h-10 w-10 rounded-xl object-cover ring-1 ring-slate-200" />
-            ) : (
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white">
-                <Store className="h-5 w-5" aria-hidden />
-              </span>
-            )}
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold">
-                {seller ? (isAr ? seller.nameAr : seller.nameEn) : (isAr ? 'مركز البائعين' : 'Seller Center')}
-              </p>
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>{isAr ? 'مركز البائعين' : 'Seller Center'}</span>
-                {seller && <StatusBadge map={SELLER_STATUS} value={seller.status} isAr={isAr} />}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleLanguage}
-              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50"
-            >
-              {isAr ? 'EN' : 'ع'}
-            </button>
-            <button
-              type="button"
-              onClick={signOut}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50"
-            >
-              <LogOut className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">{isAr ? 'خروج' : 'Sign out'}</span>
-            </button>
-          </div>
-        </div>
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 pb-2">
-          {NAV.filter((n) => !n.storeOnly || me?.seller?.allowedFulfillment?.includes('store')).map(({ to, end, ar, en, Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) => [
-                'flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition',
-                isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100',
-              ].join(' ')}
-            >
-              <Icon className="h-4 w-4" aria-hidden />
-              {isAr ? ar : en}
-            </NavLink>
-          ))}
-        </nav>
-      </header>
-
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        {loadError && !me ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{loadError}</div>
-        ) : !me ? (
-          <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>
-        ) : (
-          <>
-            <StatusBanner seller={seller} isAr={isAr} />
-            <Outlet context={{ me, seller, reload, isAr }} />
-          </>
+      {me && (
+        <SellerSidebar
+          nav={nav}
+          summary={summary}
+          isAr={isAr}
+          seller={seller}
+          collapsed={collapsed}
+          onToggleCollapsed={toggleCollapsed}
+          mobileOpen={mobileOpen}
+          onCloseMobile={closeMobile}
+        />
+      )}
+      <div className={`flex min-h-screen min-w-0 flex-col transition-[padding] duration-200 ${me ? (collapsed ? 'lg:ps-[4.5rem]' : 'lg:ps-64') : ''}`}>
+        {me && (
+          <SellerTopbar
+            me={me}
+            seller={seller}
+            isAr={isAr}
+            summary={summary}
+            onOpenMenu={() => setMobileOpen(true)}
+            onSignOut={signOut}
+            onToggleLanguage={toggleLanguage}
+            refreshSummary={refreshSummary}
+          />
         )}
-      </main>
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
+          {loadError && !me ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{loadError}</div>
+          ) : !me ? (
+            <div className="flex min-h-[40vh] items-center justify-center"><Loader size="lg" /></div>
+          ) : (
+            <>
+              <StatusBanner seller={seller} isAr={isAr} />
+              <Outlet context={{ me, seller, reload, isAr, summary, refreshSummary }} />
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

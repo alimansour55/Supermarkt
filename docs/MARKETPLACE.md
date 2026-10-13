@@ -79,11 +79,29 @@ and pays sellers after a hold period.
 | Who | Screen |
 |---|---|
 | Customers | `/sell-with-us`, `/sellers/:slug` (store page), "From marketplace sellers" filter, shipments + seller rating on the order page |
-| Sellers | `/seller-center` — Dashboard, Orders, Products (incl. CSV import, bulk section edits, duplicate), My sections, Inbound stock, Earnings & payouts, Ratings, Store profile (documents, bank details, team) |
+| Sellers | `/seller-center` — see **Seller Center layout** below |
 | Staff | Admin → Marketplace: Sellers, Seller shipments, Listing review, Seller inbound stock, Seller payouts, Marketplace settings |
 
 Permissions: `sellers:read` (view sellers and queues), `sellers:write` (approve, money moves);
 seller shipments use `orders:*`, inbound stock uses `products:*`, payouts reading uses `reports:read`.
+
+## Seller Center layout
+
+A sidebar on the start side (right in Arabic) groups everything like Amazon Seller Central;
+`frontend/src/seller/sellerNav.js` is the single menu definition (badges come from
+`GET /api/seller/summary`). The top bar has quick search (`/` focuses it), notifications,
+"Add product" and the account menu.
+
+| Menu | Pages |
+|---|---|
+| Home | Dashboard: sales vs previous period, daily chart, top products, action centre, balance, account health, onboarding checklist (`GET /seller/home?days=7\|30\|90`) |
+| Catalog | All products (bulk sections, duplicate, CSV import via `?import=1`), Add product, Manage inventory (spreadsheet edit, `PUT /seller/products/bulk-inventory`), My store sections |
+| Orders | Manage orders (tabs, date/fulfillment filters, ship-by deadlines, bulk confirm/packed, CSV export), Send stock to us (store fulfillment only) |
+| Payments | Balance & payouts, Payout details |
+| Business reports | Sales by day / product / store section with CSV export (`GET /seller/reports/sales`) |
+| Performance | Account health (cancel < 2.5 %, late ship < 4 %, rating ≥ 3.5), Customer feedback |
+| Store settings | `/store`, `/store/documents`, `/store/payout`, `/store/team` |
+| Notifications, Help center | Full notification list; fees, guides and FAQ |
 
 ## Code map
 
@@ -95,7 +113,7 @@ seller shipments use `orders:*`, inbound stock uses `products:*`, payouts readin
   `sellerCategory.service.js` (store sections).
 - Routes: `/api/sellers` (public), `/api/seller` (portal, always scoped to the signed-in seller),
   `/api/admin/marketplace` (staff).
-- Tests: `backend/test/marketplace.*.test.js` (onboarding, orders, finance, storefront, ops, catalog).
+- Tests: `backend/test/marketplace.*.test.js` (onboarding, orders, finance, storefront, ops, catalog, insights).
 
 ## Local demo
 

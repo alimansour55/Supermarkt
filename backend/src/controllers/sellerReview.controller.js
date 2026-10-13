@@ -76,13 +76,22 @@ export const listPublicSellerReviews = asyncHandler(async (req, res) => {
 
 export const listMyReviews = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query, 50);
-  const filter = { seller: req.seller._id, status: 'visible' };
-  const [items, total, performance] = await Promise.all([
+  const base = { seller: req.seller._id, status: 'visible' };
+  const rating = Number(req.query.rating);
+  const filter = [1, 2, 3, 4, 5].includes(rating) ? { ...base, rating } : base;
+  const [items, total, performance, distribution] = await Promise.all([
     SellerReview.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     SellerReview.countDocuments(filter),
     getSellerPerformance(req.seller._id),
+    SellerReview.aggregate([{ $match: base }, { $group: { _id: '$rating', count: { $sum: 1 } } }]),
   ]);
-  res.json({ success: true, data: items.map(publicReview), performance, pagination: paginationMeta(page, limit, total) });
+  res.json({
+    success: true,
+    data: items.map(publicReview),
+    performance,
+    distribution: [5, 4, 3, 2, 1].map((r) => ({ rating: r, count: distribution.find((d) => d._id === r)?.count || 0 })),
+    pagination: paginationMeta(page, limit, total),
+  });
 });
 
 // ── Admin ──

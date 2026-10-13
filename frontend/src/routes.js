@@ -123,6 +123,12 @@ export default [
       route('reviews', 'seller/pages/SellerReviewsPage.jsx'),
       route('inbound', 'seller/pages/SellerInboundPage.jsx'),
       route('store', 'seller/pages/SellerStorePage.jsx'),
+      route('store/:tab', 'seller/pages/SellerStorePage.jsx', { id: 'seller-store-tab' }),
+      route('inventory', 'seller/pages/SellerInventoryPage.jsx'),
+      route('reports', 'seller/pages/SellerReportsPage.jsx'),
+      route('performance', 'seller/pages/SellerPerformancePage.jsx'),
+      route('notifications', 'seller/pages/SellerNotificationsPage.jsx'),
+      route('help', 'seller/pages/SellerHelpPage.jsx'),
     ]),
   ]),
 

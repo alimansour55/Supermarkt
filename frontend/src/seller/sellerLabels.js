@@ -1,3 +1,5 @@
+import { AlertTriangle, Gauge, ShieldCheck } from 'lucide-react';
+
 /** Labels + badge styles shared by the seller portal and the admin marketplace pages. */
 
 export const SELLER_STATUS = {
@@ -78,3 +80,10 @@ export function label(map, key, isAr) {
 export function apiError(err, fallback) {
   return err?.response?.data?.message || fallback;
 }
+
+/** Account health levels from getSellerPerformance (Amazon-style thresholds). */
+export const ACCOUNT_HEALTH = {
+  good: { ar: 'ممتاز', en: 'Healthy', tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', Icon: ShieldCheck },
+  fair: { ar: 'يحتاج انتباه', en: 'Needs attention', tone: 'bg-amber-50 text-amber-800 ring-amber-200', Icon: Gauge },
+  at_risk: { ar: 'معرّض للإيقاف', en: 'At risk', tone: 'bg-red-50 text-red-700 ring-red-200', Icon: AlertTriangle },
+};
