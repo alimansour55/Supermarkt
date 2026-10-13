@@ -63,6 +63,7 @@ import {
   ensureOrderTracking,
 } from '../services/deliveryTracking.service.js';
 import { generateOrderNumber } from '../utils/orderNumber.js';
+import { runAtomic } from '../utils/transaction.js';
 import { resolveRequestLang } from '../utils/stockMessages.js';
 import { assertDeliveryDateInWindow } from '../utils/deliveryDate.js';
 import {
@@ -431,142 +432,139 @@ export const createOrder = asyncHandler(async (req, res) => {
     };
   });
 
-  // Claim the coupon redemption slot atomically BEFORE persisting the order.
-  // reserveCouponRedemption only increments while usedCount < usageLimit, so two
-  // concurrent checkouts can never drive a limited coupon past its cap. If a later
-  // step fails, releaseCouponRedemption hands the slot back.
-  let couponClaimed = null;
-  if (totals.appliedCoupon?.code) {
-    const reserved = await reserveCouponRedemption(totals.appliedCoupon.code);
-    if (!reserved) {
-      throw new AppError(
-        lang === 'ar'
-          ? 'نفدت صلاحية كود الخصم — لم يعد متاحاً'
-          : 'This discount code is no longer available',
-        409,
-      );
-    }
-    couponClaimed = totals.appliedCoupon.code;
-  }
-
+  // Generated outside the transaction: the daily counter is a hot document, and a
+  // gap in order numbers after a failed checkout is harmless.
   const orderNumber = await generateOrderNumber();
 
-  let order;
-  try {
-    order = await Order.create({
-      orderNumber,
-      user: req.user._id,
-      items: orderItems,
-      shippingAddress: {
-        label: enrichedShipping.label || shippingAddress.label,
-        street: enrichedShipping.street,
-        building: enrichedShipping.building,
-        floor: enrichedShipping.floor,
-        city: enrichedShipping.city || area,
-        governorate: enrichedShipping.governorate,
-        area: enrichedShipping.area || area,
-        postalCode: enrichedShipping.postalCode,
-        lat: customerPinLat,
-        lng: customerPinLng,
-        formattedAddress: enrichedShipping.formattedAddress || shippingAddress.formattedAddress || '',
-        placeId: enrichedShipping.placeId || shippingAddress.placeId || '',
-        locationSource: enrichedShipping.locationSource || shippingAddress.locationSource || '',
-      },
-      phone,
-      alternatePhone: normalizedAlternatePhone || undefined,
-      subtotal: totals.subtotal,
-      deliveryFee: totals.deliveryFee,
-      discount: totals.discountAmount,
-      pointsRedeemed: totals.pointsRedeemed,
-      pointsDiscount: totals.pointsDiscount,
-      walletAmount: totals.walletApplied || 0,
-      couponCode: totals.appliedCoupon?.code || discountCode || null,
-      total: totals.total,
-      paymentMethod,
-      manualPaymentAccount: manualPaymentAccount || undefined,
-      paymentProofUrl: paymentProofUrl || undefined,
-      paymentProofPublicId: paymentProofPublicId || undefined,
-      paymentProofUploadedAt: paymentProofUploadedAt || undefined,
-      deliveryMethod,
-      deliveryZone: /^[a-f\d]{24}$/i.test(deliveryZone._id) ? deliveryZone._id : null,
-      deliveryZoneNameAr: deliveryZone.nameAr,
-      deliveryZoneNameEn: deliveryZone.nameEn,
-      deliveryTimeSlot: selectedSlot ? {
-        labelAr: selectedSlot.labelAr,
-        labelEn: selectedSlot.labelEn,
-        from: selectedSlot.from,
-        to: selectedSlot.to,
-      } : undefined,
-      scheduledDate: parsedScheduledDate,
-      recurringDelivery: deliveryMethod === 'recurring' ? {
-        frequency: recurringFrequency,
-        preferredWeekday: recurringFrequency !== 'monthly' ? Number(recurringPreferredWeekday) : null,
-        preferredDayOfMonth: recurringFrequency === 'monthly' ? Number(recurringPreferredDayOfMonth) : null,
-        isFirstDelivery: true,
-      } : undefined,
-      notes,
-      paymentStatus: 'pending',
-      orderStatus: 'pending',
-      fulfillmentLocationId: fulfillmentLocation?._id ?? null,
-      statusHistory: [{ status: 'pending', changedAt: new Date() }],
-    });
-  } catch (err) {
-    // The coupon slot was already claimed above — hand it back if the order
-    // itself couldn't be persisted, same as every other failure path below.
-    if (couponClaimed) await releaseCouponRedemption(couponClaimed);
-    throw err;
-  }
-
-  if (totals.pointsRedeemed > 0) {
-    const updatedUser = await redeemPointsForOrder({
-      userId: req.user._id,
-      order,
-      pointsRedeemed: totals.pointsRedeemed,
-      pointsDiscount: totals.pointsDiscount,
-    });
-    if (!updatedUser) {
-      if (couponClaimed) await releaseCouponRedemption(couponClaimed);
-      await Order.findByIdAndDelete(order._id);
-      throw new AppError('Your points balance changed. Please review checkout again.', 409);
-    }
-  }
-
-  if (totals.walletApplied > 0) {
-    const spent = await spendWalletForOrder({
-      userId: req.user._id,
-      order,
-      walletApplied: totals.walletApplied,
-    });
-    if (!spent) {
-      // Undo the points redemption we just committed, hand back the coupon slot,
-      // then drop the order.
-      if (totals.pointsRedeemed > 0) {
-        await User.findByIdAndUpdate(req.user._id, {
-          $inc: { pointsBalance: totals.pointsRedeemed },
-          $push: {
-            pointsHistory: {
-              type: 'refund',
-              points: totals.pointsRedeemed,
-              amount: totals.pointsDiscount,
-              note: 'Points restored — checkout could not be completed',
-            },
-          },
-        });
+  // Everything below commits or rolls back as one unit: coupon slot, order row,
+  // points, wallet, stock, recurring subscription and the cart clear. On a replica
+  // set this is a real transaction; on a standalone mongod the undo steps run instead.
+  const order = await runAtomic(async ({ session, onRollback }) => {
+    // reserveCouponRedemption only increments while usedCount < usageLimit, so two
+    // concurrent checkouts can never drive a limited coupon past its cap.
+    if (totals.appliedCoupon?.code) {
+      const reserved = await reserveCouponRedemption(totals.appliedCoupon.code, session);
+      if (!reserved) {
+        throw new AppError(
+          lang === 'ar'
+            ? 'نفدت صلاحية كود الخصم — لم يعد متاحاً'
+            : 'This discount code is no longer available',
+          409,
+        );
       }
-      if (couponClaimed) await releaseCouponRedemption(couponClaimed);
-      await Order.findByIdAndDelete(order._id);
-      throw new AppError('Your wallet balance changed. Please review checkout again.', 409);
+      onRollback(() => releaseCouponRedemption(totals.appliedCoupon.code));
     }
-  }
 
-  // Coupon usage is already committed by reserveCouponRedemption above; the
-  // reservation stands once the order persists, so nothing to increment here.
+    const [created] = await Order.create([{
+        orderNumber,
+        user: req.user._id,
+        items: orderItems,
+        shippingAddress: {
+          label: enrichedShipping.label || shippingAddress.label,
+          street: enrichedShipping.street,
+          building: enrichedShipping.building,
+          floor: enrichedShipping.floor,
+          city: enrichedShipping.city || area,
+          governorate: enrichedShipping.governorate,
+          area: enrichedShipping.area || area,
+          postalCode: enrichedShipping.postalCode,
+          lat: customerPinLat,
+          lng: customerPinLng,
+          formattedAddress: enrichedShipping.formattedAddress || shippingAddress.formattedAddress || '',
+          placeId: enrichedShipping.placeId || shippingAddress.placeId || '',
+          locationSource: enrichedShipping.locationSource || shippingAddress.locationSource || '',
+        },
+        phone,
+        alternatePhone: normalizedAlternatePhone || undefined,
+        subtotal: totals.subtotal,
+        deliveryFee: totals.deliveryFee,
+        discount: totals.discountAmount,
+        pointsRedeemed: totals.pointsRedeemed,
+        pointsDiscount: totals.pointsDiscount,
+        walletAmount: totals.walletApplied || 0,
+        couponCode: totals.appliedCoupon?.code || discountCode || null,
+        total: totals.total,
+        paymentMethod,
+        manualPaymentAccount: manualPaymentAccount || undefined,
+        paymentProofUrl: paymentProofUrl || undefined,
+        paymentProofPublicId: paymentProofPublicId || undefined,
+        paymentProofUploadedAt: paymentProofUploadedAt || undefined,
+        deliveryMethod,
+        deliveryZone: /^[a-f\d]{24}$/i.test(deliveryZone._id) ? deliveryZone._id : null,
+        deliveryZoneNameAr: deliveryZone.nameAr,
+        deliveryZoneNameEn: deliveryZone.nameEn,
+        deliveryTimeSlot: selectedSlot ? {
+          labelAr: selectedSlot.labelAr,
+          labelEn: selectedSlot.labelEn,
+          from: selectedSlot.from,
+          to: selectedSlot.to,
+        } : undefined,
+        scheduledDate: parsedScheduledDate,
+        recurringDelivery: deliveryMethod === 'recurring' ? {
+          frequency: recurringFrequency,
+          preferredWeekday: recurringFrequency !== 'monthly' ? Number(recurringPreferredWeekday) : null,
+          preferredDayOfMonth: recurringFrequency === 'monthly' ? Number(recurringPreferredDayOfMonth) : null,
+          isFirstDelivery: true,
+        } : undefined,
+        notes,
+        paymentStatus: 'pending',
+        orderStatus: 'pending',
+        fulfillmentLocationId: fulfillmentLocation?._id ?? null,
+        statusHistory: [{ status: 'pending', changedAt: new Date() }],
+    }], { session });
+    onRollback(() => Order.findByIdAndDelete(created._id));
 
-  if (deliveryMethod === 'recurring') {
-    try {
+    if (totals.pointsRedeemed > 0) {
+      const updatedUser = await redeemPointsForOrder({
+        userId: req.user._id,
+        order: created,
+        pointsRedeemed: totals.pointsRedeemed,
+        pointsDiscount: totals.pointsDiscount,
+        session,
+      });
+      if (!updatedUser) {
+        throw new AppError('Your points balance changed. Please review checkout again.', 409);
+      }
+      onRollback(() => User.findByIdAndUpdate(req.user._id, {
+        $inc: { pointsBalance: totals.pointsRedeemed },
+        $push: {
+          pointsHistory: {
+            type: 'refund',
+            points: totals.pointsRedeemed,
+            amount: totals.pointsDiscount,
+            note: 'Points restored — checkout could not be completed',
+          },
+        },
+      }));
+    }
+
+    if (totals.walletApplied > 0) {
+      const spent = await spendWalletForOrder({
+        userId: req.user._id,
+        order: created,
+        walletApplied: totals.walletApplied,
+        session,
+      });
+      if (!spent) {
+        throw new AppError('Your wallet balance changed. Please review checkout again.', 409);
+      }
+      onRollback(() => creditWallet({
+        userId: req.user._id,
+        amount: totals.walletApplied,
+        type: 'reversal',
+        method: 'order',
+        order: created._id,
+        note: `Checkout rolled back — order ${created.orderNumber}`,
+      }));
+    }
+
+    // Throws 409 when any line sold out since the cart was validated.
+    await commitOrderInventory(req.user._id, orderItems, { session, onRollback, lang });
+
+    if (deliveryMethod === 'recurring') {
       const subscription = await createRecurringSubscription({
         userId: req.user._id,
-        sourceOrderId: order._id,
+        sourceOrderId: created._id,
         items: orderItems.map((item) => ({
           product: item.product,
           variantId: item.variantId,
@@ -577,18 +575,20 @@ export const createOrder = asyncHandler(async (req, res) => {
           unit: item.unit,
           image: item.image,
         })),
-        shippingAddress: order.shippingAddress,
-        phone: order.phone,
+        shippingAddress: created.shippingAddress,
+        phone: created.phone,
         deliveryZone,
-        deliveryTimeSlot: order.deliveryTimeSlot,
+        deliveryTimeSlot: created.deliveryTimeSlot,
         frequency: recurringFrequency,
         preferredWeekday: Number(recurringPreferredWeekday),
         preferredDayOfMonth: Number(recurringPreferredDayOfMonth),
         startDate: parsedScheduledDate,
         paymentMethod,
         notes,
+        session,
       });
-      order.recurringDelivery = {
+      onRollback(() => subscription.deleteOne());
+      created.recurringDelivery = {
         frequency: recurringFrequency,
         preferredWeekday: subscription.preferredWeekday,
         preferredDayOfMonth: subscription.preferredDayOfMonth,
@@ -597,23 +597,18 @@ export const createOrder = asyncHandler(async (req, res) => {
         subscriptionId: subscription._id,
         isFirstDelivery: true,
       };
-      await order.save();
-    } catch (err) {
-      // Roll back the just-created order so a failed subscription can't leave a
-      // charged order behind, and hand the coupon slot back.
-      if (couponClaimed) await releaseCouponRedemption(couponClaimed);
-      await Order.findByIdAndDelete(order._id);
-      throw err;
+      await created.save({ session });
     }
-  }
 
-  await Cart.findOneAndUpdate(
-    { user: req.user._id },
-    { items: [] },
-    { upsert: true },
-  );
+    // Last write, so a failed checkout leaves the customer's cart untouched.
+    await Cart.findOneAndUpdate(
+      { user: req.user._id },
+      { items: [] },
+      { upsert: true, session },
+    );
 
-  await commitOrderInventory(req.user._id, orderItems);
+    return created;
+  });
 
   try {
     await awardPointsForOrder(order);

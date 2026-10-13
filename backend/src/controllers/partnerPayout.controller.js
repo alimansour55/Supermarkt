@@ -64,5 +64,5 @@ export const exportPartnerPayoutsHandler = asyncHandler(async (req, res) => {
   const csv = toCsv(rows);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="partner-payout-batch-${Date.now()}.csv"`);
-  res.send(`﻿${csv}`);
+  res.send(`\uFEFF${csv}`);
 });

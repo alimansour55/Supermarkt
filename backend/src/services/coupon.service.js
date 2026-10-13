@@ -54,7 +54,7 @@ export async function assertCouponRedeemable({ code, userId, subtotal = 0, lang 
  * query itself, so concurrent checkouts can never push usedCount past usageLimit.
  * Returns the updated Coupon doc, or null when the code is gone / exhausted / inactive.
  */
-export async function reserveCouponRedemption(code) {
+export async function reserveCouponRedemption(code, session = null) {
   const normalized = normalizeCode(code);
   if (!normalized) return null;
 
@@ -69,17 +69,18 @@ export async function reserveCouponRedemption(code) {
       ],
     },
     { $inc: { usedCount: 1 } },
-    { new: true },
+    { new: true, session },
   );
 }
 
 /** Give back a redemption slot (order failed after reserve, or was cancelled/refunded). */
-export async function releaseCouponRedemption(code) {
+export async function releaseCouponRedemption(code, session = null) {
   const normalized = normalizeCode(code);
   if (!normalized) return;
 
   await Coupon.findOneAndUpdate(
     { code: normalized, usedCount: { $gt: 0 } },
     { $inc: { usedCount: -1 } },
+    { session },
   );
 }

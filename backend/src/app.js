@@ -12,6 +12,13 @@ import { corsOptions } from './config/cors.js';
 
 const app = express();
 
+// Behind a reverse proxy / load balancer, req.ip must come from X-Forwarded-For or
+// every rate limiter sees one shared IP. Set TRUST_PROXY to the hop count (e.g. 1).
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set('trust proxy', Number.isFinite(hops) ? hops : process.env.TRUST_PROXY);
+}
+
 // This is a JSON-only API (the React app is served separately), so the HTML-oriented
 // CSP directives are unnecessary here and can be safely disabled.
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));

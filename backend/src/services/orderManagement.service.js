@@ -4,33 +4,21 @@ import User from '../models/User.js';
 import { AppError } from '../utils/AppError.js';
 import { normalizeVariantId } from '../utils/productCatalog.js';
 import { getStripe } from '../config/stripe.js';
+import { incrementLineStock } from './inventoryReservation.service.js';
 
 const CUSTOMER_CANCELLABLE = new Set(['pending', 'confirmed', 'preparing']);
 const ADMIN_CANCELLABLE = new Set(['pending', 'confirmed', 'preparing', 'out_for_delivery']);
 
-export async function restoreOrderInventory(orderItems) {
+export async function restoreOrderInventory(orderItems, session = null) {
   for (const item of orderItems) {
     const productId = item.product || item.productId;
     if (!productId) continue;
 
     const variantId = item.variantId ? normalizeVariantId(item.variantId) : null;
-    const qty = item.quantity;
-
-    const product = await Product.findById(productId);
+    const product = await Product.findById(productId).session(session);
     if (!product) continue;
 
-    if (variantId && product.variants?.length) {
-      const variant = product.variants.id(variantId);
-      if (variant) {
-        variant.stock = (variant.stock || 0) + qty;
-        product.soldCount = Math.max(0, (product.soldCount || 0) - qty);
-      }
-    } else {
-      product.stock = (product.stock || 0) + qty;
-      product.soldCount = Math.max(0, (product.soldCount || 0) - qty);
-    }
-
-    await product.save({ validateBeforeSave: false });
+    await incrementLineStock(product, variantId, item.quantity, session);
   }
 }
 

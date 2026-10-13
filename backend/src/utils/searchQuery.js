@@ -59,6 +59,7 @@ export function arabicSearchPattern(word) {
 }
 
 function isMostlyLatin(str) {
+  // eslint-disable-next-line no-control-regex -- "is plain ASCII" check
   return /^[\x00-\x7F\s]+$/.test(str);
 }
 

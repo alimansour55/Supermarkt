@@ -25,6 +25,11 @@ export const protect = async (req, res, next) => {
       throw new AppError('User not found', 401);
     }
 
+    // A deactivated account loses access immediately, not when its JWT expires.
+    if (user.isActive === false) {
+      throw new AppError('This account has been deactivated', 401);
+    }
+
     req.user = user;
     next();
   } catch (error) {
@@ -50,7 +55,7 @@ export const optionalProtect = async (req, res, next) => {
     const user = await User.findById(decoded.id);
     // Optional auth: a missing/expired/invalid token must never block a public
     // route — just continue as an anonymous visitor.
-    if (user) req.user = user;
+    if (user && user.isActive !== false) req.user = user;
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
