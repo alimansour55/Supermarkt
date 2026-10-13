@@ -5,6 +5,8 @@ import Product from '../models/Product.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { generateToken } from '../utils/generateToken.js';
+import { formatProduct } from '../utils/formatters.js';
+import { featuredProductsFor } from './sellerGrowth.controller.js';
 import { normalizePhone } from '../utils/phone.js';
 import {
   getMarketplaceSettings,
@@ -146,6 +148,9 @@ export const applyAsSeller = asyncHandler(async (req, res) => {
 export const getPublicSeller = asyncHandler(async (req, res) => {
   const seller = await Seller.findOne({ slug: String(req.params.slug).toLowerCase(), status: 'active' }).lean();
   if (!seller) throw new AppError('Seller not found', 404);
-  const productCount = await Product.countDocuments({ seller: seller._id, isActive: true });
-  res.json({ success: true, data: { ...formatSellerPublic(seller), productCount } });
+  const [productCount, featured] = await Promise.all([
+    Product.countDocuments({ seller: seller._id, isActive: true }),
+    featuredProductsFor(seller),
+  ]);
+  res.json({ success: true, data: { ...formatSellerPublic(seller), productCount, featuredProducts: featured.map((p) => formatProduct(p)) } });
 });

@@ -7,6 +7,7 @@ import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { apiError } from '../sellerLabels';
 import SalesChart from '../SalesChart';
+import TrafficReport from '../TrafficReport';
 import { Card, KpiCard, PageHeader, Segmented } from '../ui';
 import { fmtNumber, saveBlob } from '../sellerUtils';
 
@@ -212,6 +213,7 @@ export default function SellerReportsPage() {
               )}
             </div>
           </Card>
+          <TrafficReport isAr={isAr} />
         </div>
       )}
     </div>

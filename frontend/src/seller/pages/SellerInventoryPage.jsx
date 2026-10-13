@@ -267,11 +267,11 @@ export default function SellerInventoryPage() {
                       <td className="px-3 py-2.5">{availability(p)}</td>
                       <td className="px-3 py-2.5">
                         {hasVariants ? <span className="text-xs text-slate-500">{isAr ? 'حسب النوع' : 'Per variant'}</span> : (
-                          <input type="number" min="0" step="0.01" value={shown(e.price, p.price)} onChange={(ev) => edit(p, 'price', ev.target.value)} className={`${cellCls} ${e.price !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" aria-label={isAr ? 'السعر' : 'Price'} />
+                          <input type="number" min="0" step="0.01" value={shown(e.price, p.price)} onChange={(ev) => edit(p, 'price', ev.target.value)} disabled={Boolean(p.sellerPromotion)} title={p.sellerPromotion ? (isAr ? 'في عرض نشط — يُعدّل بعد انتهائه' : 'In an active promotion') : undefined} className={`${cellCls} ${e.price !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" aria-label={isAr ? 'السعر' : 'Price'} />
                         )}
                       </td>
                       <td className="px-3 py-2.5">
-                        <input type="number" min="0" step="0.01" value={shown(e.oldPrice, p.oldPrice || '')} onChange={(ev) => edit(p, 'oldPrice', ev.target.value)} className={`${cellCls} ${e.oldPrice !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" placeholder="—" aria-label={isAr ? 'السعر قبل الخصم' : 'Old price'} />
+                        <input type="number" min="0" step="0.01" value={shown(e.oldPrice, p.oldPrice || '')} onChange={(ev) => edit(p, 'oldPrice', ev.target.value)} disabled={Boolean(p.sellerPromotion)} className={`${cellCls} ${e.oldPrice !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" placeholder="—" aria-label={isAr ? 'السعر قبل الخصم' : 'Old price'} />
                       </td>
                       <td className="px-3 py-2.5">
                         {hasVariants ? <span className="text-xs text-slate-500">{isAr ? 'حسب النوع' : 'Per variant'}</span> : (
@@ -290,7 +290,7 @@ export default function SellerInventoryPage() {
                           <td className="py-2 pe-3 ps-16 text-sm">↳ {isAr ? v.valueAr : v.valueEn} <span className="text-xs text-slate-400" dir="ltr">{v.sku}</span></td>
                           <td />
                           <td className="px-3 py-2 text-sm tabular-nums">{v.stock}</td>
-                          <td className="px-3 py-2"><input type="number" min="0" step="0.01" value={shown(ve.price, v.price)} onChange={(ev) => edit(p, 'price', ev.target.value, v._id)} className={`${cellCls} ${ve.price !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" /></td>
+                          <td className="px-3 py-2"><input type="number" min="0" step="0.01" value={shown(ve.price, v.price)} onChange={(ev) => edit(p, 'price', ev.target.value, v._id)} disabled={Boolean(p.sellerPromotion)} className={`${cellCls} ${ve.price !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" /></td>
                           <td />
                           <td className="px-3 py-2"><input type="number" min="0" value={shown(ve.stock, v.stock)} onChange={(ev) => edit(p, 'stock', ev.target.value, v._id)} disabled={storeHeld} className={`${cellCls} ${ve.stock !== undefined ? dirtyCls : 'border-slate-200'}`} dir="ltr" /></td>
                           <td />

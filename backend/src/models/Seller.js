@@ -95,6 +95,21 @@ const sellerSchema = new mongoose.Schema(
     deliveryZones: [{ type: mongoose.Schema.Types.ObjectId, ref: 'DeliveryZone' }],
     /** Typical handling time before a seller-shipped order leaves, in days. */
     handlingDays: { type: Number, min: 0, max: 30, default: 2 },
+    /** Store page design: tagline, banner slider and hand-picked featured products. */
+    storefront: {
+      taglineAr: { type: String, trim: true, default: '', maxlength: 160 },
+      taglineEn: { type: String, trim: true, default: '', maxlength: 160 },
+      banners: {
+        type: [{
+          _id: false,
+          url: { type: String, trim: true, required: true },
+          publicId: { type: String, trim: true, default: '' },
+          link: { type: String, trim: true, default: '' },
+        }],
+        default: [],
+      },
+      featuredProducts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+    },
     /** Vacation mode: every listing is hidden until the seller returns (or `until` passes). */
     vacation: {
       enabled: { type: Boolean, default: false },

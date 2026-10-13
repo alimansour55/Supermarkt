@@ -117,3 +117,12 @@ export const sellerRecoveryLimiter = rateLimit({
   legacyHeaders: false,
   message: jsonMessage('Too many attempts. Please try again in 15 minutes.'),
 });
+
+/** Product view / add-to-cart counters — generous, but one browser can't inflate stats. */
+export const productEventLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: false,
+  legacyHeaders: false,
+  handler: (_req, res) => res.status(204).end(),
+});

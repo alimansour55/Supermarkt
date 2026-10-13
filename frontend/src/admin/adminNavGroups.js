@@ -180,6 +180,7 @@ export const ADMIN_NAV_GROUPS = [
       { path: '/admin/sellers', labelAr: 'البائعون', labelEn: 'Sellers', Icon: Building2, badgeKey: 'pendingSellers', permission: 'sellers:read' },
       { path: '/admin/seller-shipments', labelAr: 'شحنات البائعين', labelEn: 'Seller shipments', Icon: Truck, permission: 'orders:read' },
       { path: '/admin/listing-review', labelAr: 'مراجعة المنتجات', labelEn: 'Listing review', Icon: ClipboardCheck, badgeKey: 'pendingListings', permission: 'sellers:read' },
+      { path: '/admin/seller-promotions', labelAr: 'عروض البائعين', labelEn: 'Seller promotions', Icon: ClipboardCheck, permission: 'sellers:read' },
       { path: '/admin/seller-inbound', labelAr: 'مخزون البائعين الوارد', labelEn: 'Seller inbound stock', Icon: Warehouse, permission: 'products:read' },
       { path: '/admin/seller-payouts', labelAr: 'مدفوعات البائعين', labelEn: 'Seller payouts', Icon: Banknote, permission: 'reports:read' },
       { path: '/admin/marketplace-settings', labelAr: 'إعدادات السوق', labelEn: 'Marketplace settings', Icon: SlidersHorizontal, permission: 'settings:write' },

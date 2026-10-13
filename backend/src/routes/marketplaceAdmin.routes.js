@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requirePermission } from '../middleware/auth.js';
 import { listSellerReviewsAdmin, setSellerReviewStatusAdmin } from '../controllers/sellerReview.controller.js';
 import { listInboundAdmin, receiveInboundAdmin } from '../controllers/sellerOps.controller.js';
+import { listPromotionsAdmin, reviewPromotionAdmin } from '../controllers/sellerGrowth.controller.js';
 import {
   getSellerBalancesAdmin,
   getSellerLedgerAdmin,
@@ -46,6 +47,8 @@ router.put('/sellers/:id/documents/:docId', ...write, reviewSellerDocument);
 
 router.get('/listings', ...read, listListingQueue);
 router.post('/listings/:id/approve', ...write, approveListing);
+router.get('/promotions', ...read, listPromotionsAdmin);
+router.post('/promotions/:id/review', ...write, reviewPromotionAdmin);
 router.post('/listings/:id/reject', ...write, rejectListing);
 
 router.get('/shipments', ...requirePermission('orders:read'), listShipmentsAdmin);

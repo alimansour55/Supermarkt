@@ -1,5 +1,5 @@
 import {
-  BarChart3, Bell, Boxes, History, Lock, RotateCcw, BellRing, MessageCircleQuestion, Palmtree, ClipboardList, FileText, Gauge, HelpCircle, LayoutDashboard, Landmark, Package, PackagePlus,
+  BarChart3, Bell, Boxes, History, Lock, RotateCcw, BellRing, MessageCircleQuestion, Palmtree, BadgePercent, Megaphone, LayoutTemplate, ClipboardList, FileText, Gauge, HelpCircle, LayoutDashboard, Landmark, Package, PackagePlus,
   Settings, Star, Store, Tags, Truck, Upload, Users, Wallet, Warehouse,
 } from 'lucide-react';
 
@@ -45,6 +45,16 @@ export const SELLER_NAV = [
     children: [
       { to: '/seller-center/finance', ar: 'الرصيد والتحويلات', en: 'Balance & payouts', Icon: Wallet, perm: 'finance' },
       { to: '/seller-center/store/payout', ar: 'بيانات استلام الأرباح', en: 'Payout details', Icon: Landmark, ownerOnly: true },
+    ],
+  },
+  {
+    id: 'marketing',
+    ar: 'التسويق',
+    en: 'Marketing',
+    Icon: Megaphone,
+    children: [
+      { to: '/seller-center/promotions', ar: 'العروض والخصومات', en: 'Promotions', Icon: BadgePercent, perm: 'products' },
+      { to: '/seller-center/store/design', ar: 'تصميم صفحة المتجر', en: 'Store page design', Icon: LayoutTemplate, perm: 'store' },
     ],
   },
   { id: 'reports', to: '/seller-center/reports', ar: 'تقارير المبيعات', en: 'Business reports', Icon: BarChart3, perm: 'reports' },

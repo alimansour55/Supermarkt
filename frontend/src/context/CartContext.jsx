@@ -1,3 +1,4 @@
+import { trackProductEvent } from '../utils/productEvents';
 import {
   createContext,
   useContext,
@@ -368,6 +369,7 @@ export function CartProvider({ children }) {
   const addItem = useCallback((product, quantity = 1, openDrawerOnAdd = true) => {
     const lastQuery = getLastSearchQuery();
     if (lastQuery) trackSearchConversion(lastQuery);
+    trackProductEvent(product, 'cart');
 
     const key = product.cartKey || itemKey({ productId: product._id || product.productId, variantId: product.variantId });
     const maxStock = getProductAvailableStock(product, product.variantId);

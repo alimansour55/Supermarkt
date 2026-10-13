@@ -17,6 +17,7 @@ import { scrollToSection } from '../utils/scrollToTop';
 import { isVideoUrl, pickProductEmoji } from '../utils/imageHelpers';
 import SecondItemPriceHighlight from '../components/promo/SecondItemPriceHighlight';
 import { getUnitLabel } from '../constants/productUnits';
+import { trackProductEvent } from '../utils/productEvents';
 
 const ProductReviewsSection = lazy(() => import('../components/product/ProductReviewsSection'));
 const ProductQuestionsSection = lazy(() => import('../components/product/ProductQuestionsSection'));
@@ -64,6 +65,11 @@ export default function ProductDetailsPage() {
   const [added, setAdded] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const isAr = language === 'ar';
+
+  // Seller traffic report: one view per product per session (marketplace products only).
+  useEffect(() => {
+    if (product?._id) trackProductEvent(product, 'view');
+  }, [product?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!product?.variants?.length) {

@@ -32,6 +32,8 @@ import whatsappRoutes from './whatsapp.routes.js';
 import sellerRoutes from './seller.routes.js';
 import sellersRoutes from './sellers.routes.js';
 import productQuestionsRoutes from './productQuestions.routes.js';
+import { trackProductEvent } from '../controllers/sellerGrowth.controller.js';
+import { productEventLimiter } from '../middleware/rateLimiter.js';
 import marketplaceAdminRoutes from './marketplaceAdmin.routes.js';
 
 const router = Router();
@@ -71,5 +73,6 @@ router.use('/whatsapp', whatsappRoutes);
 router.use('/seller', sellerRoutes);
 router.use('/sellers', sellersRoutes);
 router.use('/product-questions', productQuestionsRoutes);
+router.post('/product-events', productEventLimiter, trackProductEvent);
 
 export default router;

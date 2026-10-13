@@ -37,6 +37,7 @@ import { SELLER_DOCUMENT_TYPES, LISTING_STATUSES, sellerUserPermissions } from '
 import { normalizePhone } from '../utils/phone.js';
 import { parseCsv, toCsv, sendCsv } from '../utils/csvExport.js';
 import { logSellerActivity, diffFields } from '../services/sellerActivity.service.js';
+import { assertPriceEditable } from '../services/sellerPromotion.service.js';
 import {
   ownSellerCategoryIds,
   resolveSellerCategoryNames,
@@ -280,6 +281,7 @@ export function formatSellerProduct(product) {
     reservedStock: product.reservedStock || 0,
     sellerCategories: (product.sellerCategories || []).map((c) => String(c?._id ?? c)),
     lowStockThreshold: product.lowStockThreshold ?? null,
+    sellerPromotion: product.sellerPromotion || null,
     hasMarketplaceCategory: Boolean(product.category),
     categorySuggestion: product.categorySuggestion || '',
   };
@@ -530,6 +532,7 @@ async function updateProductFromRow(req, product, row) {
   }
   const { operational } = sanitizeSellerProductInput(input, req.seller);
   if (operational.price !== undefined && !(operational.price > 0)) throw new AppError('A price above zero is required', 400);
+  assertPriceEditable(product, operational);
   if (operational.sellerCategories) operational.sellerCategories = await ownSellerCategoryIds(req.seller._id, operational.sellerCategories);
   const nextPrice = operational.price ?? product.price;
   if (operational.oldPrice != null && operational.oldPrice <= nextPrice) operational.oldPrice = null;
@@ -670,6 +673,12 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
   if (operational.price !== undefined && !(operational.price > 0)) throw new AppError('A price above zero is required', 400);
   await resolveCategoryInput(content, product);
   if (operational.sellerCategories) operational.sellerCategories = await ownSellerCategoryIds(seller._id, operational.sellerCategories);
+  // The editor always sends prices — only block a real change.
+  if (product.sellerPromotion) {
+    if (operational.price === product.price) delete operational.price;
+    if ((operational.oldPrice ?? null) === (product.oldPrice ?? null)) delete operational.oldPrice;
+    assertPriceEditable(product, operational);
+  }
 
   if (operational.sku !== undefined && operational.sku !== product.sku) {
     operational.sku = operational.sku
@@ -840,6 +849,7 @@ export const bulkUpdateSellerInventory = asyncHandler(async (req, res) => {
       const { operational } = sanitizeSellerProductInput(input, req.seller);
       if (operational.price !== undefined && !(operational.price > 0)) throw new AppError('A price above zero is required', 400);
       if (operational.variants?.some((v) => !(v.price > 0))) throw new AppError('Every variant needs a price above zero', 400);
+      assertPriceEditable(product, operational);
       // Old price must stay above the price it's compared with.
       const nextPrice = operational.price ?? product.price;
       if (operational.oldPrice != null && operational.oldPrice <= nextPrice) operational.oldPrice = null;

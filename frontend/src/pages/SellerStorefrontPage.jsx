@@ -22,6 +22,31 @@ function Stars({ rating }) {
   );
 }
 
+/** The seller's banner slider: auto-advances every 5 s, dots to jump, pauses on hover. */
+function BannerSlider({ banners, isAr }) {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (banners.length < 2 || paused) return undefined;
+    const timer = setInterval(() => setIndex((i) => (i + 1) % banners.length), 5000);
+    return () => clearInterval(timer);
+  }, [banners.length, paused]);
+  const current = banners[Math.min(index, banners.length - 1)];
+  const img = <img src={current.url} alt="" className="h-full w-full object-cover" />;
+  return (
+    <section className="relative mt-6 aspect-[16/5] overflow-hidden rounded-3xl bg-slate-100 shadow-sm" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      {current.link ? <a href={current.link} className="block h-full">{img}</a> : img}
+      {banners.length > 1 && (
+        <div className="absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
+          {banners.map((b, i) => (
+            <button key={b.url} type="button" onClick={() => setIndex(i)} aria-label={isAr ? `الشريحة ${i + 1}` : `Slide ${i + 1}`} className={`h-2 rounded-full transition-all ${i === index ? 'w-6 bg-white' : 'w-2 bg-white/60'}`} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** Public store page of a marketplace seller: profile, rating, reviews and products. */
 export default function SellerStorefrontPage() {
   const { slug } = useParams();
@@ -121,6 +146,9 @@ export default function SellerStorefrontPage() {
     inStock && { key: 'stock', label: isAr ? 'المتوفر فقط' : 'In stock', clear: { inStock: '' } },
   ].filter(Boolean);
   const about = isAr ? seller.descriptionAr || seller.descriptionEn : seller.descriptionEn || seller.descriptionAr;
+  const tagline = isAr ? seller.storefront?.taglineAr || seller.storefront?.taglineEn : seller.storefront?.taglineEn || seller.storefront?.taglineAr;
+  const featured = seller.featuredProducts || [];
+  const showFeatured = featured.length > 0 && !chips.length && page === 1;
 
   return (
     <div className="container-app py-6">
@@ -136,6 +164,7 @@ export default function SellerStorefrontPage() {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-extrabold">{name}</h1>
+            {tagline && <p className="mt-0.5 text-sm font-medium text-primary-700">{tagline}</p>}
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-muted">
               {seller.ratingCount > 0 ? (
                 <span className="flex items-center gap-1.5"><Stars rating={seller.rating} /> {seller.rating.toFixed(1)} ({seller.ratingCount})</span>
@@ -162,6 +191,15 @@ export default function SellerStorefrontPage() {
           </div>
         )}
       </section>
+
+      {seller.storefront?.banners?.length > 0 && <BannerSlider banners={seller.storefront.banners} isAr={isAr} />}
+
+      {showFeatured && (
+        <section className="mt-6">
+          <h2 className="mb-3 text-lg font-bold">{isAr ? 'مختارات المتجر' : 'Featured by the store'}</h2>
+          <ProductGrid products={featured} layout="cards" />
+        </section>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start">
         <aside className={`${filtersOpen ? 'block' : 'hidden'} space-y-5 rounded-2xl border border-border bg-white p-4 shadow-sm lg:sticky lg:top-24 lg:block`}>

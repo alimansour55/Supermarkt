@@ -1,6 +1,15 @@
 import { Router } from 'express';
 import { sellerOnly, sellerCanEditCatalog, sellerOwnerOnly, sellerCan } from '../middleware/auth.js';
 import { uploadSingle, uploadProductMediaMultiple, optionalUploadFields } from '../middleware/upload.js';
+import {
+  listMyPromotions,
+  createMyPromotion,
+  cancelMyPromotion,
+  getMyStorefront,
+  updateMyStorefront,
+  uploadStorefrontMedia,
+  getTrafficReport,
+} from '../controllers/sellerGrowth.controller.js';
 import { getMyFinance, getMyLedger } from '../controllers/sellerFinance.controller.js';
 import { listMyReviews } from '../controllers/sellerReview.controller.js';
 import {
@@ -77,7 +86,7 @@ const router = Router();
 router.use(...sellerOnly);
 
 // Staff permissions by area — owners pass every check.
-router.use(['/products', '/categories', '/inbound', '/questions', '/product-reviews'], sellerCan('products'));
+router.use(['/products', '/categories', '/inbound', '/questions', '/product-reviews', '/promotions'], sellerCan('products'));
 router.use(['/shipments', '/returns'], sellerCan('orders'));
 router.use('/reports', sellerCan('reports'));
 router.use('/finance', sellerCan('finance'));
@@ -89,6 +98,9 @@ router.post('/me/documents', sellerCan('store'), uploadSingle('file'), uploadSel
 router.delete('/me/documents/:docId', sellerCan('store'), deleteSellerDocument);
 
 router.put('/me/vacation', sellerCan('store'), setVacation);
+router.get('/me/storefront', getMyStorefront);
+router.put('/me/storefront', sellerCan('store'), updateMyStorefront);
+router.post('/me/storefront/media', sellerCan('store'), uploadProductMediaMultiple('images', 5), uploadStorefrontMedia);
 router.get('/me/security', getMySecurity);
 router.put('/me/password', changeMyPassword);
 router.put('/me/two-factor', setMyTwoFactor);
@@ -100,6 +112,10 @@ router.get('/dashboard', getSellerDashboard);
 router.get('/summary', getSellerSummary);
 router.get('/home', getSellerHome);
 router.get('/reports/sales', getSalesReport);
+router.get('/reports/traffic', getTrafficReport);
+router.get('/promotions', listMyPromotions);
+router.post('/promotions', sellerCanEditCatalog, createMyPromotion);
+router.post('/promotions/:id/cancel', cancelMyPromotion);
 router.get('/search', sellerQuickSearch);
 
 router.get('/finance', getMyFinance);

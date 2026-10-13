@@ -9,6 +9,7 @@ export const AdminSellerInboundPage = lazy(() => import('../admin/pages/SellerIn
 export const SellerPayoutsPage = lazy(() => import('../admin/pages/SellerPayoutsPage'), 'SellerPayoutsPage');
 export const SellerShipmentsPage = lazy(() => import('../admin/pages/SellerShipmentsPage'), 'SellerShipmentsPage');
 export const ListingReviewPage = lazy(() => import('../admin/pages/ListingReviewPage'), 'ListingReviewPage');
+export const SellerPromotionsAdminPage = lazy(() => import('../admin/pages/SellerPromotionsAdminPage'), 'SellerPromotionsAdminPage');
 export const MarketplaceSettingsPage = lazy(() => import('../admin/pages/MarketplaceSettingsPage'), 'MarketplaceSettingsPage');
 export const DashboardPage = lazy(() => import('../admin/pages/DashboardPage'), 'DashboardPage');
 export const ProductsPage = lazy(() => import('../admin/pages/ProductsPage'), 'ProductsPage');

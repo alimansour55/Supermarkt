@@ -56,6 +56,17 @@ export const sellerApi = {
   downloadPayoutStatement: (id) => api.get(`/seller/finance/payouts/${id}/statement`, { params: { format: 'csv' }, responseType: 'blob' }),
   listReturns: (params) => api.get('/seller/returns', { params }),
   setVacation: (data) => api.put('/seller/me/vacation', data),
+  listPromotions: () => api.get('/seller/promotions'),
+  createPromotion: (data) => api.post('/seller/promotions', data),
+  cancelPromotion: (id) => api.post(`/seller/promotions/${id}/cancel`),
+  getStorefront: () => api.get('/seller/me/storefront'),
+  updateStorefront: (data) => api.put('/seller/me/storefront', data),
+  uploadStorefrontMedia: (files) => {
+    const form = new FormData();
+    files.forEach((file) => form.append('images', file));
+    return api.post('/seller/me/storefront/media', form, { timeout: 120_000 });
+  },
+  getTrafficReport: (params) => api.get('/seller/reports/traffic', { params }),
   exportCatalog: () => api.get('/seller/products/export', { responseType: 'blob' }),
   listQuestions: (params) => api.get('/seller/questions', { params }),
   answerQuestion: (id, answer) => api.post(`/seller/questions/${id}/answer`, { answer }),

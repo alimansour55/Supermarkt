@@ -206,6 +206,11 @@ export function formatSellerPublic(seller) {
     handlingDays: seller.handlingDays ?? 2,
     city: seller.address?.city || '',
     joinedAt: seller.approvedAt || seller.createdAt,
+    storefront: {
+      taglineAr: seller.storefront?.taglineAr || '',
+      taglineEn: seller.storefront?.taglineEn || '',
+      banners: (seller.storefront?.banners || []).map((b) => ({ url: b.url, link: b.link || '' })),
+    },
     vacation: seller.vacation?.enabled ? {
       until: seller.vacation.until || null,
       messageAr: seller.vacation.messageAr || '',

@@ -363,6 +363,11 @@ export default function SellerProductFormPage() {
           </button>
         </div>
       )}
+      {product?.sellerPromotion && (
+        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
+          {isAr ? 'هذا المنتج في عرض نشط — لا يمكن تعديل السعر حتى ينتهي العرض، وسيعود السعر الأصلي تلقائياً.' : "This product is in an active promotion — its price can't change until the promotion ends, then the original price comes back automatically."}
+        </div>
+      )}
       {reviewsEdits && !product?.pendingChangesAt && (
         <div className="flex gap-2 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
