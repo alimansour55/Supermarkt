@@ -52,6 +52,7 @@ export const ContentPagesPage = lazy(() => import('../admin/pages/ContentPagesPa
 export const NavigationPage = lazy(() => import('../admin/pages/NavigationPage'), 'NavigationPage');
 export const AppearancePage = lazy(() => import('../admin/pages/AppearancePage'), 'AppearancePage');
 export const LoyaltyPage = lazy(() => import('../admin/pages/LoyaltyPage'), 'LoyaltyPage');
+export const CartRecoveryPage = lazy(() => import('../admin/pages/CartRecoveryPage'), 'CartRecoveryPage');
 export const WalletPage = lazy(() => import('../admin/pages/WalletPage'), 'WalletPage');
 export const PaymentMethodsPage = lazy(() => import('../admin/pages/PaymentMethodsPage'), 'PaymentMethodsPage');
 export const CustomerServiceSettingsPage = lazy(() => import('../admin/pages/CustomerServiceSettingsPage'), 'CustomerServiceSettingsPage');

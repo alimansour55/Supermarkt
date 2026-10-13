@@ -51,6 +51,10 @@ const couponSchema = new mongoose.Schema(
     },
     labelAr: { type: String, trim: true },
     labelEn: { type: String, trim: true },
+    /** 'cart_recovery' codes are minted per customer by the abandoned-cart job — never listed publicly. */
+    source: { type: String, enum: ['admin', 'cart_recovery'], default: 'admin', index: true },
+    /** When set, only this customer may redeem the code. */
+    assignedUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true },
 );

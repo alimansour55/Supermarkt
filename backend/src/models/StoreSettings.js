@@ -830,6 +830,8 @@ const storeSettingsSchema = new mongoose.Schema(
     socialLinks: { type: socialLinksSchema, default: () => ({}) },
     appLinks: { type: appLinksSchema, default: () => ({}) },
     loyalty: { type: loyaltySchema, default: () => ({}) },
+    /** Abandoned-cart reminders — shape owned by services/cartRecovery.service.js (normalizeCartRecoverySettings). */
+    cartRecovery: { type: mongoose.Schema.Types.Mixed, default: null },
     wallet: { type: walletSchema, default: () => ({}) },
     navigation: { type: navigationSchema, default: () => ({}) },
     seo: { type: seoSchema, default: () => ({}) },

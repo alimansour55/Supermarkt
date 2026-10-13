@@ -34,7 +34,7 @@ export const validateDiscountCode = asyncHandler(async (req, res) => {
 });
 
 export const listCoupons = asyncHandler(async (_req, res) => {
-  const coupons = await Coupon.find({ isActive: true, expiryDate: { $gt: new Date() } })
+  const coupons = await Coupon.find({ isActive: true, expiryDate: { $gt: new Date() }, source: { $ne: 'cart_recovery' } })
     .select('code discountType discountValue minSubtotal labelAr labelEn expiryDate usageLimit usedCount')
     .sort({ createdAt: -1 });
 
@@ -86,7 +86,8 @@ export const createCoupon = asyncHandler(async (req, res) => {
 });
 
 function buildAdminCouponFilter(query) {
-  const filter = {};
+  // Per-customer cart-recovery codes live on the Cart recovery page, not in the coupon list.
+  const filter = { source: query.source === 'cart_recovery' ? 'cart_recovery' : { $ne: 'cart_recovery' } };
   if (query.isActive !== undefined && query.isActive !== '') {
     filter.isActive = query.isActive === 'true';
   }
@@ -106,9 +107,9 @@ export const getAdminCoupons = asyncHandler(async (req, res) => {
   const [coupons, total, activeCount, expiredCount, totalRedemptions] = await Promise.all([
     Coupon.find(filter).sort(sort).skip(skip).limit(limit),
     Coupon.countDocuments(filter),
-    Coupon.countDocuments({ isActive: true, expiryDate: { $gte: now } }),
-    Coupon.countDocuments({ expiryDate: { $lt: now } }),
-    Coupon.aggregate([{ $group: { _id: null, total: { $sum: '$usedCount' } } }]),
+    Coupon.countDocuments({ source: filter.source, isActive: true, expiryDate: { $gte: now } }),
+    Coupon.countDocuments({ source: filter.source, expiryDate: { $lt: now } }),
+    Coupon.aggregate([{ $match: { source: filter.source } }, { $group: { _id: null, total: { $sum: '$usedCount' } } }]),
   ]);
 
   res.json({

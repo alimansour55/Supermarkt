@@ -89,6 +89,7 @@ export const ADMIN_NAV_GROUPS = [
       },
       { path: '/admin/coupons', labelAr: 'الكوبونات', labelEn: 'Coupons', Icon: Tag, permission: 'coupons:write' },
       { path: '/admin/promotions', labelAr: 'العروض والتخفيضات', labelEn: 'Offers & promotions', Icon: Flame, permission: 'promotions:write' },
+      { path: '/admin/cart-recovery', labelAr: 'استرجاع السلال المتروكة', labelEn: 'Cart recovery', Icon: ShoppingCart, permission: 'promotions:write' },
       { path: '/admin/banners', labelAr: 'البانرات والحملات', labelEn: 'Banners & campaigns', Icon: Image, permission: 'banners:write' },
     ],
   },

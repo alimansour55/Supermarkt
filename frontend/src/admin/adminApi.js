@@ -257,6 +257,12 @@ export const adminApi = {
   getContentPage: (slug) => api.get(`/content-pages/admin/${slug}`),
   updateContentPage: (slug, data) => api.put(`/content-pages/admin/${slug}`, data),
 
+  getCartRecoverySettings: () => api.get('/admin/cart-recovery/settings'),
+  updateCartRecoverySettings: (data) => api.put('/admin/cart-recovery/settings', data),
+  getCartRecoveryStats: (params) => api.get('/admin/cart-recovery/stats', { params }),
+  getCartRecoveryEpisodes: (params) => api.get('/admin/cart-recovery/episodes', { params }),
+  runCartRecovery: () => api.post('/admin/cart-recovery/run'),
+
   getLoyaltyRules: () => api.get('/loyalty/admin/rules'),
   updateLoyaltyRules: (data) => api.put('/loyalty/admin/rules', data),
   getLoyaltyOverview: () => api.get('/loyalty/admin/overview'),

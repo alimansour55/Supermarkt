@@ -29,6 +29,7 @@ const NAV_KEYWORDS = {
   '/admin/brands': ['brand', 'ماركة', 'ماركات', 'علامة تجارية', 'manufacturer', 'شركة مصنعة'],
   '/admin/reviews': ['review', 'rating', 'تقييم', 'تقييمات', 'مراجعة', 'مراجعات', 'نجوم', 'stars', 'moderation', 'اعتماد'],
   '/admin/coupons': ['coupon', 'كوبون', 'كوبونات', 'خصم', 'discount code', 'كود خصم', 'promo code', 'قسيمة'],
+  '/admin/cart-recovery': ['abandoned cart', 'cart recovery', 'سلة متروكة', 'سلال', 'استرجاع', 'تذكير', 'reminder', 'remarketing', 'win back'],
   '/admin/promotions': ['promotion', 'offer', 'sale', 'عرض', 'عروض', 'تخفيض', 'تخفيضات', 'حملة', 'deal', 'صفقة', 'bogo', 'bundle', 'باقة'],
   '/admin/banners': ['banner', 'بانر', 'بنر', 'حملة', 'حملات', 'campaign', 'slider', 'سلايدر', 'اعلان', 'إعلان'],
   '/admin/orders': ['order', 'طلب', 'طلبات', 'اوردر', 'أوردر', 'purchase', 'مشتريات', 'invoice', 'شحنة', 'shipment', 'checkout'],

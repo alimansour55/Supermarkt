@@ -25,6 +25,10 @@ export async function assertCouponRedeemable({ code, userId, subtotal = 0, lang 
     throw new AppError(lang === 'ar' ? 'كود الخصم غير صالح' : 'Invalid discount code', 400);
   }
 
+  if (coupon.assignedUser && String(coupon.assignedUser) !== String(userId || '')) {
+    throw new AppError(lang === 'ar' ? 'كود الخصم غير صالح' : 'Invalid discount code', 400);
+  }
+
   const result = coupon.isValid(Number(subtotal) || 0);
   if (!result.valid) {
     throw new AppError(result.message, 400);

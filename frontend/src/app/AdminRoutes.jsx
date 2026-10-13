@@ -39,6 +39,7 @@ export default function AdminRoutes() {
         <Route path="team" element={withSuspense(<P.AdminPermissionRoute permission="users:write"><P.TeamPage /></P.AdminPermissionRoute>)} />
         <Route path="coupons" element={withSuspense(<P.AdminPermissionRoute permission="coupons:write"><P.CouponsPage /></P.AdminPermissionRoute>)} />
         <Route path="promotions" element={withSuspense(<P.AdminPermissionRoute permission="promotions:write"><P.PromotionsPage /></P.AdminPermissionRoute>)} />
+        <Route path="cart-recovery" element={withSuspense(<P.AdminPermissionRoute permission="promotions:write"><P.CartRecoveryPage /></P.AdminPermissionRoute>)} />
         <Route path="banners" element={withSuspense(<P.AdminPermissionRoute permission="banners:write"><P.BannersPage /></P.AdminPermissionRoute>)} />
         <Route path="homepage" element={withSuspense(<P.AdminPermissionRoute permission="homepage:write"><P.HomepageBuilderPage /></P.AdminPermissionRoute>)} />
         <Route path="navigation" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.NavigationPage /></P.AdminPermissionRoute>)} />

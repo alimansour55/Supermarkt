@@ -29,6 +29,13 @@ import {
 } from '../controllers/partnerPayout.controller.js';
 import { getAuditLogs } from '../controllers/auditLog.controller.js';
 import {
+  getCartRecoverySettingsHandler,
+  updateCartRecoverySettingsHandler,
+  getCartRecoveryStatsHandler,
+  listCartRecoveriesHandler,
+  runCartRecoveryHandler,
+} from '../controllers/cartRecoveryAdmin.controller.js';
+import {
   getNotifications,
   getUnreadNotificationCount,
   markNotificationAsRead,
@@ -62,6 +69,11 @@ router.get('/dashboard/sales-trend', ...requirePermission('dashboard:read'), get
 router.get('/revenue', ...requirePermission('reports:read'), getRevenueDashboard);
 router.get('/revenue/analytics', ...requirePermission('reports:read'), getRevenueAnalytics);
 router.get('/reports', ...requirePermission('reports:read'), getReports);
+router.get('/cart-recovery/settings', ...requirePermission('promotions:write'), getCartRecoverySettingsHandler);
+router.put('/cart-recovery/settings', ...requirePermission('promotions:write'), updateCartRecoverySettingsHandler);
+router.get('/cart-recovery/stats', ...requirePermission('promotions:write'), getCartRecoveryStatsHandler);
+router.get('/cart-recovery/episodes', ...requirePermission('promotions:write'), listCartRecoveriesHandler);
+router.post('/cart-recovery/run', ...requirePermission('promotions:write'), runCartRecoveryHandler);
 router.get('/partner-revenue/distribution', ...requirePermission('reports:read'), getPartnerRevenueDistributionReport);
 router.get('/partner-revenue/settings', ...requirePermission('reports:read'), getPartnerRevenueSettingsHandler);
 router.get('/partner-revenue/search-products', ...requirePermission('reports:read'), searchPartnerRevenueProductsHandler);

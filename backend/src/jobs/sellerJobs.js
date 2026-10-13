@@ -1,11 +1,13 @@
 /**
  * Background work for the marketplace, run in-process every few minutes (same pattern as the
  * support-chat auto-close job): ship-by reminders, low-stock alerts, vacation and seller
- * promotion schedules. Each task guards itself so one failure never stops the others.
+ * promotion schedules, plus store-wide abandoned-cart reminders. Each task guards itself so
+ * one failure never stops the others.
  */
 import { runShipByReminders, runLowStockCheck } from '../services/sellerAlerts.service.js';
 import { endExpiredVacations } from '../controllers/sellerCatalog.controller.js';
 import { runPromotionSchedule } from '../services/sellerPromotion.service.js';
+import { runCartRecoveryJob } from '../services/cartRecovery.service.js';
 
 const EVERY_MS = 5 * 60 * 1000;
 const tasks = [
@@ -13,6 +15,7 @@ const tasks = [
   ['low-stock alerts', runLowStockCheck],
   ['vacation end', endExpiredVacations],
   ['seller promotions', runPromotionSchedule],
+  ['abandoned-cart reminders', runCartRecoveryJob],
 ];
 let timer = null;
 
