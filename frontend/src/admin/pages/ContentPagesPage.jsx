@@ -74,8 +74,7 @@ export default function ContentPagesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'صفحات المحتوى' : 'Content pages'}
-        description={isAr ? 'تحرير صفحات الموقع ثنائية اللغة وإعدادات SEO' : 'Edit bilingual site pages and SEO settings'}
+        description={isAr ? 'من نحن، الشروط، سياسة الإرجاع، وأي صفحة نصية أخرى.' : 'About us, terms, return policy and other text pages.'}
       />
 
       <div className="grid gap-6 lg:grid-cols-[240px_1fr]">

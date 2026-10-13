@@ -251,7 +251,7 @@ export default function BannersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        description={isAr ? 'إدارة بانرات الصفحة الرئيسية والعروض — انقر على أي بانر للتعديل' : 'Manage homepage and promo banners — click any banner to edit'}
+        description={isAr ? 'اضغط على أي بانر لتعديله.' : 'Click a banner to edit it.'}
         action={(
           <Button onClick={openCreate}>
             {isAr ? '+ بانر جديد' : '+ New banner'}

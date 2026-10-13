@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Flame, Layers, Package, Plus, Tag } from 'lucide-react';
+import { Layers, Package, Plus, Tag } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import { useAdminListPage } from '../hooks/useAdminListPage';
@@ -183,14 +183,10 @@ export default function PromotionsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold text-text">
-            <Flame className="h-7 w-7 text-orange-600" />
-            {isAr ? 'العروض والتخفيضات' : 'Offers & promotions'}
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-text-muted">
+          <p className="max-w-2xl text-sm text-text-muted">
             {isAr
-              ? 'تعديل فوري بدون إعادة تحميل — انقر على أي منتج أو حملة لفتح لوحة التعديل.'
-              : 'Instant edits without page reload — click any product or campaign to open the editor panel.'}
+              ? 'اضغط على أي منتج أو حملة لتعديلها.'
+              : 'Click any product or campaign to edit it.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

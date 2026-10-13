@@ -8,10 +8,9 @@ function latinizeDigits(text) {
 
 /** Format a numeric amount with Latin digits (en-US), no currency symbol. */
 export function formatMoneyLatin(amount, options = {}) {
-  const {
-    minimumFractionDigits = 2,
-    maximumFractionDigits = 2,
-  } = options;
+  const { maximumFractionDigits = 2 } = options;
+  // Intl throws when min > max (e.g. callers passing only maximumFractionDigits: 0).
+  const minimumFractionDigits = Math.min(options.minimumFractionDigits ?? 2, maximumFractionDigits);
 
   const formatted = new Intl.NumberFormat('en-US', {
     minimumFractionDigits,

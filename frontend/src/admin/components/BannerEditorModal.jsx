@@ -417,12 +417,12 @@ export default function BannerEditorModal({
                             : `Until then: ${schedulePreview.liveSiblings.length} other live banner(s) in «${form.placement}» will show instead.`)
                           : (isAr
                             ? 'حتى ذلك الوقت: لا بانرات نشطة أخرى في نفس الموضع — قد لا يظهر شيء (أضف بانراً احتياطياً أو استخدم الصفحة الرئيسية).'
-                            : 'Until then: no other live banners in this placement — nothing may show (add a fallback or use Homepage CMS).')}
+                            : 'Until then: no other live banners in this placement — nothing may show (add a fallback or use the Home page editor).')}
                       </li>
                       <li>
                         {isAr
                           ? 'للسلايدر الرئيسي: استخدم «جدولة أسبوعية» في الصفحة الرئيسية لربط بانرات مختلفة كل أسبوع.'
-                          : 'For the hero: use «Weekly rotation» in Homepage CMS to link different banners each week.'}
+                          : 'For the hero: use «Weekly rotation» in the Home page editor to link different banners each week.'}
                       </li>
                     </ul>
                   ) : (

@@ -133,6 +133,14 @@
     border-radius: 9999px;
   }
 
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
   .skeleton {
     @apply rounded-lg bg-slate-200;
     background: linear-gradient(90deg, #e2e8f0 0%, #f1f5f9 50%, #e2e8f0 100%);

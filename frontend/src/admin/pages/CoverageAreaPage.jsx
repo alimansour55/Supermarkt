@@ -60,7 +60,7 @@ export default function CoverageAreaPage() {
         <div className="space-y-4 rounded-xl border border-border bg-slate-50/80 p-4">
           <p className="text-sm leading-relaxed text-text">
             {isAr
-              ? 'هذه هي الخطوة الأولى: أضف دائرة أو أكثر تمثّل كل مكان يمكن أن تصل إليه توصيلاتك على الإطلاق — يمكن أن تكون دوائر متفرقة غير متجاورة (مثلاً: القاهرة والإسكندرية كمنطقتين منفصلتين تماماً). أي طلب خارج كل الدوائر يُرفض دائماً، مهما كانت مناطق التوصيل المعرّفة. بعد ضبطها، أضف مناطق توصيل محددة (بأسعارها ومواعيدها) داخلها من صفحة «مناطق التوصيل» — تلك المناطق لا يمكنها تجاوز هذه الدوائر.'
+              ? 'ارسم دائرة أو أكثر حول كل مكان توصّل له (مثلاً القاهرة والإسكندرية كدائرتين منفصلتين). أي طلب خارج الدوائر يُرفض. بعدها حدّد المناطق وأسعارها من «المناطق والأسعار»، ولا يمكن أن تخرج منطقة عن هذه الدوائر.'
               : 'This is step one: add one or more circles for everywhere your deliveries can ever reach — they can be scattered and non-adjacent (e.g. separate circles for Cairo and Alexandria). Any order outside every circle is always rejected, no matter what delivery zones exist. Once set, add specific delivery zones (with their own fees and schedules) inside them from the Delivery Zones page — those zones cannot extend service beyond these circles.'}
           </p>
 

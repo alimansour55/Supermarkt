@@ -3,7 +3,7 @@ import {
 } from 'react';
 import { Link } from '../../app/router';
 import {
-  AlertTriangle, MapPin, Phone, Radio, RefreshCw, Ruler, Search, Truck, X,
+  AlertTriangle, MapPin, Phone, RefreshCw, Ruler, Search, Truck, X,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
@@ -115,14 +115,10 @@ export default function LiveDeliveriesPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-text">
-            <Radio className="h-5 w-5 text-indigo-600" aria-hidden />
-            {isAr ? 'التوصيل المباشر' : 'Live deliveries'}
-          </h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="text-sm text-text-muted">
             {isAr
-              ? 'كل الطلبات «في الطريق» مع موقع المندوب وعنوان العميل.'
-              : 'All out-for-delivery orders with driver GPS and customer address.'}
+              ? 'الطلبات التي خرجت للتوصيل، ومكان كل مندوب الآن.'
+              : 'Orders out for delivery, and where each driver is right now.'}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">

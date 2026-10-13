@@ -2,13 +2,8 @@ import {
   Plus,
   ExternalLink,
   Settings,
-  Phone,
-  Truck,
-  Sparkles,
-  FileText,
-  LayoutDashboard,
 } from 'lucide-react';
-import { ADMIN_NAV_GROUPS } from './adminNavGroups';
+import { ADMIN_NAV_GROUPS, SETTINGS_GROUPS } from './adminNavGroups';
 
 /**
  * Extra search keywords per destination — Arabic synonyms, English synonyms,
@@ -16,15 +11,20 @@ import { ADMIN_NAV_GROUPS } from './adminNavGroups';
  * Keyed by route path so it stays in sync with adminNavGroups.
  */
 const NAV_KEYWORDS = {
+  '/admin/live-chat': ['live chat', 'الدردشة المباشرة', 'agents', 'موظفي الدعم'],
+  '/admin/callback-requests': ['callback requests', 'طلبات الاتصال', 'call back', 'اتصل بي'],
+  '/admin/customer-service': ['customer service', 'خدمة العملاء', 'contact channels'],
+  '/admin/push': ['app push notifications', 'إشعارات التطبيق', 'push', 'broadcast', 'إرسال للكل'],
+  '/admin/order-trash': ['recycle bin', 'سلة المحذوفات', 'trash'],
   '/admin/sellers': ['seller', 'sellers', 'vendor', 'merchant', 'marketplace', 'بائع', 'بائعين', 'البائعون', 'تاجر', 'تجار', 'سوق', 'متجر خارجي'],
-  '/admin/seller-inbound': ['inbound', 'وارد', 'استلام', 'receive', 'warehouse', 'مخزن', 'مستودع', 'ASN'],
+  '/admin/seller-inbound': ['seller inbound stock', 'مخزون البائعين الوارد', 'inbound', 'وارد', 'استلام', 'receive', 'warehouse', 'مخزن', 'مستودع', 'ASN'],
   '/admin/seller-payouts': ['payout', 'تحويل', 'تحويلات', 'مدفوعات', 'رصيد', 'balance', 'ledger', 'كشف حساب', 'settlement', 'تسوية', 'bank batch'],
   '/admin/seller-shipments': ['shipment', 'شحنة', 'شحنات', 'seller orders', 'طلبات البائعين', 'tracking', 'تتبع', 'manual refund', 'استرداد'],
-  '/admin/listing-review': ['listing', 'approve', 'moderation', 'queue', 'مراجعة', 'اعتماد', 'منتجات البائعين', 'طابور'],
+  '/admin/listing-review': ['listing review', 'مراجعة المنتجات', 'listing', 'approve', 'moderation', 'queue', 'مراجعة', 'اعتماد', 'منتجات البائعين', 'طابور'],
   '/admin/marketplace-settings': ['commission', 'عمولة', 'payout', 'hold', 'marketplace', 'إعدادات السوق', 'شروط البيع'],
   '/admin': ['home', 'overview', 'رئيسية', 'الرئيسية', 'نظرة عامة', 'stats', 'احصائيات', 'إحصائيات', 'kpi'],
   '/admin/products': ['catalog', 'كتالوج', 'سلعة', 'سلع', 'اصناف', 'أصناف', 'inventory', 'sku', 'باركود', 'barcode', 'price', 'سعر', 'اسعار', 'أسعار'],
-  '/admin/stock-alerts': ['out of stock', 'نفاد', 'نفد', 'مخزون منخفض', 'low stock', 'restock', 'اعادة تعبئة', 'الكمية', 'quantity'],
+  '/admin/stock-alerts': ['stock alerts', 'تنبيهات المخزون', 'out of stock', 'نفاد', 'نفد', 'مخزون منخفض', 'low stock', 'restock', 'اعادة تعبئة', 'الكمية', 'quantity'],
   '/admin/categories': ['category', 'قسم', 'اقسام', 'تصنيف', 'تصنيفات', 'department', 'tree', 'شجرة'],
   '/admin/brands': ['brand', 'ماركة', 'ماركات', 'علامة تجارية', 'manufacturer', 'شركة مصنعة'],
   '/admin/reviews': ['review', 'rating', 'تقييم', 'تقييمات', 'مراجعة', 'مراجعات', 'نجوم', 'stars', 'moderation', 'اعتماد'],
@@ -34,96 +34,42 @@ const NAV_KEYWORDS = {
   '/admin/banners': ['banner', 'بانر', 'بنر', 'حملة', 'حملات', 'campaign', 'slider', 'سلايدر', 'اعلان', 'إعلان'],
   '/admin/orders': ['order', 'طلب', 'طلبات', 'اوردر', 'أوردر', 'purchase', 'مشتريات', 'invoice', 'شحنة', 'shipment', 'checkout'],
   '/admin/invoices': ['invoice', 'فاتورة', 'فواتير', 'receipt', 'إيصال', 'ايصال', 'pdf', 'رقم فاتورة', 'invoice number', 'رقم عميل', 'customer number'],
-  '/admin/live-deliveries': ['live', 'مباشر', 'تتبع', 'tracking', 'gps', 'map', 'خريطة', 'مندوب', 'driver', 'سائق', 'delivery'],
-  '/admin/recurring-deliveries': ['recurring', 'subscription', 'اشتراك', 'اشتراكات', 'دوري', 'متكرر', 'schedule', 'جدولة'],
+  '/admin/live-deliveries': ['live deliveries', 'التوصيل المباشر', 'live', 'مباشر', 'تتبع', 'tracking', 'gps', 'map', 'خريطة', 'مندوب', 'driver', 'سائق', 'delivery'],
+  '/admin/recurring-deliveries': ['recurring delivery', 'التوصيل الدوري', 'recurring', 'subscription', 'اشتراك', 'اشتراكات', 'دوري', 'متكرر', 'schedule', 'جدولة'],
   '/admin/order-chats': ['chat', 'message', 'محادثة', 'رسائل', 'رسالة', 'دردشة', 'support', 'دعم', 'inbox', 'وارد'],
   '/admin/returns': ['return', 'refund', 'مرتجع', 'مرتجعات', 'ارجاع', 'إرجاع', 'استرجاع', 'استرداد', 'rma'],
-  '/admin/coverage-area': ['coverage', 'تغطية', 'مظلة', 'umbrella', 'general area', 'منطقة عامة', 'radius', 'نصف قطر', 'circle', 'دائرة', 'enforce coverage', 'تفعيل التغطية'],
-  '/admin/delivery': ['delivery zone', 'منطقة', 'مناطق', 'توصيل', 'شحن', 'shipping', 'رسوم توصيل', 'delivery fee', 'نطاق'],
-  '/admin/fulfillment-locations': ['warehouse', 'مستودع', 'مخزن', 'فرع', 'فروع', 'branch', 'موقع شحن', 'pickup', 'استلام', 'location'],
-  '/admin/users': ['user', 'customer', 'مستخدم', 'مستخدمين', 'عميل', 'عملاء', 'account', 'حساب', 'حسابات', 'member'],
-  '/admin/team': ['team', 'staff', 'admin team', 'فريق', 'موظف', 'موظفين', 'صلاحيات', 'permission', 'role', 'دور', 'ادوار', 'أدوار', 'مسؤول'],
-  '/admin/loyalty': ['loyalty', 'points', 'نقاط', 'ولاء', 'مكافآت', 'rewards', 'cashback', 'كاش باك', 'استرداد نقدي', 'earn', 'redeem'],
-  '/admin/wallet': ['wallet', 'محفظة', 'المحفظة', 'رصيد', 'balance', 'top-up', 'topup', 'شحن', 'instapay', 'إنستاباي', 'vodafone cash', 'فودافون كاش', 'store credit', 'refund', 'استرداد'],
-  '/admin/homepage': ['homepage', 'home page', 'الصفحة الرئيسية', 'واجهة', 'cms', 'hero', 'سلايدر', 'sections', 'اقسام الرئيسية', 'layout', 'بناء'],
+  '/admin/coverage-area': ['coverage area', 'منطقة التغطية', 'coverage', 'تغطية', 'مظلة', 'umbrella', 'general area', 'منطقة عامة', 'radius', 'نصف قطر', 'circle', 'دائرة', 'enforce coverage', 'تفعيل التغطية'],
+  '/admin/delivery': ['delivery zones', 'مناطق التوصيل', 'delivery zone', 'منطقة', 'مناطق', 'توصيل', 'شحن', 'shipping', 'رسوم توصيل', 'delivery fee', 'نطاق'],
+  '/admin/fulfillment-locations': ['fulfillment locations', 'مواقع الشحن', 'warehouse', 'مستودع', 'مخزن', 'فرع', 'فروع', 'branch', 'موقع شحن', 'pickup', 'استلام', 'location'],
+  '/admin/users': ['users', 'المستخدمون', 'user', 'customer', 'مستخدم', 'مستخدمين', 'عميل', 'عملاء', 'account', 'حساب', 'حسابات', 'member'],
+  '/admin/team': ['admin team', 'فريق الإدارة', 'team', 'staff', 'admin team', 'فريق', 'موظف', 'موظفين', 'صلاحيات', 'permission', 'role', 'دور', 'ادوار', 'أدوار', 'مسؤول'],
+  '/admin/loyalty': ['loyalty points', 'نقاط الولاء', 'loyalty', 'points', 'نقاط', 'ولاء', 'مكافآت', 'rewards', 'cashback', 'كاش باك', 'استرداد نقدي', 'earn', 'redeem'],
+  '/admin/wallet': ['wallets', 'المحافظ', 'wallet', 'محفظة', 'المحفظة', 'رصيد', 'balance', 'top-up', 'topup', 'شحن', 'instapay', 'إنستاباي', 'vodafone cash', 'فودافون كاش', 'store credit', 'refund', 'استرداد'],
+  '/admin/homepage': ['homepage cms', 'homepage', 'home page', 'الصفحة الرئيسية', 'واجهة', 'cms', 'hero', 'سلايدر', 'sections', 'اقسام الرئيسية', 'layout', 'بناء'],
   '/admin/trending-searches': ['trending', 'الأكثر بحثا', 'رائج', 'شائع', 'popular search', 'اقتراحات بحث', 'suggestions', 'هجين', 'hybrid', 'auto-tune', 'ضبط تلقائي', 'الحد', 'blocklist', 'كلمات محجوبة'],
   '/admin/filter-settings': ['filter', 'فلتر', 'فلاتر', 'تصفية', 'facet', 'خصائص', 'attributes', 'sort', 'ترتيب'],
-  '/admin/navigation': ['navigation', 'menu', 'قائمة', 'تنقل', 'header', 'footer', 'رأس', 'تذييل', 'روابط', 'links', 'نافبار', 'navbar'],
+  '/admin/navigation': ['header & footer cms', 'header footer', 'navigation', 'menu', 'قائمة', 'تنقل', 'header', 'footer', 'رأس', 'تذييل', 'روابط', 'links', 'نافبار', 'navbar'],
   '/admin/content': ['content page', 'صفحة', 'صفحات', 'محتوى', 'about', 'من نحن', 'سياسة', 'policy', 'terms', 'شروط', 'faq', 'اسئلة'],
   '/admin/appearance': ['appearance', 'theme', 'مظهر', 'ثيم', 'الوان', 'ألوان', 'color', 'لون', 'logo', 'شعار', 'font', 'خط', 'design', 'تصميم', 'brand color'],
   '/admin/revenue': ['revenue', 'ايراد', 'إيراد', 'إيرادات', 'مبيعات', 'sales', 'دخل', 'income', 'turnover', 'money', 'فلوس'],
   '/admin/reports': ['report', 'تقرير', 'تقارير', 'analytics', 'تحليلات', 'export', 'تصدير', 'chart', 'رسم بياني', 'data'],
-  '/admin/partner-revenue': ['partner', 'شريك', 'شركاء', 'commission', 'عمولة', 'payout', 'تسوية', 'توزيع', 'revenue share', 'split', 'rule', 'قاعدة', 'قواعد', 'تخصيص إيراد', 'attribution', 'statement', 'كشف حساب', 'كشف الحساب', 'ledger', 'دفتر', 'bank batch', 'دفعة بنكية', 'simulate', 'محاكاة'],
+  '/admin/partner-revenue': ['partner revenue', 'توزيع إيرادات الشركاء', 'partner', 'شريك', 'شركاء', 'commission', 'عمولة', 'payout', 'تسوية', 'توزيع', 'revenue share', 'split', 'rule', 'قاعدة', 'قواعد', 'تخصيص إيراد', 'attribution', 'statement', 'كشف حساب', 'كشف الحساب', 'ledger', 'دفتر', 'bank batch', 'دفعة بنكية', 'simulate', 'محاكاة'],
   '/admin/search-analytics': ['search analytics', 'تحليلات البحث', 'كلمات البحث', 'search terms', 'zero results', 'بدون نتائج', 'query', 'استعلام'],
   '/admin/settings': ['settings', 'اعداد', 'إعداد', 'اعدادات', 'إعدادات', 'تهيئة', 'config', 'configuration', 'خيارات', 'options', 'preferences'],
   '/admin/payments': ['payment', 'دفع', 'مدفوعات', 'طريقة دفع', 'بطاقة', 'card', 'stripe', 'سترايب', 'paymob', 'باي موب', 'fawry', 'فوري', 'valu', 'فاليو', 'apple pay', 'cod', 'الدفع عند الاستلام', 'تحويل بنكي', 'bank transfer', 'محفظة', 'wallet', 'vodafone cash', 'فودافون كاش', 'instapay', 'انستا باي'],
-  '/admin/notifications': ['notification', 'اشعار', 'إشعار', 'اشعارات', 'إشعارات', 'template', 'قالب', 'قوالب', 'sms', 'email', 'بريد', 'رسالة نصية', 'push', 'whatsapp', 'واتساب'],
-  '/admin/audit-log': ['audit', 'تدقيق', 'سجل', 'logs', 'history', 'تاريخ', 'activity', 'نشاط', 'من غيّر', 'who changed', 'تتبع التغييرات'],
+  '/admin/notifications': ['notification templates', 'قوالب الإشعارات', 'notification', 'اشعار', 'إشعار', 'اشعارات', 'إشعارات', 'template', 'قالب', 'قوالب', 'sms', 'email', 'بريد', 'رسالة نصية', 'push', 'whatsapp', 'واتساب'],
+  '/admin/audit-log': ['audit log', 'سجل التدقيق', 'audit', 'تدقيق', 'سجل', 'logs', 'history', 'تاريخ', 'activity', 'نشاط', 'من غيّر', 'who changed', 'تتبع التغييرات'],
 };
 
-/** Store-settings sub-sections + notable options inside each (deep links). */
-const SETTINGS_ENTRIES = [
-  {
-    key: 'settings-identity',
-    path: '/admin/settings/identity',
-    Icon: Settings,
-    titleAr: 'هوية المتجر',
-    titleEn: 'Store identity',
-    descAr: 'الاسم والشعار والعملة',
-    descEn: 'Name, logo, and currency',
-    keywords: ['store name', 'اسم المتجر', 'شعار', 'logo', 'favicon', 'ايقونة', 'عملة', 'currency', 'egp', 'جنيه', 'ريال', 'دولار', 'tagline', 'وصف المتجر', 'هوية', 'branding', 'seo', 'meta', 'ميتا', 'وصف', 'description', 'keywords', 'كلمات مفتاحية', 'sitemap', 'خريطة الموقع', 'og', 'محركات البحث', 'جوجل', 'google'],
-  },
-  {
-    key: 'settings-contact',
-    path: '/admin/settings/contact',
-    Icon: Phone,
-    titleAr: 'التواصل والروابط',
-    titleEn: 'Contact & links',
-    descAr: 'الدعم ووسائل التواصل وتطبيقات الجوال',
-    descEn: 'Support, social media, and app links',
-    keywords: ['phone', 'هاتف', 'رقم', 'whatsapp', 'واتساب', 'email', 'بريد', 'ايميل', 'facebook', 'فيسبوك', 'instagram', 'انستجرام', 'tiktok', 'تيك توك', 'address', 'عنوان', 'app store', 'google play', 'تطبيق', 'social', 'سوشيال', 'دعم', 'support'],
-  },
-  {
-    key: 'settings-delivery',
-    path: '/admin/settings/delivery',
-    Icon: Truck,
-    titleAr: 'إعدادات التوصيل',
-    titleEn: 'Delivery settings',
-    descAr: 'التوصيل المجاني، الخريطة، والمهلة',
-    descEn: 'Free delivery, map pin, and lead times',
-    keywords: ['free delivery', 'توصيل مجاني', 'شحن مجاني', 'حد التوصيل المجاني', 'threshold', 'map pin', 'دبوس الخريطة', 'gps', 'lead time', 'مهلة', 'وقت التحضير', 'prep time', 'الحد الادنى للطلب', 'minimum order', 'رسوم'],
-  },
-  {
-    key: 'settings-experience',
-    path: '/admin/settings/experience',
-    Icon: Sparkles,
-    titleAr: 'تجربة العميل',
-    titleEn: 'Customer experience',
-    descAr: 'المخزون والتقييمات والمساعد الذكي',
-    descEn: 'Stock alerts, reviews, and AI chat',
-    keywords: ['ai chat', 'المساعد الذكي', 'شات بوت', 'chatbot', 'low stock alert', 'تنبيه المخزون المنخفض', 'حد المخزون', 'review request', 'طلب التقييم', 'add to cart toast', 'اشعار السلة', 'sms review', 'email review'],
-  },
-  {
-    key: 'settings-invoice',
-    path: '/admin/settings/invoice',
-    Icon: FileText,
-    titleAr: 'إعدادات الفاتورة',
-    titleEn: 'Invoice settings',
-    descAr: 'نصوص وخيارات فاتورة PDF',
-    descEn: 'PDF invoice text and display options',
-    keywords: ['invoice', 'فاتورة', 'pdf', 'رقم ضريبي', 'tax number', 'vat', 'ضريبة', 'الرقم الضريبي', 'footer note', 'ملاحظة الفاتورة', 'terms', 'شروط', 'سجل تجاري', 'commercial register'],
-  },
-  {
-    key: 'settings-admin',
-    path: '/admin/settings/admin',
-    Icon: LayoutDashboard,
-    titleAr: 'إعدادات لوحة التحكم',
-    titleEn: 'Admin panel settings',
-    descAr: 'ما يظهر للمسؤولين في اللوحة',
-    descEn: 'What admins see in the dashboard',
-    keywords: ['show revenue', 'اظهار الايرادات', 'اخفاء الايرادات', 'hide revenue', 'dashboard widgets', 'ودجت', 'عناصر اللوحة', 'permissions display', 'لوحة المسؤول'],
-  },
-];
+/** Extra search words for screens reached from the Settings page. */
+const SETTINGS_KEYWORDS = {
+  '/admin/settings/identity': ['store name', 'اسم المتجر', 'شعار', 'logo', 'favicon', 'ايقونة', 'عملة', 'currency', 'egp', 'جنيه', 'ريال', 'دولار', 'tagline', 'وصف المتجر', 'هوية', 'branding', 'seo', 'meta', 'ميتا', 'وصف', 'description', 'keywords', 'كلمات مفتاحية', 'sitemap', 'خريطة الموقع', 'og', 'محركات البحث', 'جوجل', 'google'],
+  '/admin/settings/contact': ['phone', 'هاتف', 'رقم', 'whatsapp', 'واتساب', 'email', 'بريد', 'ايميل', 'facebook', 'فيسبوك', 'instagram', 'انستجرام', 'tiktok', 'تيك توك', 'address', 'عنوان', 'app store', 'google play', 'تطبيق', 'social', 'سوشيال', 'دعم', 'support'],
+  '/admin/settings/delivery': ['free delivery', 'توصيل مجاني', 'شحن مجاني', 'حد التوصيل المجاني', 'threshold', 'map pin', 'دبوس الخريطة', 'gps', 'lead time', 'مهلة', 'وقت التحضير', 'prep time', 'الحد الادنى للطلب', 'minimum order', 'رسوم'],
+  '/admin/settings/experience': ['ai chat', 'المساعد الذكي', 'شات بوت', 'chatbot', 'low stock alert', 'تنبيه المخزون المنخفض', 'حد المخزون', 'review request', 'طلب التقييم', 'add to cart toast', 'اشعار السلة', 'sms review', 'email review'],
+  '/admin/settings/invoice': ['invoice', 'فاتورة', 'pdf', 'رقم ضريبي', 'tax number', 'vat', 'ضريبة', 'الرقم الضريبي', 'footer note', 'ملاحظة الفاتورة', 'terms', 'شروط', 'سجل تجاري', 'commercial register'],
+  '/admin/settings/admin': ['show revenue', 'اظهار الايرادات', 'اخفاء الايرادات', 'hide revenue', 'dashboard widgets', 'ودجت', 'عناصر اللوحة', 'permissions display', 'لوحة المسؤول'],
+};
 
 /** Quick actions — not screens, verbs the user might search for. */
 const ACTION_ENTRIES = [
@@ -158,40 +104,50 @@ const ACTION_ENTRIES = [
  */
 export function buildAdminSearchEntries() {
   const entries = [];
+  const seen = new Set();
 
   for (const group of ADMIN_NAV_GROUPS) {
     for (const item of group.items) {
-      entries.push({
-        key: `nav:${item.path}`,
-        path: item.path,
-        Icon: item.Icon,
-        titleAr: item.labelAr,
-        titleEn: item.labelEn,
-        groupAr: group.labelAr,
-        groupEn: group.labelEn,
-        permission: item.permission ?? null,
-        requiresRevenue: item.requiresRevenue ?? false,
-        keywords: NAV_KEYWORDS[item.path] ?? [],
-      });
+      const screens = item.tabs?.length ? item.tabs : [item];
+      for (const screen of screens) {
+        seen.add(screen.path);
+        const isTab = Boolean(item.tabs?.length);
+        entries.push({
+          key: `nav:${screen.path}`,
+          path: screen.path,
+          Icon: item.Icon,
+          titleAr: screen.labelAr,
+          titleEn: screen.labelEn,
+          // Tabs show which menu item they live under; single items show their group.
+          groupAr: isTab ? item.labelAr : (group.labelAr || item.labelAr),
+          groupEn: isTab ? item.labelEn : (group.labelEn || item.labelEn),
+          permission: screen.permission ?? item.permission ?? null,
+          requiresRevenue: screen.requiresRevenue ?? false,
+          feature: screen.feature ?? group.feature,
+          keywords: NAV_KEYWORDS[screen.path] ?? [],
+        });
+      }
     }
   }
 
-  const settingsGroupAr = 'الإعدادات';
-  const settingsGroupEn = 'Settings';
-  for (const s of SETTINGS_ENTRIES) {
-    entries.push({
-      key: s.key,
-      path: s.path,
-      Icon: s.Icon,
-      titleAr: s.titleAr,
-      titleEn: s.titleEn,
-      descAr: s.descAr,
-      descEn: s.descEn,
-      groupAr: settingsGroupAr,
-      groupEn: settingsGroupEn,
-      permission: 'settings:write',
-      keywords: s.keywords,
-    });
+  for (const group of SETTINGS_GROUPS) {
+    for (const item of group.items) {
+      if (seen.has(item.path)) continue;
+      entries.push({
+        key: `settings:${item.path}`,
+        path: item.path,
+        Icon: Settings,
+        titleAr: item.labelAr,
+        titleEn: item.labelEn,
+        descAr: item.descAr,
+        descEn: item.descEn,
+        groupAr: `الإعدادات · ${group.labelAr}`,
+        groupEn: `Settings · ${group.labelEn}`,
+        permission: item.permission,
+        isSetting: true,
+        keywords: [...(SETTINGS_KEYWORDS[item.path] ?? []), ...(NAV_KEYWORDS[item.path] ?? [])],
+      });
+    }
   }
 
   for (const a of ACTION_ENTRIES) {

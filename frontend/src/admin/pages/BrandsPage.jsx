@@ -263,11 +263,10 @@ export default function BrandsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'العلامات التجارية' : 'Brands'}
         description={
           isAr
-            ? 'إدارة كل العلامات — تظهر في صفحة «كل العلامات» وصفحة العلامات في الرئيسية.'
-            : 'Manage all brands — shown on /brands and the homepage brand row.'
+            ? 'تظهر في صفحة الماركات وفي الصفحة الرئيسية.'
+            : 'Shown on the brands page and the home page.'
         }
         action={(
           <div className="flex flex-wrap gap-2">

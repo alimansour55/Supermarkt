@@ -60,8 +60,7 @@ export default function SellerPromotionsAdminPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'عروض البائعين' : 'Seller promotions'}
-        description={isAr ? 'خصومات يمولها البائعون. بعد الموافقة تبدأ وتنتهي تلقائياً وتعود الأسعار كما كانت.' : 'Discounts funded by sellers. Once approved they start and end on schedule, and prices restore afterwards.'}
+        description={isAr ? 'خصومات يدفعها البائع من ربحه. بعد موافقتك تبدأ وتنتهي وحدها.' : 'Discounts the seller pays for. Once you approve, they start and stop on their own.'}
       />
       <div className="flex flex-wrap gap-1.5">
         {TABS.map((s) => (

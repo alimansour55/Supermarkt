@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { TrendingUp } from 'lucide-react';
 import { adminApi } from '../../adminApi';
 import SalesLineChart from './SalesLineChart';
 
@@ -37,14 +36,11 @@ export default function SalesTrendCard({ initialData, isAr }) {
   }, [period]);
 
   return (
-    <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+    <section className="rounded-xl border border-border bg-white p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary-600" />
-          <h2 className="text-lg font-bold text-text">
-            {isAr ? 'المبيعات' : 'Sales'}
-          </h2>
-        </div>
+        <h2 className="text-sm font-semibold text-text">
+          {isAr ? 'المبيعات' : 'Sales'}
+        </h2>
         <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
           {PERIODS.map((p) => (
             <button

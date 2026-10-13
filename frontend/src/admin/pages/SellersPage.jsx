@@ -417,8 +417,7 @@ export default function SellersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'البائعون' : 'Sellers'}
-        description={isAr ? 'بائعون خارجيون يعرضون منتجاتهم في متجرك.' : 'Third-party sellers listing their products in your store.'}
+        description={isAr ? 'تجار آخرون يبيعون منتجاتهم في متجرك.' : 'Other merchants selling in your store.'}
         action={canWrite && <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />{isAr ? 'إضافة بائع' : 'Add seller'}</Button>}
       />
 

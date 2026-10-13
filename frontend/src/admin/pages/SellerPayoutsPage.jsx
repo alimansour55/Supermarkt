@@ -180,8 +180,7 @@ export default function SellerPayoutsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'مدفوعات البائعين' : 'Seller payouts'}
-        description={isAr ? 'أرصدة البائعين بعد العمولات، وتحويل أرباحهم بعد فترة الاحتجاز.' : 'Seller balances after commission, and paying them out after the hold period.'}
+        description={isAr ? 'رصيد كل بائع بعد العمولة، وتحويل فلوسه بعد انتهاء فترة الانتظار.' : 'What each seller is owed after commission, and paying them once the waiting period ends.'}
         action={canWrite && <Button variant="outline" onClick={exportBatch}><Download className="h-4 w-4" />{isAr ? 'ملف التحويلات البنكية' : 'Bank batch CSV'}</Button>}
       />
 

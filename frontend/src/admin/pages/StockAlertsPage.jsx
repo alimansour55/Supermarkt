@@ -400,11 +400,10 @@ export default function StockAlertsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title={isAr ? 'إدارة المخزون والتنبيهات' : 'Inventory & stock alerts'}
         description={
           isAr
-            ? 'القائمة تُظهر تلقائياً كل منتج مخزونه ≤ حد التنبيه (بما في ذلك النافد). غيّر الحد من الإعدادات ويتحدّث العرض فوراً.'
-            : 'The list automatically shows every product with stock ≤ your alert threshold (including out of stock). Change the limit in settings and the view updates instantly.'
+            ? 'كل منتج خلص أو قارب على الخلاص.'
+            : 'Everything that has sold out or is about to.'
         }
         action={(
           <div className="flex flex-wrap items-center gap-2">

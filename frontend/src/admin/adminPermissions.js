@@ -208,7 +208,7 @@ export const PERMISSION_GROUPS = [
     labelEn: 'Content & storefront',
     labelAr: 'المحتوى وواجهة المتجر',
     permissions: [
-      { key: 'homepage:write', labelEn: 'Homepage CMS', labelAr: 'إدارة الصفحة الرئيسية' },
+      { key: 'homepage:write', labelEn: 'Edit the home page', labelAr: 'إدارة الصفحة الرئيسية' },
       { key: 'content:write', labelEn: 'Content pages', labelAr: 'صفحات المحتوى' },
     ],
   },

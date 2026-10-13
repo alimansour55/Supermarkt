@@ -195,17 +195,13 @@ export default function RecurringDeliveriesPage() {
   ];
 
   return (
-    <div className="flex h-[calc(100vh-7.5rem)] min-h-[560px] flex-col">
+    <div className="flex h-[calc(100vh-10.5rem)] min-h-[560px] flex-col">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4 px-0.5">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-text md:text-2xl">
-            <RefreshCw className="h-6 w-6 text-primary-600" aria-hidden />
-            {isAr ? 'إدارة التوصيل الدوري' : 'Recurring delivery'}
-          </h1>
-          <p className="mt-1 max-w-2xl text-sm text-text-muted">
+          <p className="max-w-2xl text-sm text-text-muted">
             {isAr
-              ? 'إدارة اشتراكات التوصيل المتكرر — جداول العملاء، المواعيد القادمة، وإتمام الدورات.'
-              : 'Manage repeat delivery subscriptions — schedules, upcoming runs, and fulfillment.'}
+              ? 'عملاء طلبوا توصيل نفس الطلب كل أسبوع أو كل شهر.'
+              : 'Customers who get the same order delivered every week or month.'}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">

@@ -85,8 +85,7 @@ export default function MarketplaceSettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'إعدادات السوق' : 'Marketplace settings'}
-        description={isAr ? 'قواعد البائعين الخارجيين: العمولة، المراجعة، والمدفوعات.' : 'Rules for third-party sellers: commission, review and payouts.'}
+        description={isAr ? 'العمولة، مراجعة منتجات البائعين، ومتى تُحوّل أرباحهم.' : 'Commission, checking seller products, and when sellers get paid.'}
         action={<Button disabled={saving} onClick={save}>{saving ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}</Button>}
       />
 

@@ -7,6 +7,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { hasPermission } from '../adminPermissions';
 import { useAdminPanel } from '../context/AdminPanelContext';
 import { adminApi } from '../adminApi';
+import { isEntryVisible } from '../adminNavGroups';
 import { formatOrderNumberShort } from '../../utils/formatters';
 import {
   buildAdminSearchEntries,
@@ -80,7 +81,7 @@ function Highlight({ text, tokens }) {
 export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72' }) {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { showRevenue } = useAdminPanel();
+  const { showRevenue, features } = useAdminPanel();
   const [recent, setRecent] = useLocalStorage(RECENT_KEY, []);
 
   const [query, setQuery] = useState('');
@@ -93,11 +94,11 @@ export default function AdminSearchBox({ isAr, className = 'w-40 sm:w-56 lg:w-72
 
   const entries = useMemo(() => buildAdminSearchEntries(), []);
 
-  const canAccess = useCallback((entry) => {
-    if (entry.requiresRevenue && !showRevenue) return false;
-    if (!entry.permission) return true;
-    return hasPermission(user, entry.permission);
-  }, [user, showRevenue]);
+  const canAccess = useCallback((entry) => isEntryVisible(entry, {
+    can: (permission) => hasPermission(user, permission),
+    showRevenue,
+    features: entry.isSetting ? {} : features,
+  }), [user, showRevenue, features]);
 
   const recentKeys = useMemo(() => (Array.isArray(recent) ? recent : []), [recent]);
 

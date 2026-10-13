@@ -62,8 +62,7 @@ export default function AdminSellerInboundPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'مخزون البائعين الوارد' : 'Seller inbound stock'}
-        description={isAr ? 'بضاعة يرسلها البائعون لمخزننا لنبيعها ونشحنها نيابة عنهم. يُضاف للمخزون ما تعدّه فقط.' : 'Stock sellers send to our warehouse so we sell and ship it for them. Only what you count is added.'}
+        description={isAr ? 'بضاعة يرسلها البائعون لمخزننا لنبيعها عنهم. لا يُضاف للمخزون إلا ما تعدّه بنفسك.' : 'Goods sellers send us to sell for them. Only what you count gets added to stock.'}
       />
       <div className="flex gap-1.5">
         {['pending', 'received', 'cancelled', ''].map((s) => (

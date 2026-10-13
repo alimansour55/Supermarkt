@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import {
-  Crown, KeyRound, Plus, RefreshCw, ShieldCheck, Truck, UserCheck, UserCog, Users, UserX,
+  Crown, KeyRound, Plus, RefreshCw, ShieldCheck, Truck, UserCheck, Users, UserX,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -252,17 +252,11 @@ export default function TeamPage() {
       <div className="mb-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
-              <UserCog className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-xl font-bold text-text">{isAr ? 'فريق الإدارة' : 'Admin team'}</h1>
-              <p className="mt-0.5 max-w-2xl text-sm text-text-muted">
-                {isAr
-                  ? 'حسابات لوحة التحكم ومناديب التوصيل: الأدوار، الدخول، وكلمات المرور.'
-                  : 'Admin panel accounts and delivery drivers — roles, sign-in and passwords.'}
-              </p>
-            </div>
+            <p className="max-w-2xl text-sm text-text-muted">
+              {isAr
+                ? 'كل من يدخل لوحة التحكم، والمندوبين، وما يستطيع كل واحد أن يفعله.'
+                : 'Everyone who uses the admin panel, your drivers, and what each one can do.'}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button

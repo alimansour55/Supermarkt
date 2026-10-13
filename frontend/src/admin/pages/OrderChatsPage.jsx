@@ -157,20 +157,7 @@ export default function OrderChatsPage() {
     : null;
 
   return (
-    <div className="flex h-[calc(100vh-7.5rem)] min-h-[560px] flex-col">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2 px-0.5">
-        <div>
-          <h1 className="text-xl font-bold text-text md:text-2xl">
-            {isAr ? 'محادثة الطلبات' : 'Order chats'}
-          </h1>
-          <p className="mt-0.5 text-sm text-text-muted">
-            {isAr
-              ? 'ردّ سريع على العملاء — محادثة، حالة الطلب، والمرتجعات في مكان واحد.'
-              : 'Reply quickly — chat, order status, and returns in one place.'}
-          </p>
-        </div>
-      </div>
-
+    <div className="flex h-[calc(100vh-10.5rem)] min-h-[560px] flex-col">
       <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
         <OrderChatsSidebar
           isAr={isAr}

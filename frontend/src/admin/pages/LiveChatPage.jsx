@@ -175,16 +175,13 @@ export default function LiveChatPage() {
     : null;
 
   return (
-    <div className="flex h-[calc(100vh-7.5rem)] min-h-[560px] flex-col">
+    <div className="flex h-[calc(100vh-10.5rem)] min-h-[560px] flex-col">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2 px-0.5">
         <div>
-          <h1 className="text-xl font-bold text-text md:text-2xl">
-            {isAr ? 'الدردشة المباشرة' : 'Live chat'}
-          </h1>
-          <p className="mt-0.5 text-sm text-text-muted">
+          <p className="text-sm text-text-muted">
             {isAr
-              ? 'ردّ مباشرة على العملاء اللي بيطلبوا التحدث مع فريق الدعم من المساعد الذكي.'
-              : 'Reply directly to customers who ask to talk to a person from the assistant widget.'}
+              ? 'عملاء طلبوا الكلام مع موظف بدل المساعد الذكي.'
+              : 'Customers who asked to talk to a person instead of the assistant.'}
           </p>
         </div>
       </div>

@@ -317,4 +317,25 @@ export const adminApi = {
   exportSellerPayouts: () => api.get('/admin/marketplace/payouts/export', { responseType: 'blob' }),
 };
 
+/**
+ * Saving any of these can switch a service on/off or hide sales figures,
+ * which changes the admin menu — tell the panel to reload its switches.
+ */
+export const ADMIN_SETTINGS_SAVED_EVENT = 'admin:settings-saved';
+[
+  'updateStoreSettings',
+  'updateStoreSettingsJson',
+  'updateLoyaltyRules',
+  'updateWalletSettings',
+  'updateMarketplaceSettings',
+  'updatePartnerRevenueSettings',
+].forEach((name) => {
+  const original = adminApi[name];
+  adminApi[name] = async (...args) => {
+    const result = await original(...args);
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event(ADMIN_SETTINGS_SAVED_EVENT));
+    return result;
+  };
+});
+
 export default adminApi;

@@ -70,8 +70,7 @@ export default function SellerShipmentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'شحنات البائعين' : 'Seller shipments'}
-        description={isAr ? 'متابعة الشحنات التي يشحنها البائعون أو يشحنها المتجر نيابة عنهم.' : 'Track shipments sellers ship themselves or the store ships for them.'}
+        description={isAr ? 'شحنات يرسلها البائع بنفسه، أو نرسلها نحن عنه.' : 'Parcels sellers send themselves, or that we send for them.'}
       />
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-1.5">

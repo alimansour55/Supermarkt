@@ -187,7 +187,7 @@ export default function HomepageBuilderPage() {
     setPendingSortOrder(null);
   };
 
-  const backToCmsLabel = isAr ? 'العودة إلى Homepage CMS' : 'Back to Homepage CMS';
+  const backToCmsLabel = isAr ? 'العودة للصفحة الرئيسية' : 'Back to the home page';
 
   const handleReorder = async (reordered) => {
     const previous = sections;
@@ -248,11 +248,10 @@ export default function HomepageBuilderPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'Homepage CMS' : 'Homepage CMS'}
         description={
           isAr
-            ? 'رتّب أقسام الصفحة الرئيسية وعدّلها من المعاينة المرئية.'
-            : 'Arrange and edit homepage sections from the visual preview.'
+            ? 'رتّب الأقسام واضغط على أي قسم لتعديله.'
+            : 'Arrange the sections and click any one to edit it.'
         }
         action={(
           <Button type="button" onClick={() => startInsert((sections.length) * 10 + 10)} disabled={reordering}>

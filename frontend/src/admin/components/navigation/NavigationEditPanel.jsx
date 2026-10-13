@@ -655,7 +655,7 @@ export default function NavigationEditPanel({
         <div className="space-y-3 text-sm text-text-muted">
           <p>
             {isAr
-              ? 'صورة الشعار واسم المتجر يُداران من صفحة «معلومات المتجر» لضمان توحيدهما في كل مكان (الفواتير، البريد، التطبيق).'
+              ? 'صورة الشعار واسم المتجر يُداران من «الإعدادات ← اسم المتجر والشعار» لضمان توحيدهما في كل مكان (الفواتير، البريد، التطبيق).'
               : 'The logo image and store name are managed on the Store Info page so they stay consistent everywhere (invoices, email, app).'}
           </p>
         </div>

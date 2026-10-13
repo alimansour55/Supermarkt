@@ -146,7 +146,7 @@ export default function HomepageSectionForm({
           onClick={onCancel}
           className="text-sm font-medium text-primary-700 hover:underline"
         >
-          {isAr ? '← العودة إلى Homepage CMS' : '← Back to Homepage CMS'}
+          {isAr ? '← العودة للصفحة الرئيسية' : '← Back to the home page'}
         </button>
       </div>
 

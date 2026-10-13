@@ -101,18 +101,18 @@ export default function StoreDeliverySettingsPage() {
               <Radar className="mt-0.5 h-5 w-5 shrink-0 text-primary-700" aria-hidden />
               <span>
                 <span className="font-semibold text-text">
-                  {isAr ? 'منطقة التغطية أصبحت صفحة مستقلة' : 'Coverage area now has its own page'}
+                  {isAr ? 'أقصى مسافة توصّل لها' : 'How far you deliver'}
                 </span>
                 <span className="mt-1 block text-xs text-text-muted">
                   {isAr
-                    ? 'تفعيل التغطية، ودائرة المظلة العامة (المركز ونصف القطر) انتقلا إلى صفحة مستقلة، منفصلة عن مناطق التوصيل.'
-                    : 'Enforcing coverage, and the general umbrella circle (center + radius), moved to their own page — separate from delivery zones.'}
+                    ? 'تضبطها من «حدود التغطية».'
+                    : 'Set it in Coverage limit.'}
                 </span>
                 <Link
                   to="/admin/coverage-area"
                   className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary-700 hover:text-primary-800"
                 >
-                  {isAr ? 'فتح صفحة منطقة التغطية' : 'Open the Coverage area page'}
+                  {isAr ? 'فتح حدود التغطية' : 'Open Coverage limit'}
                   <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
                 </Link>
               </span>

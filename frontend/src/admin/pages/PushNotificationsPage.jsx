@@ -63,10 +63,9 @@ export default function PushNotificationsPage() {
 
   return (
     <PageHeader
-      title={isAr ? 'إشعارات التطبيق' : 'App push notifications'}
       description={isAr
-        ? 'أرسل عرضاً أو تنبيهاً لكل مستخدمي تطبيق iOS و Android. إشعارات الطلبات تُرسل تلقائياً.'
-        : 'Send an offer or announcement to every iOS and Android app user. Order updates are pushed automatically.'}
+        ? 'يصل لكل من ثبّت التطبيق. تحديثات الطلبات تُرسل وحدها، لا تحتاج لإرسالها من هنا.'
+        : 'Goes to everyone who has the app. Order updates are sent on their own.'}
     >
       {!stats.configured && (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

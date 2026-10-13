@@ -294,11 +294,10 @@ export default function OrderTrashPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-text">{isAr ? 'سلة المحذوفات' : 'Recycle Bin'}</h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="max-w-2xl text-sm text-text-muted">
             {isAr
-              ? 'الطلبات المحذوفة تنتقل هنا أولاً، ثم للسلة الثانية عند نقلها يدوياً، وتُحذف نهائياً من الخادم تلقائياً بعد شهر من دخولها السلة الثانية — ولا يمكن استرجاعها بعد ذلك.'
-              : 'Deleted orders land here first, then move to the second bin when you advance them. One month after entering the second bin they are permanently purged from the server — with no way to restore them after that.'}
+              ? 'الطلب المحذوف يبقى هنا ويمكنك استرجاعه. إذا نقلته للسلة الثانية يُمسح نهائياً بعد شهر.'
+              : 'Deleted orders wait here and can be restored. Move one to the second bin and it is erased for good after a month.'}
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={list.reload} disabled={list.loading}>

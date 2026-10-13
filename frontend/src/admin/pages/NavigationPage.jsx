@@ -240,13 +240,10 @@ export default function NavigationPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-text">
-            {isAr ? 'الهيدر والفوتر' : 'Header & footer'}
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm text-text-muted">
+          <p className="max-w-2xl text-sm text-text-muted">
             {isAr
-              ? 'حرّر شريط الإعلان والهيدر والقائمة والفوتر بمعاينة حية — انقر أي عنصر لتعديله.'
-              : 'Edit the announcement bar, header, menu, and footer with a live preview — click any element to edit it.'}
+              ? 'شريط الإعلان، القائمة العلوية، وأسفل الموقع. اضغط على أي جزء في المعاينة لتعديله.'
+              : 'The announcement bar, top menu and footer. Click any part of the preview to edit it.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

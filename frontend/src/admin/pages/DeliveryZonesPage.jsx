@@ -169,7 +169,8 @@ export default function DeliveryZonesPage() {
       return !best || excessKm < best.excessKm ? { area, distanceKm, excessKm } : best;
     }, null)
     : null;
-  const outsideUmbrella = coverageAreas.length > 0 && (!nearestCoverageArea || nearestCoverageArea.excessKm > 0);
+  // No pin yet → nothing to compare; the "set the extent first" check covers that case.
+  const outsideUmbrella = Boolean(nearestCoverageArea) && nearestCoverageArea.excessKm > 0;
 
   const payload = () => {
     if (!hasCenterPin) {
@@ -180,8 +181,8 @@ export default function DeliveryZonesPage() {
     if (outsideUmbrella) {
       const excess = Math.round(nearestCoverageArea.excessKm);
       throw new Error(isAr
-        ? `هذا المركز خارج كل دوائر التغطية (أقرب دائرة أبعد بـ ${excess} كم) — منطقة التوصيل لا يمكن أن تتجاوز منطقة التغطية. عدّل الموقع هنا أو أضف/وسّع دائرة من صفحة «منطقة التغطية».`
-        : `This center is outside every coverage circle (the closest one is ${excess} km away) — a delivery zone cannot extend past the coverage area. Move it here or add/widen a circle on the Coverage area page.`);
+        ? `هذا المركز خارج كل دوائر التغطية (أقرب دائرة أبعد بـ ${excess} كم) — منطقة التوصيل لا يمكن أن تتجاوز منطقة التغطية. عدّل الموقع هنا أو أضف/وسّع دائرة من «حدود التغطية» في الإعدادات.`
+        : `This center is outside every coverage circle (the closest one is ${excess} km away) — a delivery zone cannot extend past the coverage area. Move it here or add/widen a circle on Coverage limit in Settings.`);
     }
     const rest = { ...form };
     delete rest.slug;
@@ -332,7 +333,7 @@ export default function DeliveryZonesPage() {
                   </p>
                   <p className="mt-0.5 text-xs text-text-muted">
                     {isAr
-                      ? 'ابحث عن العنوان أو انقر على الخريطة لتحديد مركز هذه المنطقة تحديداً — يُستخدم لمطابقة دبوس العميل بها ولحساب أسعارها ومواعيدها. يجب أن يقع هذا النطاق داخل «منطقة التغطية» العامة.'
+                      ? 'ابحث عن العنوان أو انقر على الخريطة لتحديد مركز هذه المنطقة تحديداً — يُستخدم لمطابقة دبوس العميل بها ولحساب أسعارها ومواعيدها. يجب أن يكون داخل «حدود التغطية».'
                       : 'Search an address or click the map to set this specific zone\'s center — used to match a customer\'s pin to it and to price/schedule it. This extent must fall inside the general "Coverage area."'}
                   </p>
                 </div>
@@ -379,8 +380,8 @@ export default function DeliveryZonesPage() {
                 <p className="flex items-start gap-2 text-xs font-semibold text-red-700">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   {isAr
-                    ? `هذا المركز خارج كل دوائر التغطية — أقرب دائرة أبعد بـ ${Math.round(nearestCoverageArea.excessKm)} كم. عدّل مركز الدائرة ليقع داخل إحدى دوائر التغطية (صفحة «منطقة التغطية») حتى يمكن حفظ هذه المنطقة.`
-                    : `This center is outside every coverage circle — the closest one is ${Math.round(nearestCoverageArea.excessKm)} km away. Move the circle inside one of the coverage circles (the Coverage area page) before this zone can be saved.`}
+                    ? `هذا المركز خارج كل دوائر التغطية — أقرب دائرة أبعد بـ ${Math.round(nearestCoverageArea.excessKm)} كم. عدّل مركز الدائرة ليقع داخل إحدى دوائر التغطية («حدود التغطية» في الإعدادات) حتى يمكن حفظ هذه المنطقة.`
+                    : `This center is outside every coverage circle — the closest one is ${Math.round(nearestCoverageArea.excessKm)} km away. Move the circle inside one of the coverage circles (Coverage limit in Settings) before this zone can be saved.`}
                 </p>
               )}
               {!hasCenterPin && (

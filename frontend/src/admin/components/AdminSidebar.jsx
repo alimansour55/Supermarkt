@@ -1,84 +1,32 @@
-import { useEffect, useMemo, useState } from 'react';
-import { NavLink, useLocation } from '../../app/router';
-import { ChevronDown, ExternalLink, LogOut, X } from 'lucide-react';
-import { ADMIN_NAV_GROUPS } from '../adminNavGroups';
+import { Link } from '../../app/router';
+import { ExternalLink, LogOut, X } from 'lucide-react';
 import { APP_NAME, APP_NAME_EN } from '../../utils/constants';
 import { useAdminStats } from '../context/AdminStatsContext';
-import { useAdminPanel } from '../context/AdminPanelContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
-import { hasPermission, roleLabel } from '../adminPermissions';
+import { roleLabel } from '../adminPermissions';
+import { itemScreens } from '../adminNavGroups';
+import useAdminNav from '../hooks/useAdminNav';
 
-function resolveBadge(item, stats) {
-  const {
-    pendingOrdersCount,
-    pendingReviewsCount,
-    ordersUnreadMessagesCount,
-    pendingReturnsCount,
-    pendingCallbackRequestsCount,
-    pendingLiveChatsCount,
-    outOfStockCount,
-    pendingSellersCount,
-    pendingListingsCount,
-  } = stats;
+const BADGE_STATS = {
+  pendingOrders: 'pendingOrdersCount',
+  pendingReturns: 'pendingReturnsCount',
+  unreadOrderMessages: 'ordersUnreadMessagesCount',
+  pendingLiveChats: 'pendingLiveChatsCount',
+  pendingCallbackRequests: 'pendingCallbackRequestsCount',
+  outOfStockCount: 'outOfStockCount',
+  pendingReviews: 'pendingReviewsCount',
+  pendingSellers: 'pendingSellersCount',
+  pendingListings: 'pendingListingsCount',
+};
 
-  if (item.badgeKey === 'pendingOrders' && pendingOrdersCount > 0) {
-    return { value: pendingOrdersCount, variant: 'default' };
-  }
-  if (item.badgeKey === 'outOfStockCount' && outOfStockCount > 0) {
-    return { value: outOfStockCount, variant: 'danger' };
-  }
-  if (item.badgeKey === 'unreadOrderMessages' && ordersUnreadMessagesCount > 0) {
-    return { value: ordersUnreadMessagesCount, variant: 'message' };
-  }
-  if (item.badgeKey === 'pendingReturns' && pendingReturnsCount > 0) {
-    return { value: pendingReturnsCount, variant: 'message' };
-  }
-  if (item.badgeKey === 'pendingCallbackRequests' && pendingCallbackRequestsCount > 0) {
-    return { value: pendingCallbackRequestsCount, variant: 'message' };
-  }
-  if (item.badgeKey === 'pendingLiveChats' && pendingLiveChatsCount > 0) {
-    return { value: pendingLiveChatsCount, variant: 'message' };
-  }
-  if (item.badgeKey === 'pendingSellers' && pendingSellersCount > 0) {
-    return { value: pendingSellersCount, variant: 'default' };
-  }
-  if (item.badgeKey === 'pendingListings' && pendingListingsCount > 0) {
-    return { value: pendingListingsCount, variant: 'default' };
-  }
-  if (item.badgeKey === 'pendingReviews' && pendingReviewsCount > 0) {
-    return { value: pendingReviewsCount, variant: 'default' };
-  }
-  return null;
+export function badgeCount(entry, stats) {
+  if (!entry.badgeKey) return 0;
+  return Number(stats[BADGE_STATS[entry.badgeKey]]) || 0;
 }
 
-function isPathActive(pathname, itemPath) {
-  if (itemPath === '/admin') return pathname === '/admin' || pathname === '/admin/';
-  return pathname === itemPath || pathname.startsWith(`${itemPath}/`);
-}
-
-function Badge({ badge, isActive, isAr }) {
-  if (!badge) return null;
-  return (
-    <span
-      className={[
-        'min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-xs font-bold',
-        isActive
-          ? 'bg-white/20 text-white'
-          : badge.variant === 'message'
-            ? 'bg-rose-500 text-white'
-            : badge.variant === 'danger'
-              ? 'bg-red-500 text-white'
-              : 'bg-amber-500 text-white',
-      ].join(' ')}
-      title={
-        badge.variant === 'message'
-          ? (isAr ? 'يتطلب انتباهاً' : 'Needs attention')
-          : undefined
-      }
-    >
-      {badge.value > 99 ? '99+' : badge.value}
-    </span>
-  );
+/** Total waiting across all of an item's screens. */
+export function itemBadgeCount(item, stats) {
+  return itemScreens(item).reduce((sum, screen) => sum + badgeCount(screen, stats), 0);
 }
 
 export default function AdminSidebar({
@@ -90,53 +38,48 @@ export default function AdminSidebar({
   onLogout,
   onStore,
 }) {
-  const location = useLocation();
   const stats = useAdminStats();
-  const { showRevenue } = useAdminPanel();
   const { settings } = useStoreSettings();
-  const { pendingReviewsCount } = stats;
+  const { nav, current } = useAdminNav();
 
   const storeName = isAr
     ? (settings?.storeNameAr || APP_NAME)
     : (settings?.storeNameEn || APP_NAME_EN);
 
-  const visibleGroups = useMemo(
-    () => ADMIN_NAV_GROUPS.map((group) => ({
-      ...group,
-      items: group.items.filter((item) => {
-        if (!hasPermission(user, item.permission)) return false;
-        if (item.requiresRevenue && !showRevenue) return false;
-        return true;
-      }),
-    })).filter((group) => group.items.length > 0),
-    [user, showRevenue],
-  );
+  const activeId = current?.item?.id;
+  const pinned = nav.filter((group) => group.id === 'settings');
+  const scrolling = nav.filter((group) => group.id !== 'settings');
 
-  const activeGroupId = useMemo(() => {
-    const match = visibleGroups.find((group) => group.items.some(
-      (item) => isPathActive(location.pathname, item.path),
-    ));
-    return match?.id || 'overview';
-  }, [location.pathname, visibleGroups]);
-
-  const [expanded, setExpanded] = useState(() => (
-    Object.fromEntries(visibleGroups.map((group) => [group.id, true]))
-  ));
-
-  useEffect(() => {
-    setExpanded((prev) => {
-      const next = { ...prev };
-      visibleGroups.forEach((group) => {
-        if (group.items.some((item) => isPathActive(location.pathname, item.path))) {
-          next[group.id] = true;
-        }
-      });
-      return next;
-    });
-  }, [location.pathname, visibleGroups]);
-
-  const toggleGroup = (groupId) => {
-    setExpanded((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  const renderItem = (item) => {
+    const Icon = item.Icon;
+    const isActive = item.id === activeId;
+    const count = itemBadgeCount(item, stats);
+    return (
+      <li key={item.id}>
+        <Link
+          to={item.path}
+          onClick={onNavigate}
+          aria-current={isActive ? 'page' : undefined}
+          className={[
+            'flex items-center gap-3 rounded-md px-3 py-[7px] text-sm transition-colors',
+            isActive
+              ? 'bg-slate-800 font-semibold text-white'
+              : 'hover:bg-slate-800/60 hover:text-white',
+          ].join(' ')}
+        >
+          <Icon
+            className={['h-[18px] w-[18px] shrink-0', isActive ? 'text-primary-400' : 'text-slate-500'].join(' ')}
+            strokeWidth={1.75}
+          />
+          <span className="flex-1 truncate">{isAr ? item.labelAr : item.labelEn}</span>
+          {count > 0 && (
+            <span className="min-w-[1.25rem] rounded-full bg-primary-500/90 px-1.5 text-center text-[11px] font-semibold leading-5 text-white">
+              {count > 99 ? '99+' : count}
+            </span>
+          )}
+        </Link>
+      </li>
+    );
   };
 
   return (
@@ -145,7 +88,7 @@ export default function AdminSidebar({
         type="button"
         aria-label={isAr ? 'إغلاق القائمة' : 'Close menu'}
         className={[
-          'fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm transition-opacity lg:hidden',
+          'fixed inset-0 z-40 bg-slate-900/50 transition-opacity lg:hidden',
           open ? 'opacity-100' : 'pointer-events-none opacity-0',
         ].join(' ')}
         onClick={onClose}
@@ -153,152 +96,73 @@ export default function AdminSidebar({
 
       <aside
         className={[
-          'fixed inset-y-0 start-0 z-50 flex w-72 flex-col bg-slate-900 text-white shadow-xl transition-transform duration-300 ease-out lg:z-30 lg:translate-x-0',
+          'fixed inset-y-0 start-0 z-50 flex w-64 flex-col border-e border-slate-800 bg-slate-900 text-slate-300 transition-transform duration-200 lg:z-30 lg:translate-x-0',
           open
             ? 'translate-x-0'
             : 'max-lg:-translate-x-full max-lg:rtl:translate-x-full',
         ].join(' ')}
       >
-        <div className="flex items-center justify-between border-b border-slate-700 px-5 py-5">
-          <div>
-            <p className="text-lg font-bold text-primary-400">{storeName}</p>
-            <p className="text-xs text-slate-400">{isAr ? 'لوحة الإدارة' : 'Admin Panel'}</p>
-          </div>
+        <div className="flex h-16 items-center justify-between px-5">
+          <Link to="/admin" onClick={onNavigate} className="truncate text-base font-bold text-white">
+            {storeName}
+          </Link>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
             aria-label={isAr ? 'إغلاق' : 'Close'}
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-3 scrollbar-thin">
-          <div className="space-y-2">
-            {visibleGroups.map((group) => {
-              const GroupIcon = group.Icon;
-              const isOpen = expanded[group.id] ?? group.id === activeGroupId;
-              const groupBadgeTotal = group.items.reduce((sum, item) => {
-                const badge = resolveBadge(item, stats);
-                return sum + (badge?.value || 0);
-              }, 0);
-              const groupActive = group.items.some(
-                (item) => isPathActive(location.pathname, item.path),
-              );
-
-              return (
-                <section
-                  key={group.id}
-                  className={[
-                    'rounded-xl border transition-colors',
-                    groupActive ? 'border-primary-500/30 bg-slate-800/60' : 'border-transparent',
-                  ].join(' ')}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.id)}
-                    className={[
-                      'flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start transition-colors',
-                      groupActive ? 'text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                    ].join(' ')}
-                    aria-expanded={isOpen}
-                  >
-                    <GroupIcon className="h-4 w-4 shrink-0 text-primary-400" aria-hidden />
-                    <span className="flex-1 text-xs font-bold uppercase tracking-wide">
-                      {isAr ? group.labelAr : group.labelEn}
-                    </span>
-                    {groupBadgeTotal > 0 && (
-                      <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                        {groupBadgeTotal > 99 ? '99+' : groupBadgeTotal}
-                      </span>
-                    )}
-                    <ChevronDown
-                      className={[
-                        'h-4 w-4 shrink-0 text-slate-400 transition-transform',
-                        isOpen ? 'rotate-180' : '',
-                      ].join(' ')}
-                      aria-hidden
-                    />
-                  </button>
-
-                  {isOpen && (
-                    <ul className="space-y-0.5 px-2 pb-2">
-                      {group.items.map((item) => {
-                        const Icon = item.Icon;
-                        const badge = resolveBadge(item, stats);
-
-                        return (
-                          <li key={item.path}>
-                            <NavLink
-                              to={item.path}
-                              end={item.path === '/admin'}
-                              onClick={onNavigate}
-                              className={({ isActive }) => [
-                                'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                                isActive
-                                  ? 'bg-primary-600 text-white shadow-sm'
-                                  : 'text-slate-300 hover:bg-slate-800/80 hover:text-white',
-                              ].join(' ')}
-                            >
-                              {({ isActive }) => (
-                                <>
-                                  <Icon
-                                    className={['h-4 w-4 shrink-0', isActive ? 'text-white' : 'text-slate-500'].join(' ')}
-                                    strokeWidth={isActive ? 2.25 : 2}
-                                  />
-                                  <span className="flex-1 leading-snug">
-                                    {isAr ? item.labelAr : item.labelEn}
-                                  </span>
-                                  <Badge badge={badge} isActive={isActive} isAr={isAr} />
-                                </>
-                              )}
-                            </NavLink>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-              );
-            })}
-          </div>
+        <nav className="flex-1 overflow-y-auto px-3 pb-4 scrollbar-thin">
+          {scrolling.map((group) => (
+            <div key={group.id} className="mt-4 first:mt-1">
+              {(isAr ? group.labelAr : group.labelEn) && (
+                <p className="mb-1 px-3 text-[11px] font-medium text-slate-500">
+                  {isAr ? group.labelAr : group.labelEn}
+                </p>
+              )}
+              <ul className="space-y-px">{group.items.map(renderItem)}</ul>
+            </div>
+          ))}
         </nav>
 
-        <div className="border-t border-slate-700 p-4">
-          <div className="flex items-center gap-2">
-            <p className="min-w-0 flex-1 truncate text-sm font-medium">{user?.name}</p>
-            {pendingReviewsCount > 0 && (
-              <span
-                className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-center text-xs font-bold text-white"
-                title={isAr ? 'تقييمات بانتظار الاعتماد' : 'Pending reviews'}
-              >
-                {pendingReviewsCount > 99 ? '99+' : pendingReviewsCount}
-              </span>
-            )}
-          </div>
-          <p className="truncate text-xs text-slate-400">{user?.email || user?.phone}</p>
-          {user?.role && (
-            <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-primary-400">
-              {roleLabel(user.role, isAr)}
-            </p>
-          )}
-          <div className="mt-3 flex gap-2">
+        {pinned.length > 0 && (
+          <ul className="border-t border-slate-800 px-3 py-2">
+            {pinned.flatMap((group) => group.items).map(renderItem)}
+          </ul>
+        )}
+
+        <div className="border-t border-slate-800 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-semibold text-white">
+              {(user?.name || '?').trim().charAt(0).toUpperCase()}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-white">{user?.name}</p>
+              {user?.role && (
+                <p className="truncate text-xs text-slate-500">{roleLabel(user.role, isAr)}</p>
+              )}
+            </div>
             <button
               type="button"
               onClick={onStore}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium hover:bg-slate-700"
+              title={isAr ? 'فتح المتجر' : 'Open store'}
+              aria-label={isAr ? 'فتح المتجر' : 'Open store'}
+              className="rounded-md p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {isAr ? 'المتجر' : 'Store'}
+              <ExternalLink className="h-4 w-4" />
             </button>
             <button
               type="button"
               onClick={onLogout}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-600/90 px-3 py-2 text-xs font-medium hover:bg-red-600"
+              title={isAr ? 'تسجيل الخروج' : 'Log out'}
+              aria-label={isAr ? 'تسجيل الخروج' : 'Log out'}
+              className="rounded-md p-2 text-slate-400 hover:bg-slate-800 hover:text-red-400"
             >
-              <LogOut className="h-3.5 w-3.5" />
-              {isAr ? 'خروج' : 'Logout'}
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         </div>

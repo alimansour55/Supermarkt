@@ -176,11 +176,10 @@ export default function FulfillmentLocationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'مواقع الشحن' : 'Fulfillment locations'}
-        subtitle={isAr
-          ? 'حدد من أين تُشحن الطلبات — مستودع لكل منطقة أو موقع افتراضي.'
-          : 'Set where orders ship from — one warehouse per zone or a default origin.'}
-        actions={(
+        description={isAr
+          ? 'من أين تخرج الطلبات. يمكنك ربط كل منطقة بمخزن، أو استخدام مخزن واحد للكل.'
+          : 'Where orders leave from. Link each area to a warehouse, or use one for everything.'}
+        action={(
           <Button type="button" onClick={selectNew}>
             <Plus className="h-4 w-4" />
             {isAr ? 'موقع جديد' : 'New location'}

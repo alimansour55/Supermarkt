@@ -9,6 +9,7 @@ import { getAdminPageMeta } from './adminRouteMeta.js';
 import { AdminStatsProvider } from './context/AdminStatsContext';
 import { AdminPanelProvider } from './context/AdminPanelContext';
 import ScrollToTop from '../components/layout/ScrollToTop';
+import useAdminNav from './hooks/useAdminNav';
 
 function AdminShell() {
   const { language } = useLanguage();
@@ -18,7 +19,11 @@ function AdminShell() {
   const isAr = language === 'ar';
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { title, breadcrumbs } = getAdminPageMeta(location.pathname, isAr);
+  const { current } = useAdminNav();
+  const { title, breadcrumbs } = getAdminPageMeta(location.pathname, isAr, current);
+  const cleanPath = location.pathname.replace(/\/$/, '');
+  // Tabs only on the tab screens themselves, not on pages opened from them (e.g. product edit).
+  const tabs = current?.tab && current.tab.path === cleanPath ? current.item.tabs : null;
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -47,7 +52,7 @@ function AdminShell() {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
+    <div className="flex min-h-screen bg-slate-50">
       <ScrollToTop />
       <AdminSidebar
         isAr={isAr}
@@ -59,10 +64,12 @@ function AdminShell() {
         onLogout={handleLogout}
       />
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:ps-72">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:ps-64">
         <AdminHeader
           title={title}
           breadcrumbs={breadcrumbs}
+          tabs={tabs}
+          activeTabPath={current?.tab?.path}
           menuOpen={sidebarOpen}
           onMenuClick={() => setSidebarOpen(true)}
         />

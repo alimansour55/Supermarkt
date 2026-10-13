@@ -257,8 +257,7 @@ export default function ListingReviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={isAr ? 'مراجعة منتجات البائعين' : 'Listing review'}
-        description={isAr ? 'المنتجات الجديدة والتعديلات لا تظهر للعملاء قبل اعتمادها.' : 'New listings and content edits stay hidden from customers until approved.'}
+        description={isAr ? 'لا يرى العملاء منتجات البائعين الجديدة أو تعديلاتها قبل موافقتك.' : 'Customers don’t see new seller products or edits until you approve them.'}
       />
       <div className="flex flex-wrap items-center gap-1.5">
         {STATES.map((s) => (
