@@ -5,7 +5,6 @@ import { normalizePhone, formatPhoneDisplay } from '../utils/phone.js';
 import { sendSmsOtp } from '../utils/sms.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { isStaffRole } from '../constants/roles.js';
-import { SELLER_ROLES } from '../constants/marketplace.js';
 import { resolveUserPermissions } from '../constants/permissions.js';
 import { pickGeoFields } from '../utils/addressGeo.js';
 import { enrichAndValidateAddress } from '../services/addressEnrichment.service.js';
@@ -97,7 +96,7 @@ function applyAddressPayload(address, payload) {
 }
 
 const sendAuthResponse = (user, res, statusCode = 200) => {
-  const token = generateToken(user._id);
+  const token = generateToken(user._id, { sv: user.sessionVersion });
 
   res.status(statusCode).json({
     success: true,
@@ -348,34 +347,6 @@ export const driverLogin = asyncHandler(async (req, res) => {
   driverUser.lastLoginAt = new Date();
   await driverUser.save({ validateBeforeSave: false });
   sendAuthResponse(driverUser, res);
-});
-
-/**
- * Marketplace seller portal — sign in with email + password.
- */
-export const sellerLogin = asyncHandler(async (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const password = String(req.body.password || '').trim();
-  if (!email || !password) {
-    throw new AppError('Email and password are required', 400);
-  }
-
-  const sellerUser = await User.findOne({
-    email,
-    role: { $in: SELLER_ROLES },
-  }).select('+password');
-
-  if (!sellerUser || sellerUser.isActive === false || !sellerUser.password) {
-    throw new AppError('Invalid email or password', 401);
-  }
-  const match = await sellerUser.comparePassword(password);
-  if (!match) {
-    throw new AppError('Invalid email or password', 401);
-  }
-
-  sellerUser.lastLoginAt = new Date();
-  await sellerUser.save({ validateBeforeSave: false });
-  sendAuthResponse(sellerUser, res);
 });
 
 export const logout = asyncHandler(async (_req, res) => {

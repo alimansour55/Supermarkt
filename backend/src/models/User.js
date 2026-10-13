@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { STAFF_ROLES } from '../constants/roles.js';
 import { ALL_PERMISSIONS } from '../constants/permissions.js';
-import { SELLER_ROLES } from '../constants/marketplace.js';
+import { SELLER_PERMISSIONS, SELLER_ROLES } from '../constants/marketplace.js';
 import geoFields from '../schemas/geoFields.js';
 
 const addressSchema = new mongoose.Schema(
@@ -109,6 +109,29 @@ const userSchema = new mongoose.Schema(
       ref: 'Seller',
       default: null,
       index: true,
+    },
+    /** Seller staff only — what this login may do (owners can do everything). */
+    sellerPermissions: {
+      type: [{ type: String, enum: SELLER_PERMISSIONS }],
+      default: undefined,
+    },
+    /** Bumped to sign out every device (tokens carry it as `sv`). */
+    sessionVersion: { type: Number, default: 0 },
+    /** Seller logins: email a one-time code on every sign-in. */
+    twoFactorEnabled: { type: Boolean, default: false },
+    loginCodeHash: { type: String, select: false },
+    loginCodeExpires: { type: Date, select: false },
+    loginCodeAttempts: { type: Number, default: 0, select: false },
+    /** Last sign-ins (newest first, max 10) — shown on the seller Security page. */
+    loginHistory: {
+      type: [{
+        _id: false,
+        at: { type: Date, default: Date.now },
+        ip: { type: String, trim: true, default: '' },
+        userAgent: { type: String, trim: true, default: '' },
+      }],
+      default: [],
+      select: false,
     },
     isActive: {
       type: Boolean,

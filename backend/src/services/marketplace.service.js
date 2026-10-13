@@ -12,6 +12,7 @@ import {
   FULFILLMENT_MODES,
   SELLER_CONTENT_FIELDS,
   SELLER_OPERATIONAL_FIELDS,
+  sellerUserPermissions,
 } from '../constants/marketplace.js';
 
 const CACHE_MS = 30_000;
@@ -358,5 +359,6 @@ export async function loadSellerForUser(user) {
 }
 
 export async function sellerUsers(sellerId) {
-  return User.find({ seller: sellerId }).select('name email role isActive lastLoginAt createdAt').lean();
+  const users = await User.find({ seller: sellerId }).select('name email role isActive lastLoginAt createdAt sellerPermissions twoFactorEnabled').lean();
+  return users.map((u) => ({ ...u, permissions: sellerUserPermissions(u) }));
 }

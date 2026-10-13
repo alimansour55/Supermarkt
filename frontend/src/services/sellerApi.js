@@ -23,6 +23,11 @@ export const sellerApi = {
   },
   deleteDocument: (docId) => api.delete(`/seller/me/documents/${docId}`),
   resubmit: () => api.post('/seller/me/resubmit'),
+  getSecurity: () => api.get('/seller/me/security'),
+  changePassword: (data) => api.put('/seller/me/password', data),
+  setTwoFactor: (data) => api.put('/seller/me/two-factor', data),
+  signOutEverywhere: () => api.post('/seller/me/sign-out-everywhere'),
+  listActivity: (params) => api.get('/seller/activity', { params }),
 
   getDashboard: () => api.get('/seller/dashboard'),
   getSummary: () => api.get('/seller/summary'),

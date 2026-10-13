@@ -87,3 +87,12 @@ export const ACCOUNT_HEALTH = {
   fair: { ar: 'يحتاج انتباه', en: 'Needs attention', tone: 'bg-amber-50 text-amber-800 ring-amber-200', Icon: Gauge },
   at_risk: { ar: 'معرّض للإيقاف', en: 'At risk', tone: 'bg-red-50 text-red-700 ring-red-200', Icon: AlertTriangle },
 };
+
+/** Seller staff permissions (mirror of backend SELLER_PERMISSIONS). */
+export const SELLER_PERMISSIONS = {
+  products: { ar: 'المنتجات والمخزون', en: 'Products & inventory', hintAr: 'إضافة وتعديل المنتجات والأسعار والمخزون والأقسام', hintEn: 'Add and edit products, prices, stock and sections' },
+  orders: { ar: 'الطلبات', en: 'Orders', hintAr: 'تأكيد الطلبات وشحنها وإلغاؤها', hintEn: 'Confirm, ship and cancel orders' },
+  reports: { ar: 'التقارير', en: 'Reports', hintAr: 'تقارير المبيعات', hintEn: 'Sales reports' },
+  finance: { ar: 'المدفوعات (عرض)', en: 'Payments (view)', hintAr: 'الرصيد والتحويلات وكشف الحساب', hintEn: 'Balance, payouts and statement' },
+  store: { ar: 'بيانات المتجر', en: 'Store profile', hintAr: 'الشعار والوصف والمستندات', hintEn: 'Logo, description and documents' },
+};

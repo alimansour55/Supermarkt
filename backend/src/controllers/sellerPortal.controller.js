@@ -33,9 +33,10 @@ import {
   syncSellerProductNames,
   documentsWithLinks,
 } from '../services/marketplace.service.js';
-import { SELLER_DOCUMENT_TYPES, LISTING_STATUSES } from '../constants/marketplace.js';
+import { SELLER_DOCUMENT_TYPES, LISTING_STATUSES, sellerUserPermissions } from '../constants/marketplace.js';
 import { normalizePhone } from '../utils/phone.js';
 import { parseCsv, toCsv, sendCsv } from '../utils/csvExport.js';
+import { logSellerActivity, diffFields } from '../services/sellerActivity.service.js';
 import {
   ownSellerCategoryIds,
   resolveSellerCategoryNames,
@@ -55,7 +56,13 @@ export const getSellerMe = asyncHandler(async (req, res) => {
     success: true,
     data: {
       seller: formatSellerPrivate(req.seller, { revealBank: req.user.role === 'seller_owner' }),
-      user: { id: req.user._id, name: req.user.name, email: req.user.email, role: req.user.role },
+      user: {
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        permissions: sellerUserPermissions(req.user),
+      },
       team,
       marketplace: {
         defaultCommissionRate: settings.defaultCommissionRate,
@@ -128,6 +135,7 @@ export const updateSellerProfile = asyncHandler(async (req, res) => {
   const renamed = seller.isModified('nameAr') || seller.isModified('nameEn');
   await seller.save();
   if (renamed) await syncSellerProductNames(seller);
+  await logSellerActivity(req, { action: 'store.profile', entityType: 'seller', entityId: seller._id, label: seller.nameEn });
   res.json({ success: true, data: formatSellerPrivate(seller, { revealBank: req.user.role === 'seller_owner' }) });
 });
 
@@ -138,6 +146,7 @@ export const updateSellerBank = asyncHandler(async (req, res) => {
     if (body[f] !== undefined) req.seller.bank[f] = str(body[f]);
   });
   await req.seller.save();
+  await logSellerActivity(req, { action: 'store.bank', entityType: 'seller', entityId: req.seller._id });
   res.json({ success: true, data: formatSellerPrivate(req.seller, { revealBank: true }) });
 });
 
@@ -489,6 +498,7 @@ export const createSellerProduct = asyncHandler(async (req, res) => {
   const submit = req.body.submit === true || req.body.submit === 'true';
   const product = await createProductForSeller(req.seller, req.user, req.body, { submit });
   await product.populate(POPULATE_CATEGORY);
+  await logSellerActivity(req, { action: 'product.create', entityType: 'product', entityId: product._id, label: product.nameEn });
   res.status(201).json({ success: true, data: formatSellerProduct(product) });
 });
 
@@ -541,6 +551,7 @@ export const importSellerProducts = asyncHandler(async (req, res) => {
     }
   }
   const created = results.filter((r) => r.ok).length;
+  if (created) await logSellerActivity(req, { action: 'product.import', label: `${created} products`, details: { created, failed: results.length - created } });
   res.status(created ? 201 : 400).json({ success: created > 0, created, failed: results.length - created, results });
 });
 
@@ -566,6 +577,7 @@ export const duplicateSellerProduct = asyncHandler(async (req, res) => {
     })),
   });
   await copy.populate(POPULATE_CATEGORY);
+  await logSellerActivity(req, { action: 'product.duplicate', entityType: 'product', entityId: copy._id, label: copy.nameEn, details: { from: source.nameEn } });
   res.status(201).json({ success: true, data: formatSellerProduct(copy) });
 });
 
@@ -592,6 +604,7 @@ export const bulkSellerProductCategories = asyncHandler(async (req, res) => {
 export const updateSellerProduct = asyncHandler(async (req, res) => {
   const seller = req.seller;
   const product = await findOwnProduct(req);
+  const before = { price: product.price, oldPrice: product.oldPrice, stock: product.stock, nameEn: product.nameEn, nameAr: product.nameAr };
   const { content, operational } = sanitizeSellerProductInput(req.body, seller);
   if (operational.price !== undefined && !(operational.price > 0)) throw new AppError('A price above zero is required', 400);
   await resolveCategoryInput(content, product);
@@ -633,6 +646,13 @@ export const updateSellerProduct = asyncHandler(async (req, res) => {
   await product.save();
   if (dropped.length) await deleteManyFromCloudinary(dropped);
   await product.populate(POPULATE_CATEGORY);
+  await logSellerActivity(req, {
+    action: 'product.update',
+    entityType: 'product',
+    entityId: product._id,
+    label: product.nameEn,
+    details: diffFields(before, product, ['price', 'oldPrice', 'stock', 'nameEn', 'nameAr']),
+  });
   res.json({
     success: true,
     data: formatSellerProduct(product),
@@ -652,6 +672,7 @@ export const submitSellerProduct = asyncHandler(async (req, res) => {
   product.reviewNote = '';
   await product.save();
   await product.populate(POPULATE_CATEGORY);
+  await logSellerActivity(req, { action: 'product.submit', entityType: 'product', entityId: product._id, label: product.nameEn });
   res.json({ success: true, data: formatSellerProduct(product) });
 });
 
@@ -661,6 +682,7 @@ export const pauseSellerProduct = asyncHandler(async (req, res) => {
   product.listingStatus = 'paused';
   await product.save();
   await product.populate(POPULATE_CATEGORY);
+  await logSellerActivity(req, { action: 'product.pause', entityType: 'product', entityId: product._id, label: product.nameEn });
   res.json({ success: true, data: formatSellerProduct(product) });
 });
 
@@ -670,6 +692,7 @@ export const unpauseSellerProduct = asyncHandler(async (req, res) => {
   product.listingStatus = 'approved';
   await product.save();
   await product.populate(POPULATE_CATEGORY);
+  await logSellerActivity(req, { action: 'product.unpause', entityType: 'product', entityId: product._id, label: product.nameEn });
   res.json({ success: true, data: formatSellerProduct(product) });
 });
 
@@ -692,6 +715,7 @@ export const deleteSellerProduct = asyncHandler(async (req, res) => {
   }
   const ids = [...(product.cloudinaryPublicIds || []), ...(product.pendingChanges?.cloudinaryPublicIds || [])];
   await product.deleteOne();
+  await logSellerActivity(req, { action: 'product.delete', entityType: 'product', entityId: product._id, label: product.nameEn });
   if (ids.length) await deleteManyFromCloudinary([...new Set(ids.filter(Boolean))]);
   res.json({ success: true });
 });
@@ -700,10 +724,12 @@ export const deleteSellerProduct = asyncHandler(async (req, res) => {
 export const updateSellerProductStock = asyncHandler(async (req, res) => {
   const product = await findOwnProduct(req);
   const { operational } = sanitizeSellerProductInput({ stock: req.body.stock, variants: req.body.variants }, req.seller);
+  const stockBefore = product.stock;
   guardStoreHeldStock(product, operational);
   applyOperational(product, operational);
   await product.save();
   await product.populate(POPULATE_CATEGORY);
+  await logSellerActivity(req, { action: 'product.stock', entityType: 'product', entityId: product._id, label: product.nameEn, details: { stock: [stockBefore, product.stock] } });
   res.json({ success: true, data: formatSellerProduct(product) });
 });
 
@@ -757,15 +783,20 @@ export const bulkUpdateSellerInventory = asyncHandler(async (req, res) => {
           operational.variants = operational.variants.map((v) => ({ ...v, stock: held.get(String(v._id)) ?? 0 }));
         }
       }
+      const before = { price: product.price, oldPrice: product.oldPrice, stock: product.stock };
       applyOperational(product, operational);
       // eslint-disable-next-line no-await-in-loop
       await product.save();
-      results.push({ id: product._id, ok: true, data: formatSellerProduct(product) });
+      results.push({ id: product._id, ok: true, data: formatSellerProduct(product), changes: diffFields(before, product, ['price', 'oldPrice', 'stock']) });
     } catch (err) {
       results.push({ id: product._id, ok: false, error: err.message });
     }
   }
   const saved = results.filter((r) => r.ok).length;
+  await Promise.all(results.filter((r) => r.ok).map((r) => logSellerActivity(req, {
+    action: 'inventory.update', entityType: 'product', entityId: r.id, label: r.data.nameEn, details: r.changes || { variants: 'updated' },
+  })));
+  results.forEach((r) => { delete r.changes; });
   res.status(saved ? 200 : 400).json({ success: saved > 0, saved, failed: results.length - saved, results });
 });
 
@@ -829,6 +860,7 @@ export const updateSellerShipmentStatus = asyncHandler(async (req, res) => {
     note,
   });
   const order = await Order.findById(shipment.order).select(ORDER_CONTACT_FIELDS).populate('user', 'name');
+  await logSellerActivity(req, { action: 'order.status', entityType: 'shipment', entityId: shipment._id, label: shipment.shipmentNumber, details: { status: shipment.status } });
   res.json({ success: true, data: formatShipmentForSeller(shipment, order) });
 });
 
@@ -868,7 +900,9 @@ export const bulkUpdateSellerShipments = asyncHandler(async (req, res) => {
   for (const id of ids) {
     try {
       // eslint-disable-next-line no-await-in-loop
-      await updateShipmentStatus(id, status, { scope: { sellerId: req.seller._id }, actor: req.user, role: 'seller' });
+      const shipment = await updateShipmentStatus(id, status, { scope: { sellerId: req.seller._id }, actor: req.user, role: 'seller' });
+      // eslint-disable-next-line no-await-in-loop
+      await logSellerActivity(req, { action: 'order.status', entityType: 'shipment', entityId: shipment._id, label: shipment.shipmentNumber, details: { status, bulk: true } });
       results.push({ id, ok: true });
     } catch (err) {
       results.push({ id, ok: false, error: err.message });

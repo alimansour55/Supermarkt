@@ -108,3 +108,12 @@ export const sellerApplyLimiter = rateLimit({
   keyGenerator: (req) => ipKeyGenerator(req.ip),
   message: jsonMessage('Too many applications. Please try again later.'),
 });
+
+/** Seller password-reset emails and 2-step code checks — per IP, relaxed outside production. */
+export const sellerRecoveryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isProd ? 10 : 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: jsonMessage('Too many attempts. Please try again in 15 minutes.'),
+});

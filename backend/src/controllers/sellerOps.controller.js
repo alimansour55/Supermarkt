@@ -14,6 +14,19 @@ import { parsePagination, paginationMeta } from '../utils/listQuery.js';
 import { logAudit } from '../services/auditLog.service.js';
 import { sellerUsers, notifySellerUsers } from '../services/marketplace.service.js';
 import { normalizeVariantId } from '../utils/productCatalog.js';
+import { SELLER_PERMISSIONS, DEFAULT_STAFF_PERMISSIONS, sellerUserPermissions } from '../constants/marketplace.js';
+import { logSellerActivity } from '../services/sellerActivity.service.js';
+import { assertStrongPassword } from './sellerAuth.controller.js';
+
+function readPermissions(value, fallback) {
+  if (!Array.isArray(value)) return fallback;
+  return [...new Set(value.map(String).filter((p) => SELLER_PERMISSIONS.includes(p)))];
+}
+
+const teamRow = (m) => ({
+  _id: m._id, name: m.name, email: m.email, role: m.role, isActive: m.isActive !== false,
+  permissions: sellerUserPermissions(m), twoFactorEnabled: m.twoFactorEnabled === true, lastLoginAt: m.lastLoginAt || null,
+});
 
 const isId = (v) => mongoose.Types.ObjectId.isValid(v);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -31,18 +44,22 @@ export const addTeamMember = asyncHandler(async (req, res) => {
   const password = String(req.body?.password || '');
   if (name.length < 2) throw new AppError('Name is required', 400);
   if (!EMAIL_RE.test(email)) throw new AppError('A valid email is required', 400);
-  if (password.length < 8) throw new AppError('Password must be at least 8 characters', 400);
+  assertStrongPassword(password);
   if (await User.countDocuments({ seller: req.seller._id }) >= MAX_STAFF + 1) {
     throw new AppError(`Up to ${MAX_STAFF} staff logins per store`, 400);
   }
   if (await User.exists({ email })) throw new AppError('This email is already registered', 409);
   const member = await User.create({
-    name, email, password, role: 'seller_staff', seller: req.seller._id, createdBy: req.user._id,
+    name,
+    email,
+    password,
+    role: 'seller_staff',
+    seller: req.seller._id,
+    createdBy: req.user._id,
+    sellerPermissions: readPermissions(req.body?.permissions, DEFAULT_STAFF_PERMISSIONS),
   });
-  res.status(201).json({
-    success: true,
-    data: { _id: member._id, name: member.name, email: member.email, role: member.role, isActive: true },
-  });
+  await logSellerActivity(req, { action: 'team.add', entityType: 'user', entityId: member._id, label: member.name, details: { permissions: member.sellerPermissions } });
+  res.status(201).json({ success: true, data: teamRow(member) });
 });
 
 /** Activate / deactivate a staff login. The owner login can't be changed here. */
@@ -50,13 +67,26 @@ export const updateTeamMember = asyncHandler(async (req, res) => {
   if (!isId(req.params.userId)) throw new AppError('Team member not found', 404);
   const member = await User.findOne({ _id: req.params.userId, seller: req.seller._id, role: 'seller_staff' });
   if (!member) throw new AppError('Team member not found', 404);
-  if (req.body?.isActive !== undefined) member.isActive = req.body.isActive === true || req.body.isActive === 'true';
+  const changes = {};
+  if (req.body?.isActive !== undefined) {
+    member.isActive = req.body.isActive === true || req.body.isActive === 'true';
+    changes.isActive = member.isActive;
+    // Deactivating signs the login out everywhere at once.
+    if (!member.isActive) member.sessionVersion = (member.sessionVersion || 0) + 1;
+  }
+  if (req.body?.permissions !== undefined) {
+    member.sellerPermissions = readPermissions(req.body.permissions, member.sellerPermissions);
+    changes.permissions = member.sellerPermissions;
+  }
   if (req.body?.password) {
-    if (String(req.body.password).length < 8) throw new AppError('Password must be at least 8 characters', 400);
+    assertStrongPassword(req.body.password);
     member.password = String(req.body.password);
+    member.sessionVersion = (member.sessionVersion || 0) + 1;
+    changes.password = 'reset';
   }
   await member.save();
-  res.json({ success: true, data: { _id: member._id, name: member.name, email: member.email, role: member.role, isActive: member.isActive } });
+  await logSellerActivity(req, { action: 'team.update', entityType: 'user', entityId: member._id, label: member.name, details: changes });
+  res.json({ success: true, data: teamRow(member) });
 });
 
 // ── Inbound stock (seller side) ──

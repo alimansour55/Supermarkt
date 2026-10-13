@@ -98,14 +98,38 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const sellerLogin = async (email, password) => {
-    setError(null);
-    const { data } = await authService.sellerLogin({ email, password });
+  /** Adopt a session the API just issued (seller sign-in, 2-step code, password reset). */
+  const adoptSession = (data) => {
     skipNextFetch.current = true;
     setToken(data.token);
     setUser(data.user);
     setLoading(false);
+  };
+
+  /** Seller sign-in; with 2-step verification on it returns `{ twoFactorRequired, challenge }` instead. */
+  const sellerLogin = async (email, password) => {
+    setError(null);
+    const { data } = await authService.sellerLogin({ email, password });
+    if (!data.twoFactorRequired) adoptSession(data);
     return data;
+  };
+
+  const sellerVerifyCode = async (challenge, code) => {
+    const { data } = await authService.sellerVerifyCode({ challenge, code });
+    adoptSession(data);
+    return data;
+  };
+
+  const sellerResetPassword = async (token, password) => {
+    const { data } = await authService.sellerResetPassword({ token, password });
+    adoptSession(data);
+    return data;
+  };
+
+  /** Swap the token after a password change / "sign out everywhere" — this device stays signed in. */
+  const replaceToken = (nextToken) => {
+    skipNextFetch.current = true;
+    setToken(nextToken);
   };
 
   /** Adopt a token issued by another flow (e.g. the seller application) and load the user. */
@@ -147,6 +171,9 @@ export function AuthProvider({ children }) {
       adminLogin,
       driverLogin,
       sellerLogin,
+      sellerVerifyCode,
+      sellerResetPassword,
+      replaceToken,
       signInWithToken,
       resendOtp,
       logout,

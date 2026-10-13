@@ -3,7 +3,7 @@ import User from '../models/User.js';
 import { AppError } from '../utils/AppError.js';
 import { STAFF_ROLES } from '../constants/roles.js';
 import { hasUserPermission } from '../constants/permissions.js';
-import { SELLER_ROLES } from '../constants/marketplace.js';
+import { SELLER_ROLES, sellerUserPermissions } from '../constants/marketplace.js';
 import Seller from '../models/Seller.js';
 
 export const protect = async (req, res, next) => {
@@ -25,6 +25,9 @@ export const protect = async (req, res, next) => {
 
     if (!user) {
       throw new AppError('User not found', 401);
+    }
+    if ((user.sessionVersion || 0) !== (decoded.sv || 0)) {
+      throw new AppError('Your session has ended — please sign in again', 401);
     }
 
     req.user = user;
@@ -100,6 +103,14 @@ export const sellerOnly = [protect, restrictTo(...SELLER_ROLES), loadSeller];
 export const sellerCanEditCatalog = (req, res, next) => {
   if (['suspended', 'rejected'].includes(req.seller?.status)) {
     return next(new AppError('Your seller account cannot make changes right now', 403));
+  }
+  next();
+};
+
+/** Seller staff need the matching permission (products, orders, reports, finance, store); owners always pass. */
+export const sellerCan = (permission) => (req, res, next) => {
+  if (!sellerUserPermissions(req.user).includes(permission)) {
+    return next(new AppError('Your login does not have access to this area — ask the store owner', 403));
   }
   next();
 };

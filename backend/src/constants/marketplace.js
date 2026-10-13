@@ -7,6 +7,18 @@ export function isSellerRole(role) {
   return SELLER_ROLES.includes(role);
 }
 
+/**
+ * What a seller staff login may do. Owners always have all of them. Staff created before
+ * permissions existed (no list) keep the old default: everything except finance.
+ */
+export const SELLER_PERMISSIONS = ['products', 'orders', 'reports', 'finance', 'store'];
+export const DEFAULT_STAFF_PERMISSIONS = ['products', 'orders', 'reports', 'store'];
+
+export function sellerUserPermissions(user) {
+  if (user?.role === 'seller_owner') return [...SELLER_PERMISSIONS];
+  return Array.isArray(user?.sellerPermissions) ? user.sellerPermissions : DEFAULT_STAFF_PERMISSIONS;
+}
+
 /** Seller business lifecycle. Only `active` sellers have products on the storefront. */
 export const SELLER_STATUSES = ['applied', 'under_review', 'active', 'suspended', 'rejected'];
 

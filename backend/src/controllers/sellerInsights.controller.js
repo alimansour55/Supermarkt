@@ -12,7 +12,7 @@ import { getSellerBalance } from '../services/sellerLedger.service.js';
 import { getSellerPerformance } from '../services/sellerReputation.service.js';
 import { getUserUnreadCount } from '../services/userNotification.service.js';
 import { getMarketplaceSettings } from '../services/marketplace.service.js';
-import { LISTING_STATUSES } from '../constants/marketplace.js';
+import { LISTING_STATUSES, sellerUserPermissions } from '../constants/marketplace.js';
 
 const DAY = 86400000;
 const TZ = 'Africa/Cairo';
@@ -205,7 +205,8 @@ export const getSellerHome = asyncHandler(async (req, res) => {
       },
       series,
       topProducts,
-      balance,
+      // Money is for logins with the finance permission only.
+      balance: sellerUserPermissions(req.user).includes('finance') ? balance : null,
       performance,
       listings,
       totalProducts: Object.values(listings).reduce((a, b) => a + b, 0),

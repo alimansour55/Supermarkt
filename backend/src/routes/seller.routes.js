@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { sellerOnly, sellerCanEditCatalog, sellerOwnerOnly } from '../middleware/auth.js';
+import { sellerOnly, sellerCanEditCatalog, sellerOwnerOnly, sellerCan } from '../middleware/auth.js';
 import { uploadSingle, uploadProductMediaMultiple, optionalUploadFields } from '../middleware/upload.js';
 import { getMyFinance, getMyLedger } from '../controllers/sellerFinance.controller.js';
 import { listMyReviews } from '../controllers/sellerReview.controller.js';
@@ -53,17 +53,36 @@ import {
   deleteMyCategory,
   reorderMyCategories,
 } from '../controllers/sellerCategory.controller.js';
+import {
+  getMySecurity,
+  changeMyPassword,
+  setMyTwoFactor,
+  signOutEverywhere,
+  listMyActivity,
+} from '../controllers/sellerAuth.controller.js';
 
 /** Seller portal API — every route runs as the signed-in seller (req.seller). */
 const router = Router();
 
 router.use(...sellerOnly);
 
+// Staff permissions by area — owners pass every check.
+router.use(['/products', '/categories', '/inbound'], sellerCan('products'));
+router.use('/shipments', sellerCan('orders'));
+router.use('/reports', sellerCan('reports'));
+router.use('/finance', sellerCan('finance'));
+
 router.get('/me', getSellerMe);
-router.put('/me', optionalUploadFields([{ name: 'logo', maxCount: 1 }, { name: 'banner', maxCount: 1 }]), updateSellerProfile);
+router.put('/me', sellerCan('store'), optionalUploadFields([{ name: 'logo', maxCount: 1 }, { name: 'banner', maxCount: 1 }]), updateSellerProfile);
 router.put('/me/bank', sellerOwnerOnly, updateSellerBank);
-router.post('/me/documents', uploadSingle('file'), uploadSellerDocument);
-router.delete('/me/documents/:docId', deleteSellerDocument);
+router.post('/me/documents', sellerCan('store'), uploadSingle('file'), uploadSellerDocument);
+router.delete('/me/documents/:docId', sellerCan('store'), deleteSellerDocument);
+
+router.get('/me/security', getMySecurity);
+router.put('/me/password', changeMyPassword);
+router.put('/me/two-factor', setMyTwoFactor);
+router.post('/me/sign-out-everywhere', signOutEverywhere);
+router.get('/activity', sellerOwnerOnly, listMyActivity);
 router.post('/me/resubmit', sellerOwnerOnly, resubmitApplication);
 
 router.get('/dashboard', getSellerDashboard);

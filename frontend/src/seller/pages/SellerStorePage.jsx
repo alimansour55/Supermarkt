@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useOutletContext, useParams } from '../../app/router';
-import { FileText, FileUp, Landmark, Send, Store, Trash2, Users } from 'lucide-react';
+import { FileText, FileUp, Landmark, Lock, Send, Store, Trash2, Users } from 'lucide-react';
+import TeamSettings from '../settings/TeamSettings';
+import SecuritySettings from '../settings/SecuritySettings';
 import { useToast } from '../../components/ui/Toast';
 import { sellerApi } from '../../services/sellerApi';
 import { DOCUMENT_STATUS, DOCUMENT_TYPES, FULFILLMENT, apiError, label } from '../sellerLabels';
@@ -225,73 +227,12 @@ function BankSection({ seller, isAr, reload }) {
   );
 }
 
-function TeamSection({ isAr }) {
-  const toast = useToast();
-  const [team, setTeam] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
-  const [busy, setBusy] = useState(false);
-  const load = () => sellerApi.listTeam().then(({ data }) => setTeam(data.data || [])).catch(() => setTeam([]));
-  useEffect(() => { load(); }, []);
-
-  const add = async () => {
-    setBusy(true);
-    try {
-      await sellerApi.addTeamMember(form);
-      setForm({ name: '', email: '', password: '' });
-      toast.success(isAr ? 'تمت إضافة الموظف' : 'Team member added');
-      load();
-    } catch (err) {
-      toast.error(apiError(err, isAr ? 'تعذّرت الإضافة' : 'Could not add'));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const toggle = async (m) => {
-    try {
-      await sellerApi.updateTeamMember(m._id, { isActive: !m.isActive });
-      load();
-    } catch (err) {
-      toast.error(apiError(err, isAr ? 'تعذّر التحديث' : 'Update failed'));
-    }
-  };
-
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-1 font-bold">{isAr ? 'فريق المتجر' : 'Store team'}</h2>
-      <p className="mb-4 text-sm text-slate-500">{isAr ? 'يدير الموظفون المنتجات والطلبات، ولا يرون بيانات الدفع ولا يضيفون موظفين.' : 'Staff run products and orders; they never see payout details or manage the team.'}</p>
-      {team?.length > 0 && (
-        <ul className="mb-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
-          {team.map((m) => (
-            <li key={m._id} className={`flex flex-wrap items-center gap-3 p-3 text-sm ${m.isActive === false ? 'opacity-60' : ''}`}>
-              <span className="font-semibold">{m.name}</span>
-              <span className="text-slate-500" dir="ltr">{m.email}</span>
-              <span className="text-xs text-slate-500">{m.role === 'seller_owner' ? (isAr ? 'المالك' : 'Owner') : (isAr ? 'موظف' : 'Staff')}</span>
-              {m.role === 'seller_staff' && (
-                <button type="button" onClick={() => toggle(m)} className="ms-auto rounded-lg px-3 py-1 text-xs font-semibold ring-1 ring-slate-200 hover:bg-slate-50">
-                  {m.isActive === false ? (isAr ? 'تفعيل' : 'Activate') : (isAr ? 'إيقاف' : 'Deactivate')}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="grid gap-3 sm:grid-cols-4">
-        <input className={inputCls} placeholder={isAr ? 'الاسم' : 'Name'} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-        <input className={inputCls} placeholder={isAr ? 'البريد الإلكتروني' : 'Email'} value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} dir="ltr" />
-        <input type="password" className={inputCls} placeholder={isAr ? 'كلمة مرور (8+)' : 'Password (8+)'} value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} dir="ltr" autoComplete="new-password" />
-        <button type="button" disabled={busy || !form.name || !form.email || form.password.length < 8} onClick={add} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-          {isAr ? 'إضافة موظف' : 'Add staff'}
-        </button>
-      </div>
-    </section>
-  );
-}
-
 const TABS = [
   { id: '', ar: 'بيانات وواجهة المتجر', en: 'Store profile', Icon: Store },
   { id: 'documents', ar: 'المستندات', en: 'Documents', Icon: FileText },
   { id: 'payout', ar: 'بيانات استلام الأرباح', en: 'Payout details', Icon: Landmark, ownerOnly: true },
   { id: 'team', ar: 'فريق العمل', en: 'Team & logins', Icon: Users, ownerOnly: true },
+  { id: 'security', ar: 'الأمان وتسجيل الدخول', en: 'Login & security', Icon: Lock },
 ];
 
 export default function SellerStorePage() {
@@ -300,8 +241,9 @@ export default function SellerStorePage() {
   const toast = useToast();
   const isOwner = me.user.role === 'seller_owner';
   const [busy, setBusy] = useState(false);
-  const tabs = TABS.filter((t) => !t.ownerOnly || isOwner);
-  const active = tabs.some((t) => t.id === tab) ? tab : '';
+  const canStore = (me.user.permissions || []).includes('store');
+  const tabs = TABS.filter((t) => (!t.ownerOnly || isOwner) && (canStore || t.id === 'security'));
+  const active = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id ?? 'security';
 
   const resubmit = async () => {
     setBusy(true);
@@ -346,7 +288,8 @@ export default function SellerStorePage() {
       {active === '' && <ProfileSection key={seller.updatedAt} seller={seller} isAr={isAr} reload={reload} />}
       {active === 'documents' && <DocumentsSection seller={seller} isAr={isAr} reload={reload} />}
       {active === 'payout' && <BankSection key={`bank-${seller.updatedAt}`} seller={seller} isAr={isAr} reload={reload} />}
-      {active === 'team' && <TeamSection isAr={isAr} />}
+      {active === 'team' && <TeamSettings isAr={isAr} />}
+      {active === 'security' && <SecuritySettings isAr={isAr} />}
     </div>
   );
 }

@@ -59,7 +59,7 @@ function ActionCenter({ data, summary, seller, isAr }) {
     { n: data.outOfStock, Icon: PackageX, tone: 'text-amber-600 bg-amber-50', ar: 'منتجات نفد مخزونها', en: 'Products out of stock', to: '/seller-center/inventory?stock=out' },
     { n: data.lowStock, Icon: Boxes, tone: 'text-amber-600 bg-amber-50', ar: 'منتجات مخزونها منخفض', en: 'Products running low', to: '/seller-center/inventory?stock=low' },
     { n: data.listings.draft, Icon: Clock, tone: 'text-slate-600 bg-slate-100', ar: 'مسودات لم تُرسل بعد', en: 'Drafts not submitted yet', to: '/seller-center/products?listingStatus=draft' },
-    { n: !(seller.bank?.accountNumber || seller.bank?.iban || seller.bank?.walletPhone) && data.balance.pending + data.balance.available > 0 ? 1 : 0, Icon: Landmark, tone: 'text-amber-600 bg-amber-50', ar: 'أضف بيانات البنك لاستلام أرباحك', en: 'Add bank details to receive your money', to: '/seller-center/store/payout', hideCount: true },
+    { n: data.balance && !(seller.bank?.accountNumber || seller.bank?.iban || seller.bank?.walletPhone) && data.balance.pending + data.balance.available > 0 ? 1 : 0, Icon: Landmark, tone: 'text-amber-600 bg-amber-50', ar: 'أضف بيانات البنك لاستلام أرباحك', en: 'Add bank details to receive your money', to: '/seller-center/store/payout', hideCount: true },
   ].filter((r) => r.n > 0);
 
   return (
@@ -202,6 +202,7 @@ export default function SellerDashboardPage() {
         <div className="space-y-6">
           <ActionCenter data={data} summary={summary} seller={seller} isAr={isAr} />
 
+          {balance && (
           <Card title={isAr ? 'رصيدك' : 'Your balance'} action={<Link to="/seller-center/finance" className="text-xs font-semibold text-indigo-700 hover:underline">{isAr ? 'التفاصيل' : 'Details'}</Link>}>
             <p className="flex items-center gap-2 text-sm text-slate-500"><Wallet className="h-4 w-4 text-emerald-600" />{isAr ? 'متاح للتحويل' : 'Available for payout'}</p>
             <p className="mt-1 text-3xl font-extrabold tabular-nums text-emerald-700">{formatPrice(balance.available)}</p>
@@ -217,6 +218,7 @@ export default function SellerDashboardPage() {
             </div>
             <p className="mt-3 text-xs text-slate-500">{isAr ? `تُتاح المبيعات بعد ${data.payoutHoldDays} يوماً من التسليم.` : `Sales become available ${data.payoutHoldDays} days after delivery.`}</p>
           </Card>
+          )}
 
           <Card title={isAr ? 'صحة الحساب' : 'Account health'} action={<Link to="/seller-center/performance" className="text-xs font-semibold text-indigo-700 hover:underline">{isAr ? 'التفاصيل' : 'Details'}</Link>}>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ring-1 ${health.tone}`}>

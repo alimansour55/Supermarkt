@@ -111,6 +111,7 @@ export default [
   // Marketplace seller portal — third-party sellers manage their store here.
   clientOnly('seller-client', [
     route('seller-center/login', 'seller/pages/SellerLoginPage.jsx'),
+    route('seller-center/reset-password/:token', 'seller/pages/SellerResetPasswordPage.jsx'),
     route('seller-center', 'seller/SellerShell.jsx', [
       index('seller/pages/SellerDashboardPage.jsx'),
       route('products', 'seller/pages/SellerProductsPage.jsx'),
@@ -129,6 +130,7 @@ export default [
       route('performance', 'seller/pages/SellerPerformancePage.jsx'),
       route('notifications', 'seller/pages/SellerNotificationsPage.jsx'),
       route('help', 'seller/pages/SellerHelpPage.jsx'),
+      route('activity', 'seller/pages/SellerActivityPage.jsx'),
     ]),
   ]),
 

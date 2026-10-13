@@ -114,7 +114,7 @@ test('owners add staff logins; staff manage products but not money or the team',
   const off = await call('PUT', `/seller/team/${add.body.data._id}`, { isActive: false }, t.ownerToken);
   assert.equal(off.status, 200);
   assert.equal((await call('POST', '/auth/seller-login', { email: 'mai@ops.test', password: 'staffpass123' })).status, 401);
-  assert.equal((await call('GET', '/seller/products', null, t.staffToken)).status, 403, 'deactivated sessions stop working');
+  assert.equal((await call('GET', '/seller/products', null, t.staffToken)).status, 401, 'deactivated sessions stop working');
   assert.equal((await call('PUT', `/seller/team/${t.ownerId}`, { isActive: false }, t.ownerToken)).status, 404, 'the owner login is not editable here');
 });
 

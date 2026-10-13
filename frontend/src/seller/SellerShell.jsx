@@ -126,6 +126,7 @@ export default function SellerShell() {
   const nav = visibleNav({
     isOwner: me?.user?.role === 'seller_owner',
     storeFulfillment: Boolean(seller?.allowedFulfillment?.includes('store')),
+    permissions: me?.user?.permissions || [],
   });
 
   const signOut = async () => {
