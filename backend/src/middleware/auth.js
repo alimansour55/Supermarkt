@@ -4,6 +4,13 @@ import { AppError } from '../utils/AppError.js';
 import { STAFF_ROLES } from '../constants/roles.js';
 import { hasUserPermission } from '../constants/permissions.js';
 
+/** Deactivated accounts and tokens issued before a password change are rejected. */
+function isTokenStillValid(user, decoded) {
+  if (user.isActive === false) return false;
+  if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) return false;
+  return true;
+}
+
 export const protect = async (req, res, next) => {
   try {
     let token;
@@ -23,6 +30,9 @@ export const protect = async (req, res, next) => {
 
     if (!user) {
       throw new AppError('User not found', 401);
+    }
+    if (!isTokenStillValid(user, decoded)) {
+      throw new AppError('Not authorized — session is no longer valid', 401);
     }
 
     req.user = user;
@@ -50,7 +60,7 @@ export const optionalProtect = async (req, res, next) => {
     const user = await User.findById(decoded.id);
     // Optional auth: a missing/expired/invalid token must never block a public
     // route — just continue as an anonymous visitor.
-    if (user) req.user = user;
+    if (user && isTokenStillValid(user, decoded)) req.user = user;
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {

@@ -14,18 +14,18 @@ export default function AdminRoutes() {
         )}
       >
         <Route index element={withSuspense(<P.DashboardPage />)} />
-        <Route path="products" element={withSuspense(<P.ProductsPage />)} />
-        <Route path="stock-alerts" element={withSuspense(<P.StockAlertsPage />)} />
-        <Route path="products/new" element={withSuspense(<P.ProductFormPage />)} />
-        <Route path="products/:id/edit" element={withSuspense(<P.ProductFormPage />)} />
+        <Route path="products" element={withSuspense(<P.AdminPermissionRoute permission="products:read"><P.ProductsPage /></P.AdminPermissionRoute>)} />
+        <Route path="stock-alerts" element={withSuspense(<P.AdminPermissionRoute permission="products:read"><P.StockAlertsPage /></P.AdminPermissionRoute>)} />
+        <Route path="products/new" element={withSuspense(<P.AdminPermissionRoute permission="products:write"><P.ProductFormPage /></P.AdminPermissionRoute>)} />
+        <Route path="products/:id/edit" element={withSuspense(<P.AdminPermissionRoute permission="products:write"><P.ProductFormPage /></P.AdminPermissionRoute>)} />
         <Route path="categories" element={withSuspense(<P.AdminPermissionRoute permission="categories:write"><P.AdminCategoriesPage /></P.AdminPermissionRoute>)} />
         <Route path="brands" element={withSuspense(<P.AdminPermissionRoute permission="brands:write"><P.AdminBrandsPage /></P.AdminPermissionRoute>)} />
-        <Route path="orders" element={withSuspense(<P.AdminOrdersPage />)} />
+        <Route path="orders" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.AdminOrdersPage /></P.AdminPermissionRoute>)} />
         <Route path="invoices" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.InvoicesPage /></P.AdminPermissionRoute>)} />
         <Route path="live-deliveries" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.LiveDeliveriesPage /></P.AdminPermissionRoute>)} />
         <Route path="recurring-deliveries" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.AdminRecurringDeliveriesPage /></P.AdminPermissionRoute>)} />
-        <Route path="order-chats" element={withSuspense(<P.OrderChatsPage />)} />
-        <Route path="returns" element={withSuspense(<P.OrderReturnsPage />)} />
+        <Route path="order-chats" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.OrderChatsPage /></P.AdminPermissionRoute>)} />
+        <Route path="returns" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.OrderReturnsPage /></P.AdminPermissionRoute>)} />
         <Route path="callback-requests" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.CallbackRequestsPage /></P.AdminPermissionRoute>)} />
         <Route path="live-chat" element={withSuspense(<P.AdminPermissionRoute permission="support:chat"><P.LiveChatPage /></P.AdminPermissionRoute>)} />
         <Route path="order-trash" element={withSuspense(<P.AdminPermissionRoute permission="orders:delete"><P.OrderTrashPage /></P.AdminPermissionRoute>)} />

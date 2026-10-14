@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requirePermission, staffOnly } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/auth.js';
 import { validate, createAdminUserValidation, bulkAdminUsersValidation } from '../middleware/validate.js';
 import { getAdminReturns } from '../controllers/orderReturn.controller.js';
 import { getDashboardStats, getDashboardSalesTrend } from '../controllers/admin.controller.js';
@@ -55,7 +55,7 @@ import {
 const router = Router();
 
 /** Product returns inbox — dedicated path avoids /orders/admin/:id catching "returns" */
-router.get('/order-returns', ...staffOnly, getAdminReturns);
+router.get('/order-returns', ...requirePermission('orders:read'), getAdminReturns);
 
 router.get('/dashboard/stats', ...requirePermission('dashboard:read'), getDashboardStats);
 router.get('/dashboard/sales-trend', ...requirePermission('dashboard:read'), getDashboardSalesTrend);
