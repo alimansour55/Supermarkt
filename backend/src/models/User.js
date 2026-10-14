@@ -85,6 +85,11 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    // Bumped to revoke every JWT issued before it (see middleware/auth.js).
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
     password: {
       type: String,
       minlength: 6,
@@ -219,6 +224,8 @@ userSchema.pre('validate', function requirePhoneForCustomers(next) {
 userSchema.pre('save', async function hashPassword(next) {
   if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
+  // A new password signs out every existing session.
+  if (!this.isNew) this.tokenVersion = (this.tokenVersion || 0) + 1;
   next();
 });
 

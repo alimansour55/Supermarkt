@@ -16,29 +16,26 @@ const getStripeClient = () => {
 };
 
 export const markOrderPaid = async (orderId, stripeSessionId) => {
-  const order = await Order.findById(orderId);
-  if (!order) return null;
-  if (order.paymentStatus === 'paid') return order;
+  // Conditional update: the webhook and the client's confirm call can land at the
+  // same moment, and only the one that flips the status may award points / notify.
+  // Order stays on «order received» until admin advances fulfillment.
+  const order = await Order.findOneAndUpdate(
+    { _id: orderId, paymentStatus: { $ne: 'paid' } },
+    { $set: { paymentStatus: 'paid', ...(stripeSessionId ? { stripeSessionId } : {}) } },
+    { new: true },
+  );
+  if (!order) return Order.findById(orderId);
 
-  order.paymentStatus = 'paid';
-  // Stay on «order received» until admin advances fulfillment
-  if (stripeSessionId) {
-    order.stripeSessionId = stripeSessionId;
-  }
-  await order.save();
   await awardPointsForOrder(order);
   notifyPaymentSuccessAfterPaid(orderId);
   return order;
 };
 
-export const markOrderFailed = async (orderId) => {
-  const order = await Order.findById(orderId);
-  if (!order || order.paymentStatus === 'paid') return null;
-
-  order.paymentStatus = 'failed';
-  await order.save();
-  return order;
-};
+export const markOrderFailed = async (orderId) => Order.findOneAndUpdate(
+  { _id: orderId, paymentStatus: { $ne: 'paid' } },
+  { $set: { paymentStatus: 'failed' } },
+  { new: true },
+);
 
 const buildCheckoutLineItems = (order) => {
   const lineItems = order.items.map((item) => ({

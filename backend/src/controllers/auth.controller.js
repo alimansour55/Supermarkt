@@ -95,7 +95,7 @@ function applyAddressPayload(address, payload) {
 }
 
 const sendAuthResponse = (user, res, statusCode = 200) => {
-  const token = generateToken(user._id);
+  const token = generateToken(user._id, user.tokenVersion);
 
   res.status(statusCode).json({
     success: true,
@@ -350,6 +350,12 @@ export const driverLogin = asyncHandler(async (req, res) => {
 
 export const logout = asyncHandler(async (_req, res) => {
   res.status(200).json({ success: true, message: 'Logged out successfully' });
+});
+
+/** Revoke every token this account holds (all devices, including this one). */
+export const logoutAll = asyncHandler(async (req, res) => {
+  await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
+  res.status(200).json({ success: true, message: 'Logged out of all devices' });
 });
 
 export const getMe = asyncHandler(async (req, res) => {

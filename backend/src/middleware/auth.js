@@ -4,6 +4,9 @@ import { AppError } from '../utils/AppError.js';
 import { STAFF_ROLES } from '../constants/roles.js';
 import { hasUserPermission } from '../constants/permissions.js';
 
+/** Tokens issued before the last logout-all / password change carry an older version. */
+const isTokenCurrent = (decoded, user) => (decoded.tv ?? 0) === (user.tokenVersion ?? 0);
+
 export const protect = async (req, res, next) => {
   try {
     let token;
@@ -28,6 +31,10 @@ export const protect = async (req, res, next) => {
     // A deactivated account loses access immediately, not when its JWT expires.
     if (user.isActive === false) {
       throw new AppError('This account has been deactivated', 401);
+    }
+
+    if (!isTokenCurrent(decoded, user)) {
+      throw new AppError('Session expired — please sign in again', 401);
     }
 
     req.user = user;
@@ -55,7 +62,7 @@ export const optionalProtect = async (req, res, next) => {
     const user = await User.findById(decoded.id);
     // Optional auth: a missing/expired/invalid token must never block a public
     // route — just continue as an anonymous visitor.
-    if (user && user.isActive !== false) req.user = user;
+    if (user && user.isActive !== false && isTokenCurrent(decoded, user)) req.user = user;
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
