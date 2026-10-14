@@ -2,11 +2,16 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo, u
 import { authService } from '../services/apiServices';
 import { STORAGE_KEYS } from '../utils/constants';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { usesBearerToken } from '../services/api';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  // Native app: bearer token. Web: httpOnly cookie + a harmless "session exists" hint.
+  // A token left in web storage by an older build is still honoured until the next sign-in.
   const [token, setToken, removeToken] = useLocalStorage(STORAGE_KEYS.TOKEN, null);
+  const [sessionHint, setSessionHint, removeSessionHint] = useLocalStorage(STORAGE_KEYS.SESSION_HINT, false);
+  const hasSession = Boolean(token || sessionHint);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,7 +19,7 @@ export function AuthProvider({ children }) {
   const skipNextFetch = useRef(false);
 
   const fetchUser = useCallback(async () => {
-    if (!token) {
+    if (!hasSession) {
       setUser(null);
       setLoading(false);
       return;
@@ -35,12 +40,13 @@ export function AuthProvider({ children }) {
       // a 5xx must not sign the customer out.
       if (err.response?.status === 401) {
         removeToken();
+        removeSessionHint();
         setUser(null);
       }
     } finally {
       setLoading(false);
     }
-  }, [token, removeToken]);
+  }, [hasSession, removeToken, removeSessionHint]);
 
   useEffect(() => {
     fetchUser();
@@ -48,11 +54,25 @@ export function AuthProvider({ children }) {
 
   // Session kept through an outage — restore the user once the connection is back.
   useEffect(() => {
-    if (!token || user) return undefined;
+    if (!hasSession || user) return undefined;
     const retry = () => fetchUser();
     window.addEventListener('online', retry);
     return () => window.removeEventListener('online', retry);
-  }, [token, user, fetchUser]);
+  }, [hasSession, user, fetchUser]);
+
+  /** Store whatever the server issued: bearer token (native) or just the cookie-session hint (web). */
+  const startSession = (data) => {
+    // Flipping hasSession re-runs fetchUser; we already have the user, so skip that one.
+    skipNextFetch.current = !hasSession;
+    if (usesBearerToken && data.token) {
+      setToken(data.token);
+    } else {
+      removeToken();
+      setSessionHint(true);
+    }
+    setUser(data.user);
+    setLoading(false);
+  };
 
   const sendOtp = async (payload) => {
     setError(null);
@@ -63,34 +83,36 @@ export function AuthProvider({ children }) {
   const verifyOtp = async (payload) => {
     setError(null);
     const { data } = await authService.verifyOtp(payload);
-    skipNextFetch.current = true;
     sessionStorage.setItem(STORAGE_KEYS.PENDING_CART_MERGE, '1');
-    setToken(data.token);
-    setUser(data.user);
-    setLoading(false);
+    startSession(data);
     return data;
   };
 
   const adminLogin = async (username, password) => {
     setError(null);
-    const payload = password !== undefined
-      ? { username, password }
-      : { password: username };
-    const { data } = await authService.adminLogin(payload);
-    skipNextFetch.current = true;
-    setToken(data.token);
-    setUser(data.user);
-    setLoading(false);
+    const { data } = await authService.adminLogin({ username, password });
+    // Staff with a phone must confirm an SMS code first — no session yet.
+    if (!data.mfaRequired) startSession(data);
+    return data;
+  };
+
+  const verifyAdminMfa = async (mfaToken, code) => {
+    setError(null);
+    const { data } = await authService.adminMfaVerify({ mfaToken, code });
+    startSession(data);
+    return data;
+  };
+
+  const resendAdminMfa = async (mfaToken, lang) => {
+    setError(null);
+    const { data } = await authService.adminMfaResend({ mfaToken, lang });
     return data;
   };
 
   const driverLogin = async (username, password) => {
     setError(null);
     const { data } = await authService.driverLogin({ username, password });
-    skipNextFetch.current = true;
-    setToken(data.token);
-    setUser(data.user);
-    setLoading(false);
+    startSession(data);
     return data;
   };
 
@@ -108,6 +130,7 @@ export function AuthProvider({ children }) {
     } finally {
       skipNextFetch.current = false;
       removeToken();
+      removeSessionHint();
       setUser(null);
       setLoading(false);
     }
@@ -117,19 +140,22 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       token,
+      hasSession,
       loading,
       error,
       isAuthenticated: !!user,
       sendOtp,
       verifyOtp,
       adminLogin,
+      verifyAdminMfa,
+      resendAdminMfa,
       driverLogin,
       resendOtp,
       logout,
       setError,
       refreshUser: fetchUser,
     }),
-    [user, token, loading, error, fetchUser],
+    [user, token, hasSession, loading, error, fetchUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

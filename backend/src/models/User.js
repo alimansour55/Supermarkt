@@ -159,6 +159,14 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    /**
+     * Set only on self-sign-ups that haven't confirmed their SMS code yet. MongoDB deletes the
+     * account when it passes (TTL index below); cleared on successful verification.
+     */
+    pendingSignupExpiresAt: {
+      type: Date,
+      default: undefined,
+    },
     /** Bumped to invalidate every issued session token (e.g. password reset) */
     tokenVersion: {
       type: Number,
@@ -288,9 +296,11 @@ userSchema.methods.verifyPhoneOtp = function verifyPhoneOtp(code) {
   this.phoneOtpAttempts = 0;
   this.isPhoneVerified = true;
   this.mfaEnabled = true;
+  this.pendingSignupExpiresAt = undefined;
   return { ok: true };
 };
 
+userSchema.index({ pendingSignupExpiresAt: 1 }, { expireAfterSeconds: 0 });
 userSchema.index(
   { email: 1 },
   { unique: true, partialFilterExpression: { email: { $type: 'string', $gt: '' } } },

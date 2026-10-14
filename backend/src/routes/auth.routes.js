@@ -4,6 +4,8 @@ import {
   verifyOtp,
   resendOtp,
   adminLogin,
+  verifyAdminMfa,
+  resendAdminMfa,
   driverLogin,
   logout,
   getMe,
@@ -23,6 +25,8 @@ router.post('/send-otp', otpSendLimiter, validate(sendOtpValidation), sendOtp);
 router.post('/verify-otp', otpVerifyLimiter, validate(verifyOtpValidation), verifyOtp);
 router.post('/resend-otp', otpSendLimiter, validate(sendOtpValidation), resendOtp);
 router.post('/admin-login', loginLimiter, validate(adminLoginValidation), adminLogin);
+router.post('/admin-login/verify', otpVerifyLimiter, verifyAdminMfa);
+router.post('/admin-login/resend', otpSendLimiter, resendAdminMfa);
 router.post('/driver-login', loginLimiter, validate(driverLoginValidation), driverLogin);
 
 router.post('/logout', protect, logout);

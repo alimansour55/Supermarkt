@@ -44,7 +44,8 @@ export const corsOptions = {
 
     callback(new Error('Not allowed by CORS'));
   },
-  credentials: false,
+  // Session lives in an httpOnly cookie for web clients.
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Auth-Transport'],
 };

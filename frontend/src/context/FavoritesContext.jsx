@@ -40,7 +40,7 @@ const orderProductsByIds = (products, ids) => {
 };
 
 export function FavoritesProvider({ children }) {
-  const { isAuthenticated, user, token } = useAuth();
+  const { isAuthenticated, user, hasSession } = useAuth();
   const userId = user?.id || user?._id || null;
 
   const [favorites, setFavorites] = useState(() => normalizeIds(readJson(STORAGE_KEYS.FAVORITES, [])));
@@ -79,7 +79,7 @@ export function FavoritesProvider({ children }) {
 
   // Sync with server when authenticated user changes
   useEffect(() => {
-    if (!isAuthenticated || !token) {
+    if (!isAuthenticated || !hasSession) {
       syncedUserId.current = null;
       const ids = normalizeIds(readJson(STORAGE_KEYS.FAVORITES, []));
       const products = orderProductsByIds(
@@ -126,12 +126,12 @@ export function FavoritesProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [applyServerState, isAuthenticated, token, userId]);
+  }, [applyServerState, isAuthenticated, hasSession, userId]);
 
   // Guest: load missing product details by id (once per favorites change)
   const favoritesKey = favorites.join(',');
   useEffect(() => {
-    if (isAuthenticated && token) return;
+    if (isAuthenticated && hasSession) return;
 
     if (!favorites.length) {
       setFavoriteProducts([]);
@@ -178,7 +178,7 @@ export function FavoritesProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [favoritesKey, isAuthenticated, token, persistGuest]);
+  }, [favoritesKey, isAuthenticated, hasSession, persistGuest]);
 
   const isFavorite = useCallback(
     (productId) => favorites.includes(String(productId)),
@@ -204,7 +204,7 @@ export function FavoritesProvider({ children }) {
     setFavorites(nextFavorites);
     setFavoriteProducts(nextProducts);
 
-    if (!isAuthenticated || !token) {
+    if (!isAuthenticated || !hasSession) {
       persistGuest(nextFavorites, nextProducts);
       return;
     }
@@ -218,7 +218,7 @@ export function FavoritesProvider({ children }) {
       setFavorites(previousFavorites);
       setFavoriteProducts(previousProducts);
     }
-  }, [applyServerState, isAuthenticated, persistGuest, token]);
+  }, [applyServerState, isAuthenticated, persistGuest, hasSession]);
 
   const value = useMemo(
     () => ({

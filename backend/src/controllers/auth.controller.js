@@ -1,26 +1,19 @@
 import User from '../models/User.js';
 import RevokedToken from '../models/RevokedToken.js';
 import { AppError } from '../utils/AppError.js';
-import { generateToken } from '../utils/generateToken.js';
+import { generateToken, generateMfaToken, verifyMfaToken } from '../utils/generateToken.js';
+import { setSessionCookie, clearSessionCookie, wantsTokenInBody } from '../utils/sessionCookie.js';
 import { normalizePhone, formatPhoneDisplay } from '../utils/phone.js';
 import { sendSmsOtp } from '../utils/sms.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
-import { isStaffRole } from '../constants/roles.js';
+import { isStaffRole, STAFF_ROLES } from '../constants/roles.js';
 import { resolveUserPermissions } from '../constants/permissions.js';
 import { pickGeoFields } from '../utils/addressGeo.js';
 import { enrichAndValidateAddress } from '../services/addressEnrichment.service.js';
-import crypto from 'crypto';
 
 const OTP_RESEND_SECONDS = 60;
 const DEMO_SHOPPER_PHONE = normalizePhone('01098765432');
 const DEMO_ADMIN_OTP_PHONE = normalizePhone('01012345678');
-
-const getConfiguredAdminPassword = () => {
-  const fromEnv = process.env.ADMIN_PASSWORD?.trim();
-  if (fromEnv) return fromEnv;
-  if (process.env.NODE_ENV !== 'production') return 'admin123';
-  return null;
-};
 
 const isDevDemoPhone = (phone) => {
   if (process.env.NODE_ENV === 'production') return false;
@@ -31,16 +24,6 @@ const defaultDemoNameForPhone = (phone) => {
   if (phone === DEMO_SHOPPER_PHONE) return 'Demo Shopper';
   if (phone === DEMO_ADMIN_OTP_PHONE) return 'Demo Admin';
   return 'Demo User';
-};
-
-const safePasswordMatch = (input, expected) => {
-  const inputBuf = Buffer.from(String(input));
-  const expectedBuf = Buffer.from(String(expected));
-  if (inputBuf.length !== expectedBuf.length) {
-    crypto.timingSafeEqual(inputBuf, inputBuf);
-    return false;
-  }
-  return crypto.timingSafeEqual(inputBuf, expectedBuf);
 };
 
 const devOtpFields = (code) => {
@@ -95,18 +78,27 @@ function applyAddressPayload(address, payload) {
   }
 }
 
-const sendAuthResponse = (user, res, statusCode = 200) => {
+const sendAuthResponse = (user, req, res, statusCode = 200) => {
   const token = generateToken(user);
+  setSessionCookie(res, token);
 
   res.status(statusCode).json({
     success: true,
-    token,
+    ...(wantsTokenInBody(req) ? { token } : {}),
     user: formatUserResponse(user),
   });
 };
 
+/** 01012345678 → 010•••••678 */
+const maskPhone = (phone) => {
+  const local = String(formatPhoneDisplay(phone) || phone).replace(/\s+/g, '');
+  return local.length > 6 ? `${local.slice(0, 3)}${'•'.repeat(local.length - 6)}${local.slice(-3)}` : local;
+};
+
+const OTP_SELECT = '+phoneOtpHash +phoneOtpExpires +phoneOtpAttempts +lastOtpSentAt +otpSendCount +otpSendWindowStart';
+
 const findUserWithOtp = async (phone) =>
-  User.findOne({ phone }).select('+phoneOtpHash +phoneOtpExpires +phoneOtpAttempts +lastOtpSentAt +otpSendCount +otpSendWindowStart');
+  User.findOne({ phone }).select(OTP_SELECT);
 
 /** Enforce resend cooldown + daily per-phone quota, then generate, store and SMS a fresh code. */
 const issuePhoneOtp = async (user, phone, lang) => {
@@ -158,6 +150,8 @@ export const sendOtp = asyncHandler(async (req, res) => {
       isPhoneVerified: false,
       mfaEnabled: true,
       role: 'user',
+      // Abandoned sign-ups are removed automatically after a day.
+      pendingSignupExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
     isNewUser = true;
   } else if (!user.isPhoneVerified && name?.trim()) {
@@ -226,7 +220,7 @@ export const verifyOtp = asyncHandler(async (req, res) => {
   }
 
   await user.save();
-  sendAuthResponse(user, res);
+  sendAuthResponse(user, req, res);
 });
 
 export const resendOtp = asyncHandler(async (req, res) => {
@@ -259,8 +253,11 @@ export const resendOtp = asyncHandler(async (req, res) => {
   });
 });
 
+const staffMfaRequired = () => process.env.ADMIN_MFA_REQUIRED === 'true';
+
 /**
- * Admin panel — sign in with username + password, or legacy shared ADMIN_PASSWORD.
+ * Admin panel — step 1: username + password.
+ * Staff with a phone on file then get an SMS code (step 2, verifyAdminMfa) before a session is issued.
  */
 export const adminLogin = asyncHandler(async (req, res) => {
   const { username, password } = req.body;
@@ -268,51 +265,103 @@ export const adminLogin = asyncHandler(async (req, res) => {
     throw new AppError('Password is required', 400);
   }
 
-  const trimmedPassword = password.trim();
   const normalizedUsername = username ? String(username).trim().toLowerCase() : '';
+  if (!normalizedUsername) {
+    throw new AppError('Username is required', 400);
+  }
 
-  if (normalizedUsername) {
-    const staffUser = await User.findOne({
-      username: normalizedUsername,
-      role: { $in: ['manager', 'admin', 'super_admin'] },
-    }).select('+password');
+  const staffUser = await User.findOne({
+    username: normalizedUsername,
+    role: { $in: STAFF_ROLES },
+  }).select(`+password ${OTP_SELECT}`);
 
-    if (!staffUser || staffUser.isActive === false) {
-      throw new AppError('Invalid username or password', 401);
+  if (!staffUser || staffUser.isActive === false) {
+    throw new AppError('Invalid username or password', 401);
+  }
+  if (!staffUser.password) {
+    throw new AppError('This account does not have a password set', 401);
+  }
+  const match = await staffUser.comparePassword(password.trim());
+  if (!match) {
+    throw new AppError('Invalid username or password', 401);
+  }
+
+  if (staffUser.phone) {
+    const code = await issuePhoneOtp(staffUser, staffUser.phone, req.body.lang);
+    return res.json({
+      success: true,
+      mfaRequired: true,
+      mfaToken: generateMfaToken(staffUser),
+      phoneDisplay: maskPhone(staffUser.phone),
+      expiresInMinutes: 10,
+      ...devOtpFields(code),
+    });
+  }
+
+  if (staffMfaRequired()) {
+    throw new AppError('Two-step verification is required. Ask a super admin to add a phone number to your account.', 403);
+  }
+
+  staffUser.lastLoginAt = new Date();
+  await staffUser.save({ validateBeforeSave: false });
+  sendAuthResponse(staffUser, req, res);
+});
+
+const loadMfaStaffUser = async (mfaToken) => {
+  let decoded;
+  try {
+    decoded = verifyMfaToken(String(mfaToken || ''));
+  } catch {
+    throw new AppError('Sign-in expired. Please enter your password again.', 401);
+  }
+  const user = await User.findById(decoded.id).select(OTP_SELECT);
+  if (
+    !user
+    || user.isActive === false
+    || !isStaffRole(user.role)
+    || (decoded.tv || 0) !== (user.tokenVersion || 0)
+  ) {
+    throw new AppError('Sign-in expired. Please enter your password again.', 401);
+  }
+  return user;
+};
+
+/** Admin panel — step 2: SMS code sent after the password step. */
+export const verifyAdminMfa = asyncHandler(async (req, res) => {
+  const { mfaToken, code } = req.body;
+  if (!code || !/^\d{6}$/.test(String(code).trim())) {
+    throw new AppError('A valid 6-digit verification code is required', 400);
+  }
+
+  const user = await loadMfaStaffUser(mfaToken);
+  const result = user.verifyPhoneOtp(code);
+  if (!result.ok) {
+    await user.save({ validateBeforeSave: false });
+    if (result.reason === 'expired') {
+      throw new AppError('Verification code expired. Request a new one.', 400);
     }
-    if (!staffUser.password) {
-      throw new AppError('This account does not have a password set', 401);
+    if (result.reason === 'locked') {
+      throw new AppError('Too many failed attempts. Request a new code.', 429);
     }
-    const match = await staffUser.comparePassword(trimmedPassword);
-    if (!match) {
-      throw new AppError('Invalid username or password', 401);
-    }
-
-    staffUser.lastLoginAt = new Date();
-    await staffUser.save({ validateBeforeSave: false });
-    return sendAuthResponse(staffUser, res);
+    throw new AppError('Invalid verification code', 401);
   }
 
-  const configuredPassword = getConfiguredAdminPassword();
-  if (!configuredPassword) {
-    throw new AppError('Admin password login is not configured on the server', 503);
-  }
+  user.lastLoginAt = new Date();
+  await user.save({ validateBeforeSave: false });
+  sendAuthResponse(user, req, res);
+});
 
-  if (!safePasswordMatch(trimmedPassword, configuredPassword)) {
-    throw new AppError('Invalid admin password', 401);
-  }
-
-  const adminUser = await User.findOne({ role: 'super_admin' })
-    || await User.findOne({ role: 'admin' })
-    || await User.findOne({ role: 'manager' });
-
-  if (!adminUser || !isStaffRole(adminUser.role)) {
-    throw new AppError('No admin account found. Run npm run seed from the project root.', 503);
-  }
-
-  adminUser.lastLoginAt = new Date();
-  await adminUser.save({ validateBeforeSave: false });
-  sendAuthResponse(adminUser, res);
+/** Admin panel — resend the step-2 SMS code. */
+export const resendAdminMfa = asyncHandler(async (req, res) => {
+  const user = await loadMfaStaffUser(req.body.mfaToken);
+  const code = await issuePhoneOtp(user, user.phone, req.body.lang);
+  res.json({
+    success: true,
+    mfaRequired: true,
+    phoneDisplay: maskPhone(user.phone),
+    expiresInMinutes: 10,
+    ...devOtpFields(code),
+  });
 });
 
 /**
@@ -344,7 +393,7 @@ export const driverLogin = asyncHandler(async (req, res) => {
 
   driverUser.lastLoginAt = new Date();
   await driverUser.save({ validateBeforeSave: false });
-  sendAuthResponse(driverUser, res);
+  sendAuthResponse(driverUser, req, res);
 });
 
 export const logout = asyncHandler(async (req, res) => {
@@ -356,6 +405,7 @@ export const logout = asyncHandler(async (req, res) => {
       { upsert: true },
     );
   }
+  clearSessionCookie(res);
   res.status(200).json({ success: true, message: 'Logged out successfully' });
 });
 

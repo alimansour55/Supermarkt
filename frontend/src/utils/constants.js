@@ -8,6 +8,8 @@ export const APP_NAME_EN = 'MarketPlus';
 
 export const STORAGE_KEYS = {
   TOKEN: 'marketplus_token',
+  /** Non-secret flag: a cookie session probably exists, so fetch /auth/me on load. */
+  SESSION_HINT: 'marketplus_session',
   CART: 'marketplus_cart',
   LANGUAGE: 'marketplus_lang',
   DISCOUNT: 'marketplus_discount',

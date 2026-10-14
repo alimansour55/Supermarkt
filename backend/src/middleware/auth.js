@@ -5,11 +5,24 @@ import { AppError } from '../utils/AppError.js';
 import { STAFF_ROLES } from '../constants/roles.js';
 import { hasUserPermission } from '../constants/permissions.js';
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * Bearer header first (native app / legacy clients), then the httpOnly session cookie.
+ * Cookie sessions on state-changing requests must carry X-Requested-With: browsers only
+ * send custom headers cross-origin after a CORS preflight, which our allowlist blocks —
+ * so a forged form post from another site can't ride the cookie (CSRF).
+ */
 const extractToken = (req) => {
   if (req.headers.authorization?.startsWith('Bearer ')) {
     return req.headers.authorization.split(' ')[1];
   }
-  return req.cookies?.token || null;
+  const fromCookie = req.cookies?.token;
+  if (!fromCookie) return null;
+  if (!SAFE_METHODS.has(req.method) && !req.get('X-Requested-With')) {
+    throw new AppError('Missing X-Requested-With header', 403);
+  }
+  return fromCookie;
 };
 
 /**
@@ -19,6 +32,10 @@ const extractToken = (req) => {
  */
 export const resolveSessionUser = async (token) => {
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  // Purpose-bound tokens (e.g. the admin SMS-step ticket) are never sessions.
+  if (decoded.purpose) {
+    throw new AppError('Not authorized — invalid token', 401);
+  }
 
   const [user, revoked] = await Promise.all([
     User.findById(decoded.id),
