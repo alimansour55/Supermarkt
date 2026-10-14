@@ -169,34 +169,35 @@ assigned → accepted → picked_up → en_route → arrived → delivered
 
 ## Phase 4: Smarter dispatch and driver experience
 
-- [ ] Auto-assign scoring: active load + **distance from driver (`lastLocation`) or store to destination** +
-      zone match + idle time. Today it uses least-busy only.
-- [ ] Driver profile: vehicle type, capacity, home zones and branch (`fulfillmentLocationId`).
+- [x] Auto-assign ranking: fewest active deliveries → **closest to the pickup branch** (driver's GPS in the
+      last 15 min vs. the order's fulfillment location) → idle longest. Drivers with no recent GPS rank after
+      located ones at the same load.
+- [ ] Driver profile: vehicle type, capacity, home zones and branch (`fulfillmentLocationId`), with zone filtering in auto-assign.
 - [ ] Batching: suggest grouping orders that share a zone and slot onto one driver.
-- [ ] Multi-stop route: "Start route" orders the stops (nearest-neighbour, or the OSRM `trip` API) and
-      opens Google Maps with waypoints.
-- [ ] Driver home dashboard: today's deliveries, km driven, on-time %, cash in hand, and earnings
-      (per-delivery fee and zone bonus from settings).
-- [ ] History: pagination, a date filter, and a daily summary.
-- [ ] UX: large tap targets, a swipe-to-confirm slider for Complete (prevents accidental taps),
-      dark mode for night shifts, and full Arabic-first copy review.
+- [x] Multi-stop route: "Start route — N stops" orders the active stops nearest-first and opens Google Maps with
+      waypoints. It opens synchronously inside the tap, so phone browsers don't block it.
+- [x] Driver performance on the account page: delivered, failed, success rate, average delivery minutes, and cash
+      collected, for Today / 7 days / 30 days (`GET /orders/driver/stats`).
+- [x] History: server pagination (`page`, `limit`, `from`, `to`) with "Load more". Today's counts come from the stats endpoint.
+- [ ] UX: swipe-to-confirm, dark mode for night shifts, full Arabic-first copy review.
 
 ---
 
 ## Phase 5: Admin tools for drivers
 
-- [ ] Live map: stale-GPS alerts, a "reassign" action from the map, and the driver's trail for the current order.
-- [ ] Driver performance page: delivered/failed counts, average time from assign to delivery, on-time rate,
-      geofence flags and cash mismatches.
-- [ ] Delivery timeline on the order panel: assigned → accepted → picked up → arrived → delivered, with timestamps
-      and who did each step.
+- [ ] Live map: a "reassign" action from the map, and the driver's trail for the current order.
+- [x] **Driver performance** page (`/admin/driver-performance`): delivered, failed, success rate, average
+      assign→delivered time, declines, expired assignments, away-from-address and missing-at-pickup flags,
+      cash held, and last GPS, for Today / 7 / 30 days.
+- [x] Delivery timeline on the order panel: assigned → accepted → picked up → on the way → arrived (→ returned),
+      plus missing items, cash, geofence flag, wrong-code count, the delivery code for support, and Reattempt.
 
 ---
 
 ## Phase 6: Quality and testing
 
 - [x] Add a backend test setup (`node:test` or Vitest with `mongodb-memory-server`).
-- [ ] Tests: complete is idempotent (double call gives one loyalty award), driver cannot touch another driver's
+- [x] Tests: complete is idempotent (double call gives one loyalty award), driver cannot touch another driver's
       order, PIN and geofence rules, cash ledger balances, auto-assign ranking, and location fan-out.
 - [ ] `scripts/acceptance-driver-flow.js`: seed → assign → accept → pickup → location → arrive → complete with PIN.
 - [ ] Manual QA on a real Android phone: screen locked, switching to Waze, offline then back online, 3 parallel orders.

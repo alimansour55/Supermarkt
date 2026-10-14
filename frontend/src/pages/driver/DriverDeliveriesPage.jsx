@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
-  Banknote, History, ListChecks, LocateFixed, Loader2, Package, RefreshCw, Search, Truck, Wallet, X,
+  Banknote, History, ListChecks, LocateFixed, Loader2, Package, RefreshCw, Route, Search, Truck, Wallet, X,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { orderService } from '../../services/apiServices';
@@ -10,8 +10,10 @@ import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import Loader from '../../components/ui/Loader';
 import DriverDeliveryCard from './components/DriverDeliveryCard';
 import DriverStatCard from './components/DriverStatCard';
-import DriverHistoryList, { groupHistoryByDay } from './components/DriverHistoryList';
-import { formatDriverAddress, haversineKm } from './driverUtils';
+import DriverHistoryList from './components/DriverHistoryList';
+import {
+  formatDriverAddress, haversineKm, multiStopDirectionsUrl, orderStopsByNearest,
+} from './driverUtils';
 
 async function fetchDeliveries() {
   const { data } = await orderService.getDriverDeliveries();
@@ -23,9 +25,16 @@ async function fetchCashBalance() {
   return data.data?.balance ?? 0;
 }
 
-async function fetchHistory() {
-  const { data } = await orderService.getDriverHistory();
-  return data.data || [];
+const HISTORY_PAGE_SIZE = 30;
+
+async function fetchHistoryPage(page = 1) {
+  const { data } = await orderService.getDriverHistory({ page, limit: HISTORY_PAGE_SIZE });
+  return { items: data.data || [], hasMore: Boolean(data.meta?.hasMore) };
+}
+
+async function fetchTodayStats() {
+  const { data } = await orderService.getDriverStats(1);
+  return data.data || null;
 }
 
 function matchesQuery(order, q) {
@@ -39,7 +48,7 @@ function matchesQuery(order, q) {
 export default function DriverDeliveriesPage() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
-  const { isOffline, assignmentsVersion = 0 } = useOutletContext() || {};
+  const { isOffline, assignmentsVersion = 0, geo } = useOutletContext() || {};
   const [tab, setTab] = useState('active');
   const [query, setQuery] = useState('');
   const [nearestOn, setNearestOn] = useState(false);
@@ -65,8 +74,32 @@ export default function DriverDeliveriesPage() {
   }, [assignmentsVersion, refreshAll]);
 
   const {
-    data: history, loading: historyLoading, error: historyError, refetch: refetchHistory,
-  } = useAsyncData(tab === 'history' ? fetchHistory : () => Promise.resolve([]), [tab]);
+    data: firstHistoryPage, loading: historyLoading, error: historyError, refetch: refetchHistoryFirst,
+  } = useAsyncData(tab === 'history' ? () => fetchHistoryPage(1) : () => Promise.resolve(null), [tab]);
+  const { data: todayStats, refetch: refetchTodayStats } = useAsyncData(
+    tab === 'history' ? fetchTodayStats : () => Promise.resolve(null),
+    [tab],
+  );
+  // Later pages appended by "Load more"; reset whenever the first page reloads.
+  const [olderHistory, setOlderHistory] = useState({ forPage: null, items: [], page: 1, hasMore: null });
+  const [loadingMore, setLoadingMore] = useState(false);
+  const older = olderHistory.forPage === firstHistoryPage ? olderHistory : { items: [], page: 1, hasMore: null };
+  const historyHasMore = older.hasMore ?? Boolean(firstHistoryPage?.hasMore);
+  const refetchHistory = useCallback(() => {
+    refetchHistoryFirst();
+    refetchTodayStats();
+  }, [refetchHistoryFirst, refetchTodayStats]);
+  const loadMoreHistory = async () => {
+    setLoadingMore(true);
+    try {
+      const next = await fetchHistoryPage(older.page + 1);
+      setOlderHistory({
+        forPage: firstHistoryPage, items: [...older.items, ...next.items], page: older.page + 1, hasMore: next.hasMore,
+      });
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // The API returns on-the-road orders plus ones assigned ahead of dispatch ("upcoming").
   const activeDeliveries = useMemo(
@@ -78,7 +111,10 @@ export default function DriverDeliveriesPage() {
     [deliveries, query],
   );
   const list = useMemo(() => activeDeliveries.filter((o) => matchesQuery(o, query)), [activeDeliveries, query]);
-  const historyList = history || [];
+  const historyList = useMemo(
+    () => [...(firstHistoryPage?.items || []), ...older.items],
+    [firstHistoryPage, older.items],
+  );
 
   const sortedList = useMemo(() => {
     if (!nearestOn || !myPos) return list;
@@ -93,9 +129,20 @@ export default function DriverDeliveriesPage() {
 
   const codTotal = activeDeliveries.reduce((sum, o) => sum + (o.cashDue || 0), 0);
 
-  const todayHistory = historyList.filter((o) => groupHistoryByDay([o], isAr)[0]?.[0] === (isAr ? 'اليوم' : 'Today'));
-  const deliveredToday = todayHistory.filter((o) => o.orderStatus === 'delivered').length;
-  const failedToday = todayHistory.filter((o) => o.orderStatus === 'delivery_failed').length;
+  const deliveredToday = todayStats?.delivered ?? 0;
+  const failedToday = todayStats?.failed ?? 0;
+
+  // Several stops on the road → one Google Maps route, nearest stop first.
+  const routeStops = useMemo(() => activeDeliveries
+    .map((o) => ({ id: o._id, lat: o.shippingAddress?.lat != null ? Number(o.shippingAddress.lat) : null, lng: o.shippingAddress?.lng != null ? Number(o.shippingAddress.lng) : null }))
+    .filter((s) => s.lat != null && s.lng != null), [activeDeliveries]);
+  // Opened synchronously inside the tap — browsers block windows opened after an async GPS read.
+  // Without an origin, Google Maps starts from the phone's current location by itself.
+  const openRoute = () => {
+    const here = myPos || geo?.lastPosition || null;
+    const url = multiStopDirectionsUrl(here, orderStopsByNearest(here, routeStops));
+    if (url) window.open(url, '_blank', 'noopener');
+  };
 
   const toggleNearest = () => {
     if (nearestOn) {
@@ -286,6 +333,19 @@ export default function DriverDeliveriesPage() {
             </div>
           )}
 
+          {routeStops.length >= 2 && (
+            <button
+              type="button"
+              onClick={openRoute}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-teal-700"
+            >
+              <Route className="h-4 w-4" aria-hidden />
+              {isAr
+                ? `ابدأ المسار — ${routeStops.length} محطات (الأقرب أولاً)`
+                : `Start route — ${routeStops.length} stops (nearest first)`}
+            </button>
+          )}
+
           {sortedList.length > 0 && (
             <ul className="space-y-3">
               {sortedList.map((order) => (
@@ -359,6 +419,16 @@ export default function DriverDeliveriesPage() {
           )}
 
           {historyList.length > 0 && <DriverHistoryList history={historyList} isAr={isAr} />}
+          {historyList.length > 0 && historyHasMore && (
+            <button
+              type="button"
+              onClick={loadMoreHistory}
+              disabled={loadingMore}
+              className="w-full rounded-xl border border-slate-200 bg-white py-3 text-sm font-semibold text-teal-700 shadow-sm disabled:opacity-60"
+            >
+              {loadingMore ? (isAr ? 'جاري التحميل…' : 'Loading…') : (isAr ? 'عرض المزيد' : 'Load more')}
+            </button>
+          )}
         </>
       )}
     </div>

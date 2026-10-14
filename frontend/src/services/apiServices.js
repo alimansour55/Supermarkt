@@ -51,7 +51,8 @@ export const orderService = {
   getDriverConfig: () => api.get('/orders/driver/config'),
   setDriverAvailability: (available) => api.put('/orders/driver/availability', { available }),
   getDriverDeliveries: () => api.get('/orders/driver/deliveries'),
-  getDriverHistory: () => api.get('/orders/driver/deliveries/history'),
+  getDriverHistory: (params = {}) => api.get('/orders/driver/deliveries/history', { params }),
+  getDriverStats: (days = 1) => api.get('/orders/driver/stats', { params: { days } }),
   getDriverDelivery: (id) => api.get(`/orders/driver/deliveries/${id}`),
   /** `fields`: { cashCollected?, deliveryPin?, offsiteReason? } — sent as multipart when a photo is attached. */
   completeDriverDelivery: (id, photoFile, fields = {}) => {

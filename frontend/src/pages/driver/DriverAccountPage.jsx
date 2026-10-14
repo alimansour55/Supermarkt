@@ -1,5 +1,8 @@
 import { useOutletContext } from 'react-router-dom';
-import { LogOut, Package, Phone, ShieldCheck, UserRound, XCircle } from 'lucide-react';
+import { useState } from 'react';
+import {
+  LogOut, Package, Percent, Phone, ShieldCheck, Timer, UserRound, XCircle,
+} from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { orderService } from '../../services/apiServices';
@@ -8,12 +11,13 @@ import Button from '../../components/ui/Button';
 import DriverAvailabilityToggle from '../../components/driver/DriverAvailabilityToggle';
 import DriverStatCard from './components/DriverStatCard';
 import DriverCashCard from './components/DriverCashCard';
-import { isToday } from './driverUtils';
+import { formatPrice } from '../../utils/formatters';
 
-async function fetchHistory() {
-  const { data } = await orderService.getDriverHistory();
-  return data.data || [];
-}
+const RANGES = [
+  { days: 1, ar: 'اليوم', en: 'Today' },
+  { days: 7, ar: '7 أيام', en: '7 days' },
+  { days: 30, ar: '30 يوم', en: '30 days' },
+];
 
 async function fetchCash() {
   const { data } = await orderService.getDriverCash();
@@ -36,13 +40,14 @@ export default function DriverAccountPage() {
   const { user, logout } = useAuth();
   const isAr = language === 'ar';
   const { config, setAvailability, availabilityBusy } = useOutletContext() || {};
-  const { data: history } = useAsyncData(fetchHistory, []);
+  const [days, setDays] = useState(1);
+  const { data: stats } = useAsyncData(async () => {
+    const { data } = await orderService.getDriverStats(days);
+    return data.data || null;
+  }, [days]);
   const { data: cash } = useAsyncData(fetchCash, []);
 
   const availabilityEnabled = config?.availabilityEnabled === true;
-  const todayOrders = (history || []).filter((o) => isToday(o.deliveredAt));
-  const deliveredToday = todayOrders.filter((o) => o.orderStatus === 'delivered').length;
-  const failedToday = todayOrders.filter((o) => o.orderStatus === 'delivery_failed').length;
 
   return (
     <div className="space-y-5">
@@ -53,17 +58,47 @@ export default function DriverAccountPage() {
         </p>
       </div>
 
-      {history && history.length > 0 && (
-        <div>
-          <p className="mb-2 px-1 text-xs font-bold uppercase tracking-wide text-slate-400">
-            {isAr ? 'أداء اليوم' : "Today's performance"}
+      <div>
+        <div className="mb-2 flex items-center justify-between px-1">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+            {isAr ? 'أدائي' : 'My performance'}
           </p>
-          <div className="grid grid-cols-2 gap-2.5">
-            <DriverStatCard icon={Package} label={isAr ? 'تم التسليم' : 'Delivered'} value={deliveredToday} accent="emerald" />
-            <DriverStatCard icon={XCircle} label={isAr ? 'فشل' : 'Failed'} value={failedToday} accent="red" />
+          <div className="flex gap-1 rounded-lg bg-slate-200/60 p-0.5">
+            {RANGES.map((r) => (
+              <button
+                key={r.days}
+                type="button"
+                onClick={() => setDays(r.days)}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold ${days === r.days ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500'}`}
+              >
+                {isAr ? r.ar : r.en}
+              </button>
+            ))}
           </div>
         </div>
-      )}
+        <div className="grid grid-cols-2 gap-2.5">
+          <DriverStatCard icon={Package} label={isAr ? 'تم التسليم' : 'Delivered'} value={stats?.delivered ?? '—'} accent="emerald" />
+          <DriverStatCard icon={XCircle} label={isAr ? 'فشل' : 'Failed'} value={stats?.failed ?? '—'} accent="red" />
+          <DriverStatCard
+            icon={Percent}
+            label={isAr ? 'نسبة النجاح' : 'Success rate'}
+            value={stats?.successRate != null ? `${stats.successRate}%` : '—'}
+            accent="teal"
+          />
+          <DriverStatCard
+            icon={Timer}
+            label={isAr ? 'متوسط التوصيل (د)' : 'Avg delivery (min)'}
+            value={stats?.avgPickupToDeliverMin ?? stats?.avgAssignToDeliverMin ?? '—'}
+            accent="violet"
+          />
+        </div>
+        {stats?.cashCollected > 0 && (
+          <p className="mt-2 px-1 text-xs text-slate-500">
+            {isAr ? 'نقدية حُصّلت في الفترة: ' : 'Cash collected in this period: '}
+            <span className="font-semibold text-slate-700">{formatPrice(stats.cashCollected)}</span>
+          </p>
+        )}
+      </div>
 
       {config?.cashTrackingEnabled !== false && <DriverCashCard summary={cash} isAr={isAr} />}
 

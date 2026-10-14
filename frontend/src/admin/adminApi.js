@@ -123,6 +123,7 @@ export const adminApi = {
   assignDriver: (id, data) => api.put(`/orders/admin/${id}/assign-driver`, data),
   reattemptDelivery: (id, data = {}) => api.post(`/orders/admin/${id}/delivery/reattempt`, data),
   getDriverCashBalances: () => api.get('/orders/admin/drivers/cash'),
+  getDriversPerformance: (days = 7) => api.get('/orders/admin/drivers/performance', { params: { days } }),
   getDriverCashLedger: (driverId) => api.get(`/orders/admin/drivers/${driverId}/cash`),
   recordDriverCashHandover: (driverId, data) => api.post(`/orders/admin/drivers/${driverId}/cash/handover`, data),
   adjustDriverCash: (driverId, data) => api.post(`/orders/admin/drivers/${driverId}/cash/adjust`, data),

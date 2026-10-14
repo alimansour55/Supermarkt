@@ -103,3 +103,42 @@ export function isToday(iso) {
     && d.getMonth() === now.getMonth()
     && d.getDate() === now.getDate();
 }
+
+/**
+ * Visit order for several stops: nearest-neighbour from `start` (the driver's position).
+ * Stops without coordinates go last, in their original order.
+ */
+export function orderStopsByNearest(start, stops) {
+  const located = stops.filter((s) => s.lat != null && s.lng != null);
+  const unlocated = stops.filter((s) => s.lat == null || s.lng == null);
+  const route = [];
+  let from = start;
+  const remaining = [...located];
+  while (remaining.length) {
+    let best = 0;
+    if (from) {
+      let bestKm = Infinity;
+      remaining.forEach((stop, i) => {
+        const km = haversineKm(from, stop) ?? Infinity;
+        if (km < bestKm) { bestKm = km; best = i; }
+      });
+    }
+    const [next] = remaining.splice(best, 1);
+    route.push(next);
+    from = next;
+  }
+  return [...route, ...unlocated];
+}
+
+/** Google Maps directions through several stops (Maps supports up to 9 waypoints). */
+export function multiStopDirectionsUrl(origin, stops) {
+  const point = (p) => `${p.lat},${p.lng}`;
+  const located = stops.filter((s) => s.lat != null && s.lng != null).slice(0, 10);
+  if (!located.length) return '';
+  const destination = located[located.length - 1];
+  const waypoints = located.slice(0, -1).map(point).join('|');
+  const params = new URLSearchParams({ api: '1', destination: point(destination), travelmode: 'driving' });
+  if (origin) params.set('origin', point(origin));
+  if (waypoints) params.set('waypoints', waypoints);
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
+}

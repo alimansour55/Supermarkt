@@ -47,6 +47,7 @@ import {
   roundMoney,
 } from '../services/driverCash.service.js';
 import User from '../models/User.js';
+import { getDriverStats } from '../services/driverStats.service.js';
 import { CLOUDINARY_FOLDERS, deleteFromCloudinary, uploadFileToCloudinary } from '../utils/cloudinaryUpload.js';
 
 /** Statuses a driver can see before dispatch — assigned ahead of time, not yet on the road. */
@@ -343,18 +344,38 @@ export const getDriverDeliveries = asyncHandler(async (req, res) => {
 });
 
 export const getDriverHistory = asyncHandler(async (req, res) => {
-  const orders = await Order.find({
+  const page = Math.max(1, Math.round(Number(req.query.page) || 1));
+  const limit = Math.min(100, Math.max(5, Math.round(Number(req.query.limit) || 30)));
+  const filter = {
     assignedDriver: req.user._id,
     orderStatus: { $in: ['delivered', 'delivery_failed'] },
-  })
+  };
+  const from = req.query.from ? new Date(req.query.from) : null;
+  const to = req.query.to ? new Date(req.query.to) : null;
+  if ((from && !Number.isNaN(from.getTime())) || (to && !Number.isNaN(to.getTime()))) {
+    filter.updatedAt = {};
+    if (from && !Number.isNaN(from.getTime())) filter.updatedAt.$gte = from;
+    if (to && !Number.isNaN(to.getTime())) filter.updatedAt.$lte = to;
+  }
+
+  // One extra row tells us whether another page exists without a count query.
+  const orders = await Order.find(filter)
     .populate('user', 'name')
-    .sort({ deliveredAt: -1, updatedAt: -1 })
-    .limit(100);
+    .sort({ updatedAt: -1, _id: -1 })
+    .skip((page - 1) * limit)
+    .limit(limit + 1);
 
   res.json({
     success: true,
-    data: orders.map(formatDriverHistoryOrder),
+    data: orders.slice(0, limit).map(formatDriverHistoryOrder),
+    meta: { page, limit, hasMore: orders.length > limit },
   });
+});
+
+export const getDriverStatsSummary = asyncHandler(async (req, res) => {
+  const days = Math.min(90, Math.max(1, Math.round(Number(req.query.days) || 1)));
+  const data = await getDriverStats(req.user._id, { days });
+  res.json({ success: true, data: { ...data, days } });
 });
 
 export const getDriverDeliveryById = asyncHandler(async (req, res) => {

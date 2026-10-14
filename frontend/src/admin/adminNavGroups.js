@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  Gauge,
   Package,
   PackageX,
   FolderOpen,
@@ -122,6 +123,13 @@ export const ADMIN_NAV_GROUPS = [
         labelAr: 'نقدية المناديب',
         labelEn: 'Driver cash',
         Icon: Banknote,
+        permission: 'orders:read',
+      },
+      {
+        path: '/admin/driver-performance',
+        labelAr: 'أداء المناديب',
+        labelEn: 'Driver performance',
+        Icon: Gauge,
         permission: 'orders:read',
       },
       {

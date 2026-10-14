@@ -27,6 +27,7 @@ const NAV_KEYWORDS = {
   '/admin/banners': ['banner', 'بانر', 'بنر', 'حملة', 'حملات', 'campaign', 'slider', 'سلايدر', 'اعلان', 'إعلان'],
   '/admin/orders': ['order', 'طلب', 'طلبات', 'اوردر', 'أوردر', 'purchase', 'مشتريات', 'invoice', 'شحنة', 'shipment', 'checkout'],
   '/admin/invoices': ['invoice', 'فاتورة', 'فواتير', 'receipt', 'إيصال', 'ايصال', 'pdf', 'رقم فاتورة', 'invoice number', 'رقم عميل', 'customer number'],
+  '/admin/driver-performance': ['performance', 'أداء', 'مندوب', 'driver', 'kpi', 'تقييم', 'نسبة النجاح'],
   '/admin/driver-cash': ['cash', 'نقدية', 'تحصيل', 'cod', 'مندوب', 'driver', 'handover', 'تسليم'],
   '/admin/live-deliveries': ['live', 'مباشر', 'تتبع', 'tracking', 'gps', 'map', 'خريطة', 'مندوب', 'driver', 'سائق', 'delivery'],
   '/admin/recurring-deliveries': ['recurring', 'subscription', 'اشتراك', 'اشتراكات', 'دوري', 'متكرر', 'schedule', 'جدولة'],

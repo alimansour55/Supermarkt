@@ -2,6 +2,7 @@ import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { logAudit } from '../services/auditLog.service.js';
 import User from '../models/User.js';
+import { getDriverPerformance } from '../services/driverStats.service.js';
 import {
   getDriverCashSummary,
   listDriverCashBalances,
@@ -69,4 +70,11 @@ export const adjustDriverCash = asyncHandler(async (req, res) => {
     changes: { amount, balanceAfter: entry.balanceAfter, note },
   });
   res.json({ success: true, data: await getDriverCashSummary(driver._id, { limit: 100 }) });
+});
+
+/** Per-driver outcomes over the last N days (admin driver performance page). */
+export const getDriversPerformance = asyncHandler(async (req, res) => {
+  const days = Math.min(90, Math.max(1, Math.round(Number(req.query.days) || 7)));
+  const data = await getDriverPerformance({ days });
+  res.json({ success: true, data: { ...data, days } });
 });

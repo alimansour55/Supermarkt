@@ -1,5 +1,7 @@
 import Order from '../models/Order.js';
 import User from '../models/User.js';
+import FulfillmentLocation from '../models/FulfillmentLocation.js';
+import { haversineMeters } from './googleMaps.service.js';
 import { logAudit } from './auditLog.service.js';
 import { createNotification } from './notification.service.js';
 import { createUserNotification } from './userNotification.service.js';
@@ -19,11 +21,24 @@ export async function getActiveDeliveryCounts() {
   return Object.fromEntries(rows.map((row) => [String(row._id), row.count]));
 }
 
+/** A driver's last GPS fix older than this is ignored for distance ranking. */
+const LOCATION_FRESH_MS = 15 * 60 * 1000;
+
+/** Where the driver collects the order: its fulfillment branch, when it has one with coordinates. */
+async function pickupPointFor(order) {
+  const ref = order?.fulfillmentLocationId;
+  if (!ref) return null;
+  const location = ref.lat != null ? ref : await FulfillmentLocation.findById(ref).select('lat lng').lean();
+  return location?.lat != null && location?.lng != null ? { lat: location.lat, lng: location.lng } : null;
+}
+
 /**
  * Choose the best driver for an automatic assignment, or null when none qualifies.
- * Least-busy first, ties broken by the driver who has been idle longest.
+ * Ranking: fewest active deliveries first; then, when the order's pickup branch and the
+ * driver's recent GPS are known, the closest driver; then whoever has been idle longest.
+ * Drivers with no recent location rank after located ones at the same load.
  */
-export async function pickAutoAssignDriver(driverSettings, { excludeId } = {}) {
+export async function pickAutoAssignDriver(driverSettings, { excludeId, order } = {}) {
   const settings = driverSettings || (await getDriverSettings());
 
   const query = { role: 'driver', isActive: { $ne: false } };
@@ -35,21 +50,29 @@ export async function pickAutoAssignDriver(driverSettings, { excludeId } = {}) {
   }
 
   const drivers = await User.find(query)
-    .select('name phone username driverAvailableAt lastLoginAt')
+    .select('name phone username driverAvailableAt lastLoginAt driverLastLocation')
     .lean();
   if (!drivers.length) return null;
 
-  const counts = await getActiveDeliveryCounts();
+  const [counts, pickup] = await Promise.all([getActiveDeliveryCounts(), pickupPointFor(order)]);
   const cap = Number(settings.autoAssignMaxActive) || 0;
+  const now = Date.now();
 
   const ranked = drivers
-    .map((driver) => ({
-      driver,
-      active: counts[String(driver._id)] || 0,
-      idleSince: new Date(driver.driverAvailableAt || driver.lastLoginAt || 0).getTime(),
-    }))
+    .map((driver) => {
+      const loc = driver.driverLastLocation;
+      const fresh = loc?.at && now - new Date(loc.at).getTime() <= LOCATION_FRESH_MS;
+      return {
+        driver,
+        active: counts[String(driver._id)] || 0,
+        distance: pickup && fresh ? haversineMeters(loc.lat, loc.lng, pickup.lat, pickup.lng) : Infinity,
+        idleSince: new Date(driver.driverAvailableAt || driver.lastLoginAt || 0).getTime(),
+      };
+    })
     .filter((entry) => cap <= 0 || entry.active < cap)
-    .sort((a, b) => a.active - b.active || a.idleSince - b.idleSince);
+    .sort((a, b) => a.active - b.active
+      || (a.distance === b.distance ? 0 : a.distance < b.distance ? -1 : 1)
+      || a.idleSince - b.idleSince);
 
   return ranked.length ? ranked[0].driver : null;
 }
@@ -65,7 +88,7 @@ export async function autoAssignDriverToOrder(order, { req } = {}) {
   const settings = await getDriverSettings();
   if (!settings.autoAssignEnabled) return null;
 
-  const driver = await pickAutoAssignDriver(settings);
+  const driver = await pickAutoAssignDriver(settings, { order });
 
   if (!driver) {
     await createNotification({
@@ -166,7 +189,7 @@ export async function releaseAssignment(orderId, driverId, { reason, req } = {})
   const settings = await getDriverSettings();
   let nextDriver = null;
   if (settings.autoAssignEnabled) {
-    nextDriver = await pickAutoAssignDriver(settings, { excludeId: driverId });
+    nextDriver = await pickAutoAssignDriver(settings, { excludeId: driverId, order: released });
     if (nextDriver) {
       const now = new Date();
       const claimed = await Order.findOneAndUpdate(

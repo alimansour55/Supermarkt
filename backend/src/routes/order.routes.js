@@ -83,11 +83,13 @@ import {
   getDriverCash,
   returnDriverDelivery,
   updateDriverShiftLocation,
+  getDriverStatsSummary,
 } from '../controllers/driver.controller.js';
 import {
   adjustDriverCash,
   getDriverCashBalances,
   getDriverCashLedger,
+  getDriversPerformance,
   recordDriverCashHandover,
 } from '../controllers/driverCash.controller.js';
 import {
@@ -115,6 +117,7 @@ router.patch('/recurring-deliveries/:id/cancel', cancelMyRecurringDelivery);
 
 router.get('/admin/delivery-staff', ...adminOnly, getDeliveryStaff);
 router.get('/admin/drivers/cash', ...requirePermission('orders:read'), getDriverCashBalances);
+router.get('/admin/drivers/performance', ...requirePermission('orders:read'), getDriversPerformance);
 router.get('/admin/drivers/:driverId/cash', ...requirePermission('orders:read'), getDriverCashLedger);
 router.post('/admin/drivers/:driverId/cash/handover', ...requirePermission('orders:write'), recordDriverCashHandover);
 router.post('/admin/drivers/:driverId/cash/adjust', ...requirePermission('orders:write'), adjustDriverCash);
@@ -177,6 +180,7 @@ router.put('/driver/location', ...driverOnly, driverShiftLocationLimiter, update
 router.get('/driver/deliveries', ...driverOnly, getDriverDeliveries);
 router.get('/driver/deliveries/history', ...driverOnly, getDriverHistory);
 router.get('/driver/cash', ...driverOnly, getDriverCash);
+router.get('/driver/stats', ...driverOnly, getDriverStatsSummary);
 router.get('/driver/deliveries/:id', ...driverOnly, getDriverDeliveryById);
 router.post('/driver/deliveries/:id/accept', ...driverOnly, acceptDriverDelivery);
 router.post('/driver/deliveries/:id/reject', ...driverOnly, rejectDriverDelivery);
