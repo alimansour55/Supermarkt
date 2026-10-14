@@ -3,6 +3,7 @@ import Product from '../models/Product.js';
 import Brand from '../models/Brand.js';
 import Category from '../models/Category.js';
 import { AppError } from '../utils/AppError.js';
+import { hasUserPermission } from '../constants/permissions.js';
 import { formatProduct } from '../utils/formatters.js';
 import { buildSimilarProducts } from '../utils/relatedProducts.js';
 import { slugify } from '../utils/slugify.js';
@@ -971,6 +972,9 @@ export const bulkAdminProducts = asyncHandler(async (req, res) => {
   } else if (action === 'deactivate') {
     await Product.updateMany(filter, { isActive: false });
   } else if (action === 'delete') {
+    if (!hasUserPermission(req.user, 'products:delete')) {
+      throw new AppError('You do not have permission to perform this action', 403);
+    }
     const products = await Product.find(filter);
     await Promise.all(products.map((p) => deleteProductCloudinaryAssets(p)));
     await Product.deleteMany(filter);

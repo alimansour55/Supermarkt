@@ -110,6 +110,11 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    /** Set whenever the password changes — tokens issued before this are rejected by `protect`. */
+    passwordChangedAt: {
+      type: Date,
+      default: null,
+    },
     /** Delivery drivers only — whether the driver is on shift and can receive auto-assigned orders. */
     driverAvailable: {
       type: Boolean,
@@ -219,6 +224,8 @@ userSchema.pre('validate', function requirePhoneForCustomers(next) {
 userSchema.pre('save', async function hashPassword(next) {
   if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
+  // Backdate 1s so a token issued right after this save (same second) stays valid.
+  if (!this.isNew) this.passwordChangedAt = new Date(Date.now() - 1000);
   next();
 });
 
