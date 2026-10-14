@@ -1,4 +1,5 @@
 import { formatAddressForGeocoding, structureGeocodePayload } from '../utils/addressGeo.js';
+import { logger } from '../utils/logger.js';
 
 const GEOCODE_URL = 'https://maps.googleapis.com/maps/api/geocode/json';
 const DIRECTIONS_URL = 'https://maps.googleapis.com/maps/api/directions/json';
@@ -24,7 +25,7 @@ function getApiKey() {
 export async function geocodeAddress(input) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.warn('[googleMaps] GOOGLE_MAPS_API_KEY is not set — skipping geocode');
+    logger.warn('[googleMaps] GOOGLE_MAPS_API_KEY is not set — skipping geocode');
     return null;
   }
 
@@ -164,7 +165,7 @@ function mergeGeocodePayloads(primary, secondary) {
 export async function reverseGeocode(lat, lng) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.warn('[googleMaps] GOOGLE_MAPS_API_KEY is not set — skipping reverse geocode');
+    logger.warn('[googleMaps] GOOGLE_MAPS_API_KEY is not set — skipping reverse geocode');
     return null;
   }
 
@@ -304,7 +305,7 @@ async function fetchNewPlaceSuggestions(query, apiKey, language, biasLat, biasLn
         err.code = 'MAPS_REQUEST_DENIED';
         throw err;
       }
-      console.warn('[googleMaps] Places API (New) autocomplete:', response.status, message);
+      logger.warn('[googleMaps] Places API (New) autocomplete:', response.status, message);
       return [];
     }
 
@@ -322,7 +323,7 @@ async function fetchNewPlaceSuggestions(query, apiKey, language, biasLat, biasLn
       }));
   } catch (error) {
     if (error.code === 'MAPS_REQUEST_DENIED' || error.code === 'QUOTA_EXCEEDED') throw error;
-    console.warn('[googleMaps] Places API (New) autocomplete failed:', error.message);
+    logger.warn('[googleMaps] Places API (New) autocomplete failed:', error.message);
     return [];
   }
 }
@@ -347,7 +348,7 @@ async function fetchLegacyPlaceSuggestions(query, apiKey, language, biasLat, bia
 
   const data = await response.json();
   if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-    console.warn('[googleMaps] Legacy Places autocomplete status:', data.status, data.error_message);
+    logger.warn('[googleMaps] Legacy Places autocomplete status:', data.status, data.error_message);
     if (isQuotaExceededMessage(data.error_message)) {
       const err = new Error(data.error_message || 'Google Places quota exceeded');
       err.code = 'QUOTA_EXCEEDED';

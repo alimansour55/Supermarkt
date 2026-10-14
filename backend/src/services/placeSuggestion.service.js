@@ -2,6 +2,7 @@ import { getPlaceSuggestions } from './googleMaps.service.js';
 import { getOsmSuggestions } from './osmGeocode.service.js';
 import { getPhotonSuggestions } from './photonGeocode.service.js';
 import { searchDeliveryZoneSuggestions } from './deliveryZone.service.js';
+import { logger } from '../utils/logger.js';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const EMPTY_CACHE_TTL_MS = 60 * 1000;
@@ -111,9 +112,9 @@ export async function getAddressSuggestions(input, { language = 'ar', biasLat, b
       if (isQuotaError(error)) {
         disableGoogleTemporarily();
         googleError = 'quota';
-        console.warn('[placeSuggestion] Google quota exceeded — using OSM/local fallbacks for 30 min');
+        logger.warn('[placeSuggestion] Google quota exceeded — using OSM/local fallbacks for 30 min');
       } else if (error.code !== 'MAPS_NOT_CONFIGURED') {
-        console.warn('[placeSuggestion] Google failed:', error.message);
+        logger.warn('[placeSuggestion] Google failed:', error.message);
       }
     }
   } else {
@@ -134,7 +135,7 @@ export async function getAddressSuggestions(input, { language = 'ar', biasLat, b
       getPhotonSuggestions(query, { language, lat: biasLat, lng: biasLng }),
     ]);
   } catch (error) {
-    console.warn('[placeSuggestion] Open geocoder failed:', error.message);
+    logger.warn('[placeSuggestion] Open geocoder failed:', error.message);
   }
 
   const openMap = mergeSuggestions(photon, osm);

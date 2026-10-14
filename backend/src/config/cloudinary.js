@@ -1,10 +1,11 @@
 import { v2 as cloudinary } from 'cloudinary';
+import { logger } from '../utils/logger.js';
 
 const configureCloudinary = () => {
   const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = process.env;
 
   if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
-    console.warn('Cloudinary credentials missing — image uploads will be disabled');
+    logger.warn('Cloudinary credentials missing — image uploads will be disabled');
     return false;
   }
 

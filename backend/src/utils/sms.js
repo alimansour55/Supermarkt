@@ -1,5 +1,6 @@
 import { AppError } from './AppError.js';
 import { twilioClient, isSmsConfigured, getTwilioPhoneNumber } from '../config/sms.js';
+import { logger } from './logger.js';
 
 const OTP_MESSAGE_AR = (code) =>
   `رمز التحقق من سوق+: ${code}\nصالح لمدة 10 دقائق. لا تشارك هذا الرمز مع أحد.`;
@@ -9,12 +10,12 @@ const OTP_MESSAGE_EN = (code) =>
 
 const logDevOtp = (phone, code) => {
   const line = '='.repeat(52);
-  console.log(`\n${line}`);
-  console.log('  📱  MARKETPLUS — DEV SMS CODE (no Twilio)');
-  console.log(`  Phone: ${phone}`);
-  console.log(`  OTP:   ${code}`);
-  console.log('  Valid for 10 minutes');
-  console.log(`${line}\n`);
+  logger.info(`\n${line}`);
+  logger.info('  📱  MARKETPLUS — DEV SMS CODE (no Twilio)');
+  logger.info(`  Phone: ${phone}`);
+  logger.info(`  OTP:   ${code}`);
+  logger.info('  Valid for 10 minutes');
+  logger.info(`${line}\n`);
 };
 
 /**

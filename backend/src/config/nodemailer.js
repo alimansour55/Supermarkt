@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { logger } from '../utils/logger.js';
 
 let transporter = null;
 
@@ -6,7 +7,7 @@ const configureNodemailer = () => {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
 
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    console.warn('SMTP credentials missing — email sending will be disabled');
+    logger.warn('SMTP credentials missing — email sending will be disabled');
     return null;
   }
 

@@ -1,5 +1,6 @@
 import { buildAddressSearchVariants, rankAddressSuggestions } from '../utils/addressQuery.js';
 import { structureGeocodePayload } from '../utils/addressGeo.js';
+import { logger } from '../utils/logger.js';
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 
@@ -56,7 +57,7 @@ async function fetchOsmVariant(searchQuery, language) {
 
   if (!response.ok) {
     if (response.status === 429) {
-      console.warn('[osmGeocode] Nominatim rate limit — try again in a moment');
+      logger.warn('[osmGeocode] Nominatim rate limit — try again in a moment');
       return [];
     }
     throw new Error(`OSM search failed (${response.status})`);

@@ -56,6 +56,7 @@ import {
   notifyCustomerOrderStatus,
   notifyCustomerTrackingLive,
 } from '../services/orderTrackingNotify.service.js';
+import { logger } from '../utils/logger.js';
 
 async function loadOrderForAdmin(id) {
   const order = await Order.findById(id)
@@ -142,7 +143,7 @@ async function cancelOrderInternal(order, { reason, actor, isAdmin }) {
   const user = order.user?._id ? order.user : await User.findById(order.user);
   await notifyOrderTimeline(order, user, 'cancelled');
   await notifyCustomerOrderStatus(order, user, 'cancelled', previousStatus)
-    .catch((err) => console.error('Order tracking notify failed:', err.message));
+    .catch((err) => logger.error('Order tracking notify failed:', err.message));
   await notifyOrderStatusChange(order._id, 'cancelled', previousStatus);
 
   return order;
@@ -368,10 +369,10 @@ export const assignDriver = asyncHandler(async (req, res) => {
       .populate('user', 'name email phone')
       .populate('assignedDriver', 'name phone');
     notifyCustomerDriverAssigned(populated, populated.user, populated.assignedDriver)
-      .catch((err) => console.error('Driver assign notify failed:', err.message));
+      .catch((err) => logger.error('Driver assign notify failed:', err.message));
     if (order.orderStatus === 'out_for_delivery') {
       notifyCustomerTrackingLive(populated, populated.user)
-        .catch((err) => console.error('Tracking live notify failed:', err.message));
+        .catch((err) => logger.error('Tracking live notify failed:', err.message));
     }
   }
 

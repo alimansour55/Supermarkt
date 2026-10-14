@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import { logAudit } from './auditLog.service.js';
 import { createNotification } from './notification.service.js';
 import { getDriverSettings } from './storeSettings.service.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Active delivery count per driver — orders currently out for delivery.
@@ -73,7 +74,7 @@ export async function autoAssignDriverToOrder(order, { req } = {}) {
       messageEn: `Order #${order.orderNumber} is out for delivery with no driver — no driver was available for auto-assignment.`,
       link: `/admin/orders?order=${order._id}`,
       data: { orderId: order._id, orderNumber: order.orderNumber },
-    }).catch((err) => console.error('Auto-assign alert failed:', err.message));
+    }).catch((err) => logger.error('Auto-assign alert failed:', err.message));
     return null;
   }
 

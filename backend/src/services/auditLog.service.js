@@ -1,4 +1,5 @@
 import AuditLog from '../models/AuditLog.js';
+import { logger } from '../utils/logger.js';
 
 export async function logAudit({
   req,
@@ -22,7 +23,7 @@ export async function logAudit({
       userAgent: req?.headers?.['user-agent'],
     });
   } catch (err) {
-    console.error('Audit log failed:', err.message);
+    logger.error('Audit log failed:', err.message);
   }
 }
 

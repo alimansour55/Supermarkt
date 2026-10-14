@@ -9,7 +9,7 @@ Full-stack supermarket e-commerce platform with **Arabic RTL-first** design, ins
 | **Storefront** | Hero slider, category rail, product grids, offers, search, cart drawer, checkout |
 | **RTL / i18n** | Arabic default (RTL) + English toggle, Cairo font |
 | **Responsive** | Mobile, tablet, and desktop layouts |
-| **Auth** | Register, login, JWT, email verification, password reset |
+| **Auth** | Phone + SMS OTP for customers, username/password for staff & drivers, JWT with server-side revocation |
 | **Cart & checkout** | Scheduled/express delivery, coupons, COD + Stripe Checkout |
 | **Admin** | Dashboard, products, categories, orders, users, coupons, banners |
 | **Media** | Cloudinary uploads (products, categories, banners) |
@@ -78,7 +78,7 @@ CLIENT_URL=http://localhost:5173
 **Frontend `.env` (optional):**
 
 ```env
-# Uses Vite proxy to backend when omitted — /api → localhost:5000
+# Uses Vite proxy to backend when omitted — /api → localhost:5001
 VITE_API_URL=/api
 ```
 
@@ -110,7 +110,7 @@ Creates:
 - 24 products (Arabic + English names, prices in EGP)
 - 3 coupon codes
 - Hero & promo banners
-- Admin user: `admin@marketplus.com` / `admin123`
+- Super admin: username `superadmin` / password `admin123` (dev only — set `ADMIN_PASSWORD` in production)
 
 ### 5. Run development servers
 
@@ -122,16 +122,16 @@ npm run dev
 |---------|-----|
 | Storefront | http://localhost:5173 |
 | Admin panel | http://localhost:5173/admin/login |
-| API | http://localhost:5000 |
-| Health check | http://localhost:5000/api/health |
+| API | http://localhost:5001 |
+| Health check | http://localhost:5001/api/health |
 
 ---
 
 ## Demo accounts
 
-| Role | Phone | Notes |
+| Role | Login | Notes |
 |------|-------|-------|
-| Admin | `01012345678` | SMS OTP at `/admin/login` — code in backend console when Twilio is off |
+| Super admin | username `superadmin` / `admin123` | At `/admin/login`. Dev default only — set `ADMIN_PASSWORD` before seeding production. |
 
 **Customers:** Register at `/register` with **name + mobile only**. Every sign-in uses **SMS MFA** (6-digit code).
 
@@ -164,10 +164,33 @@ Without Twilio, OTP codes are printed to the backend terminal in development.
 | `npm run install:all` | Install all dependencies |
 | `npm run dev` | Frontend + backend concurrently |
 | `npm run dev:frontend` | Vite only (port 5173) |
-| `npm run dev:backend` | API only (port 5000) |
+| `npm run dev:backend` | API only (port 5001) |
 | `npm run seed` | Populate MongoDB with demo data |
 | `npm run build` | Production frontend build |
 | `npm start` | Start backend (production) |
+
+---
+
+## Tests & CI
+
+```bash
+cd backend
+npm test        # vitest + supertest against an in-memory MongoDB replica set
+npm run lint
+```
+
+The first run downloads a MongoDB binary (cached under `~/.cache/mongodb-binaries`).
+GitHub Actions (`.github/workflows/ci.yml`) runs backend lint + tests and frontend lint + build on every PR.
+
+## Production notes
+
+| Setting | Why |
+|---------|-----|
+| MongoDB replica set (Atlas is one) | Checkout runs in a real transaction — coupon, points, wallet, stock and the order commit or roll back together. A standalone `mongod` still works, using compensating rollbacks. |
+| `TRUST_PROXY=1` | Behind a reverse proxy / load balancer, so rate limits see real client IPs. |
+| `API_RATE_LIMIT` | Optional whole-API cap per IP per 15 min — enable only once `TRUST_PROXY` is right. |
+| `SENTRY_DSN`, `LOG_LEVEL` | Error reporting and log verbosity. Logs are JSON lines on stdout; every 5xx is logged with a request id that is also returned to the client. |
+| `POST /api/auth/logout-all` | Signs an account out of every device; changing a staff password does the same. |
 
 ---
 
@@ -188,7 +211,7 @@ Without Twilio, OTP codes are printed to the backend terminal in development.
    ```
 2. Local webhooks:
    ```bash
-   stripe listen --forward-to localhost:5000/api/payment/webhook
+   stripe listen --forward-to localhost:5001/api/payment/webhook
    ```
 3. Choose **Online Payment (Stripe)** at checkout.
 

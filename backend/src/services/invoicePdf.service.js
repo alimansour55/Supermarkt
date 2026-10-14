@@ -12,6 +12,7 @@ import {
   getPdfFontBuffer,
   getPdfBoldFontBuffer,
 } from '../utils/arabicPdfText.js';
+import { logger } from '../utils/logger.js';
 
 const require = createRequire(import.meta.url);
 const QRCode = require('qrcode');
@@ -135,12 +136,12 @@ async function loadImage(url) {
     const isPng = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
     const isJpeg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
     if (!isPng && !isJpeg) {
-      console.warn('[invoice] image ignored — only PNG or JPEG are supported');
+      logger.warn('[invoice] image ignored — only PNG or JPEG are supported');
       return null;
     }
     return buf;
   } catch (err) {
-    console.warn('[invoice] could not load image:', err.message);
+    logger.warn('[invoice] could not load image:', err.message);
     return null;
   }
 }

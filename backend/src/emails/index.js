@@ -11,12 +11,13 @@ import {
 import { lowStockTemplate } from './templates/inventoryTemplates.js';
 import { STAFF_ROLES } from '../constants/roles.js';
 import { renderEmailTemplate } from '../services/notificationTemplate.service.js';
+import { logger } from '../utils/logger.js';
 
 export const sendEmail = async ({ to, subject, html, text }) => {
   const transporter = getTransporter();
 
   if (!transporter) {
-    console.warn(`Email not sent (SMTP disabled): ${subject} → ${to}`);
+    logger.warn(`Email not sent (SMTP disabled): ${subject} → ${to}`);
     return { simulated: true };
   }
 
@@ -94,7 +95,7 @@ export const sendOrderStatusUpdateEmail = async (order, user, newStatus) => {
 export const sendAdminNewOrderEmail = async (order, customer) => {
   const adminEmails = await getAdminEmails();
   if (!adminEmails.length) {
-    console.warn('No admin emails configured for new order notification');
+    logger.warn('No admin emails configured for new order notification');
     return null;
   }
   const custom = await renderEmailTemplate('admin_new_order', 'ar', { order, user: customer });
@@ -113,7 +114,7 @@ export const loadOrderWithUser = async (orderId) => {
 export const sendLowStockEmail = async (product, threshold) => {
   const adminEmails = await getAdminEmails();
   if (!adminEmails.length) {
-    console.warn('No admin emails configured for low stock alert');
+    logger.warn('No admin emails configured for low stock alert');
     return null;
   }
   const template = lowStockTemplate(product, threshold);
@@ -131,7 +132,7 @@ export const notifyOrderCreated = async (order, user) => {
       notifyOrderTimeline(order, user, 'order_created'),
     ]);
   } catch (err) {
-    console.error('Order email notification failed:', err.message);
+    logger.error('Order email notification failed:', err.message);
   }
 };
 
@@ -143,7 +144,7 @@ export const notifyPaymentSuccess = async (orderId) => {
     if (order.paymentStatus === 'paid') return;
     await sendPaymentSuccessEmail(order, user);
   } catch (err) {
-    console.error('Payment success email failed:', err.message);
+    logger.error('Payment success email failed:', err.message);
   }
 };
 
@@ -154,7 +155,7 @@ export const notifyOrderStatusChange = async (orderId, newStatus, previousStatus
     if (!data) return;
     await sendOrderStatusUpdateEmail(data.order, data.user, newStatus);
   } catch (err) {
-    console.error('Order status email failed:', err.message);
+    logger.error('Order status email failed:', err.message);
   }
 };
 
@@ -165,6 +166,6 @@ export const notifyPaymentSuccessAfterPaid = async (orderId) => {
     if (!data || data.order.paymentStatus !== 'paid') return;
     await sendPaymentSuccessEmail(data.order, data.user);
   } catch (err) {
-    console.error('Payment success email failed:', err.message);
+    logger.error('Payment success email failed:', err.message);
   }
 };

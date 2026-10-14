@@ -14,6 +14,7 @@ import {
   updateDriverTrackingLocation,
 } from '../services/deliveryTracking.service.js';
 import { pathLengthMeters, pointAtDistanceAlong } from '../utils/geoPath.js';
+import { logger } from '../utils/logger.js';
 
 /** orderId -> { timer, startedAt } */
 const runners = new Map();
@@ -115,7 +116,7 @@ export const startDriverSimulation = asyncHandler(async (req, res) => {
       });
       progress += metersPerStep;
     } catch (err) {
-      console.error('[driverSim] tick failed:', err.message);
+      logger.error('[driverSim] tick failed:', err.message);
     }
   };
 

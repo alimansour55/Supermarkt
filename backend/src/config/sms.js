@@ -1,4 +1,5 @@
 import twilio from 'twilio';
+import { logger } from '../utils/logger.js';
 
 let twilioClient = null;
 
@@ -6,7 +7,7 @@ export const configureSms = () => {
   const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER } = process.env;
 
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
-    console.warn('Twilio credentials missing — SMS OTP will be logged to console in development');
+    logger.warn('Twilio credentials missing — SMS OTP will be logged to console in development');
     return false;
   }
 
