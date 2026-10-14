@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream';
 import { cloudinary, configureCloudinary } from '../config/cloudinary.js';
 import { AppError } from './AppError.js';
+import { matchesDeclaredMedia } from './fileSignature.js';
 
 export const CLOUDINARY_FOLDERS = {
   products: 'marketplus/products',
@@ -35,6 +36,9 @@ export const uploadFileToCloudinary = async (file, folder = CLOUDINARY_FOLDERS.p
 
   if (!file?.buffer?.length) {
     throw new AppError('Invalid media file', 400);
+  }
+  if (!matchesDeclaredMedia(file)) {
+    throw new AppError('File content does not match an allowed image or video type', 400);
   }
 
   const resourceType = getFileResourceType(file);

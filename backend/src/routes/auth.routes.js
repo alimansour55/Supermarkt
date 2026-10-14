@@ -6,6 +6,7 @@ import {
   adminLogin,
   driverLogin,
   logout,
+  logoutAll,
   getMe,
   updateMe,
   addMyAddress,
@@ -26,6 +27,7 @@ router.post('/admin-login', loginLimiter, validate(adminLoginValidation), adminL
 router.post('/driver-login', loginLimiter, validate(driverLoginValidation), driverLogin);
 
 router.post('/logout', protect, logout);
+router.post('/logout-all', protect, logoutAll);
 router.get('/me', protect, getMe);
 router.patch('/me', protect, validate(updateProfileValidation), updateMe);
 router.post('/me/addresses', protect, validate(addAddressValidation), addMyAddress);

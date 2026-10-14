@@ -98,3 +98,20 @@ export const adminTrackingUpdateLimiter = rateLimit({
   keyGenerator: (req) => req.user?._id?.toString() || ipKeyGenerator(req.ip),
   message: jsonMessage('Too many tracking updates. Please slow down.'),
 });
+
+/**
+ * Whole-API ceiling per client IP, opt-in via API_RATE_LIMIT (requests per 15 min).
+ * Opt-in because behind a proxy without TRUST_PROXY every visitor shares one IP and
+ * a global cap would throttle the whole store at once.
+ */
+const apiRateLimit = Number(process.env.API_RATE_LIMIT);
+export const apiLimiter = Number.isFinite(apiRateLimit) && apiRateLimit > 0
+  ? rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: apiRateLimit,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.path === '/health',
+    message: jsonMessage('Too many requests. Please slow down and try again shortly.'),
+  })
+  : (_req, _res, next) => next();
