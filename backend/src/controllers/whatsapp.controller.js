@@ -1,6 +1,7 @@
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { verifyWhatsAppSignature } from '../services/whatsapp.service.js';
 import { receiveWhatsAppMessage } from './supportConversation.controller.js';
+import { logger } from '../utils/logger.js';
 
 /** Meta webhook verification handshake. */
 export const verifyWebhook = (req, res) => {
@@ -24,7 +25,7 @@ export const receiveWebhook = asyncHandler(async (req, res) => {
         try {
           await receiveWhatsAppMessage({ phone: msg.from, text: msg.text.body });
         } catch (err) {
-          console.error('WhatsApp inbound failed:', err.message);
+          logger.error('WhatsApp inbound failed:', err.message);
         }
       }
     }

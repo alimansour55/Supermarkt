@@ -23,6 +23,7 @@ import { logAudit } from '../services/auditLog.service.js';
 import { getGpsDeliveryEnabled, getDriverSettings } from '../services/storeSettings.service.js';
 import User from '../models/User.js';
 import { CLOUDINARY_FOLDERS, uploadFileToCloudinary } from '../utils/cloudinaryUpload.js';
+import { logger } from '../utils/logger.js';
 
 function formatDriverItems(items = []) {
   return items.map((item) => ({
@@ -152,28 +153,28 @@ async function finalizeDriverOrderStatus(order, nextStatus, { driverId, failureP
   try {
     await awardPointsForOrder(order);
   } catch (err) {
-    console.error('Loyalty award skipped:', err.message);
+    logger.error('Loyalty award skipped:', err.message);
   }
 
   try {
     await notifyOrderStatusChange(order._id, nextStatus, previousStatus);
   } catch (err) {
-    console.error('Order status email failed:', err.message);
+    logger.error('Order status email failed:', err.message);
   }
 
   try {
     const populated = await Order.findById(order._id).populate('user', 'name email phone');
     await notifyOrderTimeline(populated, populated.user, nextStatus);
     await notifyCustomerOrderStatus(populated, populated.user, nextStatus, previousStatus)
-      .catch((err) => console.error('Order tracking notify failed:', err.message));
+      .catch((err) => logger.error('Order tracking notify failed:', err.message));
     if (nextStatus === 'delivered') {
       const { sendReviewRequest } = await import('../services/reviewRequest.service.js');
       await sendReviewRequest(populated, populated.user, 'ar').catch((err) => {
-        console.error('Review request failed:', err.message);
+        logger.error('Review request failed:', err.message);
       });
     }
   } catch (err) {
-    console.error('Order status SMS failed:', err.message);
+    logger.error('Order status SMS failed:', err.message);
   }
 
   return { previousStatus, nextStatus };
@@ -294,7 +295,7 @@ export const updateDriverOrderLocation = asyncHandler(async (req, res) => {
         etaText: snapshot?.route?.etaText || '',
         etaSeconds: snapshot?.route?.etaSeconds || null,
       },
-    ).catch((err) => console.error('Driver location notify failed:', err.message));
+    ).catch((err) => logger.error('Driver location notify failed:', err.message));
   }
 
   res.json({

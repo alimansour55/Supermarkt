@@ -1,5 +1,6 @@
 import { notifyLowStock } from './notification.service.js';
 import { sendLowStockEmail } from '../emails/index.js';
+import { logger } from '../utils/logger.js';
 
 export const LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD) || 10;
 
@@ -19,6 +20,6 @@ export async function checkInventoryAlert(product, previousStock) {
     await sendLowStockEmail(product, LOW_STOCK_THRESHOLD);
     return notification;
   } catch (err) {
-    console.error('Inventory alert failed:', err.message);
+    logger.error('Inventory alert failed:', err.message);
   }
 }

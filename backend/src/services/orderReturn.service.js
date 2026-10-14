@@ -10,6 +10,7 @@ import {
   processStripeRefund,
   pushStatusHistory,
 } from './orderManagement.service.js';
+import { logger } from '../utils/logger.js';
 
 const RETURNABLE_ORDER_STATUSES = new Set(['delivered']);
 const ACTIVE_RETURN_STATUSES = new Set(['pending', 'approved']);
@@ -224,7 +225,7 @@ export async function applyApprovedReturn(order, returnDoc) {
       const stripeRefundId = await processStripeRefund(order, refundAmount);
       if (stripeRefundId) returnDoc.stripeRefundId = stripeRefundId;
     } catch (err) {
-      console.error('Return stripe refund failed:', err.message);
+      logger.error('Return stripe refund failed:', err.message);
     }
   }
 

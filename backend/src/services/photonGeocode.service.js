@@ -1,4 +1,5 @@
 import { buildAddressSearchVariants, rankAddressSuggestions } from '../utils/addressQuery.js';
+import { logger } from '../utils/logger.js';
 
 const PHOTON_URL = 'https://photon.komoot.io/api/';
 
@@ -58,7 +59,7 @@ export async function getPhotonSuggestions(input, { language = 'ar', lat, lng } 
 
       if (!response.ok) {
         if (response.status === 429) {
-          console.warn('[photonGeocode] Rate limit — skipping');
+          logger.warn('[photonGeocode] Rate limit — skipping');
           return [];
         }
         throw new Error(`Photon search failed (${response.status})`);

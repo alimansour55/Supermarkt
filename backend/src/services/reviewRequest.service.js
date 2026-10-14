@@ -1,6 +1,7 @@
 import StoreSettings from '../models/StoreSettings.js';
 import { sendEmail } from '../emails/index.js';
 import { twilioClient, isSmsConfigured, getTwilioPhoneNumber } from '../config/sms.js';
+import { logger } from '../utils/logger.js';
 
 const REVIEW_SMS = {
   ar: (order) => `سوق+: تم تسليم طلبك ${order.orderNumber}. شاركنا رأيك في المنتجات من صفحة طلباتي ⭐`,
@@ -24,7 +25,7 @@ async function sendReviewSms(phone, order, lang) {
 
   if (!isSmsConfigured()) {
     if (process.env.NODE_ENV !== 'production' || process.env.SMS_DEV_MODE === 'true') {
-      console.log(`\n📱 REVIEW REQUEST SMS → ${phone}\n   ${body}\n`);
+      logger.info(`\n📱 REVIEW REQUEST SMS → ${phone}\n   ${body}\n`);
       return { simulated: true };
     }
     return { skipped: true };

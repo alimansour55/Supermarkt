@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { logger } from '../utils/logger.js';
 
 let stripe = null;
 
@@ -6,7 +7,7 @@ const configureStripe = () => {
   const secretKey = process.env.STRIPE_SECRET_KEY;
 
   if (!secretKey) {
-    console.warn('Stripe secret key missing — payments will be disabled');
+    logger.warn('Stripe secret key missing — payments will be disabled');
     return null;
   }
 

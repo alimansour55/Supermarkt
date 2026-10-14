@@ -1,6 +1,7 @@
 import { twilioClient, isSmsConfigured, getTwilioPhoneNumber } from '../config/sms.js';
 import { ORDER_STATUSES } from '../constants/orderStatuses.js';
 import { getSmsTemplateKeyForEvent, renderSmsTemplate } from '../services/notificationTemplate.service.js';
+import { logger } from '../utils/logger.js';
 
 function statusLabel(status, lang = 'ar') {
   const row = ORDER_STATUSES.find((s) => s.value === status);
@@ -82,7 +83,7 @@ export async function sendOrderSms(phone, templateKey, order, lang = 'ar') {
 
   if (!isSmsConfigured()) {
     if (process.env.NODE_ENV !== 'production' || process.env.SMS_DEV_MODE === 'true') {
-      console.log(`\n📱 ORDER SMS → ${phone}\n   ${body}\n`);
+      logger.info(`\n📱 ORDER SMS → ${phone}\n   ${body}\n`);
       return { simulated: true };
     }
     return { skipped: true };

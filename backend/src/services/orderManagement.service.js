@@ -5,6 +5,7 @@ import { AppError } from '../utils/AppError.js';
 import { normalizeVariantId } from '../utils/productCatalog.js';
 import { getStripe } from '../config/stripe.js';
 import { incrementLineStock } from './inventoryReservation.service.js';
+import { logger } from '../utils/logger.js';
 
 const CUSTOMER_CANCELLABLE = new Set(['pending', 'confirmed', 'preparing']);
 const ADMIN_CANCELLABLE = new Set(['pending', 'confirmed', 'preparing', 'out_for_delivery']);
@@ -107,7 +108,7 @@ export async function processStripeRefund(order, amountEgp) {
 
     return refund.id;
   } catch (err) {
-    console.error('Stripe refund failed:', err.message);
+    logger.error('Stripe refund failed:', err.message);
     throw new AppError(`Refund failed: ${err.message}`, 502);
   }
 }

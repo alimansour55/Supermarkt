@@ -10,6 +10,7 @@ import { stripeWebhook } from './controllers/payment.controller.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import { corsOptions } from './config/cors.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
+import { requestId } from './middleware/requestId.js';
 
 const app = express();
 
@@ -19,6 +20,8 @@ if (process.env.TRUST_PROXY) {
   const hops = Number(process.env.TRUST_PROXY);
   app.set('trust proxy', Number.isFinite(hops) ? hops : process.env.TRUST_PROXY);
 }
+
+app.use(requestId);
 
 // This is a JSON-only API (the React app is served separately), so the HTML-oriented
 // CSP directives are unnecessary here and can be safely disabled.

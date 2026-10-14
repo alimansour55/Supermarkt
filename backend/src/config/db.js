@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { logger } from '../utils/logger.js';
 
 const connectDB = async () => {
   const uri = process.env.MONGODB_URI;
@@ -10,7 +11,7 @@ const connectDB = async () => {
   mongoose.set('strictQuery', true);
 
   await mongoose.connect(uri);
-  console.log(`MongoDB connected: ${mongoose.connection.host}`);
+  logger.info(`MongoDB connected: ${mongoose.connection.host}`);
 };
 
 export default connectDB;

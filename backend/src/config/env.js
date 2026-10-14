@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger.js';
+
 const REQUIRED = ['MONGODB_URI', 'JWT_SECRET'];
 
 const RECOMMENDED_IN_PRODUCTION = [
@@ -16,7 +18,7 @@ function applyDevEnvDefaults() {
   Object.entries(DEV_DEFAULTS).forEach(([key, value]) => {
     if (!process.env[key]?.trim()) {
       process.env[key] = value;
-      console.warn(`[env] Using development default for ${key}`);
+      logger.warn(`[env] Using development default for ${key}`);
     }
   });
 }
@@ -39,7 +41,7 @@ export const validateEnv = () => {
   if (process.env.NODE_ENV === 'production') {
     RECOMMENDED_IN_PRODUCTION.forEach((key) => {
       if (!process.env[key]?.trim()) {
-        console.warn(`Warning: ${key} is not set — recommended for production`);
+        logger.warn(`Warning: ${key} is not set — recommended for production`);
       }
     });
   }

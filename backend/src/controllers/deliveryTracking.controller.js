@@ -17,6 +17,7 @@ import {
   notifyCustomerDriverLocation,
   notifyCustomerTrackingLive,
 } from '../services/orderTrackingNotify.service.js';
+import { logger } from '../utils/logger.js';
 
 export const getCustomerOrderTracking = asyncHandler(async (req, res) => {
   const order = await Order.findOne({ _id: req.params.id, user: req.user._id })
@@ -97,9 +98,9 @@ export const updateAdminOrderTracking = asyncHandler(async (req, res) => {
         etaText: data?.route?.etaText || '',
         etaSeconds: data?.route?.etaSeconds || null,
       },
-    ).catch((err) => console.error('Admin tracking notify failed:', err.message));
+    ).catch((err) => logger.error('Admin tracking notify failed:', err.message));
     notifyCustomerTrackingLive(populated, populated.user)
-      .catch((err) => console.error('Tracking live notify failed:', err.message));
+      .catch((err) => logger.error('Tracking live notify failed:', err.message));
   }
 
   res.json({ success: true, tracking, data });

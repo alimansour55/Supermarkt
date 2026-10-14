@@ -99,6 +99,7 @@ import {
   advanceSubscriptionDelivery,
   formatSubscription,
 } from '../services/recurringDelivery.service.js';
+import { logger } from '../utils/logger.js';
 
 export const ADMIN_ORDER_SORT = ['createdAt', 'total', 'orderNumber'];
 
@@ -613,19 +614,19 @@ export const createOrder = asyncHandler(async (req, res) => {
   try {
     await awardPointsForOrder(order);
   } catch (err) {
-    console.error('Loyalty award skipped:', err.message);
+    logger.error('Loyalty award skipped:', err.message);
   }
 
   try {
     await notifyOrderCreated(order, req.user);
   } catch (err) {
-    console.error('Order confirmation email failed:', err.message);
+    logger.error('Order confirmation email failed:', err.message);
   }
 
   try {
     await notifyOrderTimeline(order, req.user, 'order_created');
   } catch (err) {
-    console.error('Order created SMS failed:', err.message);
+    logger.error('Order created SMS failed:', err.message);
   }
 
   res.status(201).json({
@@ -1037,14 +1038,14 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   try {
     await awardPointsForOrder(order);
   } catch (err) {
-    console.error('Loyalty award skipped:', err.message);
+    logger.error('Loyalty award skipped:', err.message);
   }
 
   if (orderStatus && orderStatus !== previousStatus) {
     try {
       await notifyOrderStatusChange(order._id, orderStatus, previousStatus);
     } catch (err) {
-      console.error('Order status email failed:', err.message);
+      logger.error('Order status email failed:', err.message);
     }
     try {
       const populatedForNotify = await Order.findById(order._id).populate('user', 'name email phone');
@@ -1054,15 +1055,15 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         populatedForNotify.user,
         orderStatus,
         previousStatus,
-      ).catch((err) => console.error('Order tracking notify failed:', err.message));
+      ).catch((err) => logger.error('Order tracking notify failed:', err.message));
       if (orderStatus === 'delivered' && previousStatus !== 'delivered') {
         const { sendReviewRequest } = await import('../services/reviewRequest.service.js');
         await sendReviewRequest(populatedForNotify, populatedForNotify.user, 'ar').catch((err) => {
-          console.error('Review request failed:', err.message);
+          logger.error('Review request failed:', err.message);
         });
       }
     } catch (err) {
-      console.error('Order status SMS failed:', err.message);
+      logger.error('Order status SMS failed:', err.message);
     }
     await logAudit({
       req,
@@ -1090,9 +1091,9 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         populatedForDriver.assignedDriver,
       );
       await notifyCustomerTrackingLive(populatedForDriver, populatedForDriver.user)
-        .catch((err) => console.error('Tracking live notify failed:', err.message));
+        .catch((err) => logger.error('Tracking live notify failed:', err.message));
     } catch (err) {
-      console.error('Auto-assign driver notify failed:', err.message);
+      logger.error('Auto-assign driver notify failed:', err.message);
     }
   }
 

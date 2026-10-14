@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { logger } from './logger.js';
 
 const TRANSACTIONAL_TOPOLOGIES = new Set(['ReplicaSetWithPrimary', 'Sharded', 'LoadBalanced']);
 
@@ -32,7 +33,7 @@ export async function runAtomic(work) {
         try {
           await fn();
         } catch (undoErr) {
-          console.error('[runAtomic] rollback step failed:', undoErr.message);
+          logger.error('[runAtomic] rollback step failed:', undoErr.message);
         }
       }
       throw err;

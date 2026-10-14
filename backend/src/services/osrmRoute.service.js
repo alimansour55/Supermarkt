@@ -1,4 +1,5 @@
 import { getDirections } from './googleMaps.service.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Driving route with road geometry + ETA. Prefers Google Directions (when the
@@ -50,7 +51,7 @@ async function getOsrmRoute({ originLat, originLng, destLat, destLng }) {
       source: 'osrm',
     };
   } catch (err) {
-    console.warn('[osrm] route failed:', err.message);
+    logger.warn('[osrm] route failed:', err.message);
     return null;
   } finally {
     clearTimeout(timer);
@@ -66,7 +67,7 @@ export async function getDrivingRoute({ originLat, originLng, destLat, destLng }
     const google = await getDirections({ originLat, originLng, destLat, destLng });
     if (google?.path?.length >= 2) return { ...google, source: 'google' };
   } catch (err) {
-    console.warn('[route] Google Directions failed, trying OSRM:', err.message);
+    logger.warn('[route] Google Directions failed, trying OSRM:', err.message);
   }
 
   return getOsrmRoute({ originLat, originLng, destLat, destLng });

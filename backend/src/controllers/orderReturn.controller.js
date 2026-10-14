@@ -18,6 +18,7 @@ import {
   persistOrderDeliveredAtIfNeeded,
   updateReturnFulfillment,
 } from '../services/orderReturn.service.js';
+import { logger } from '../utils/logger.js';
 
 async function loadOrderForCustomer(id, userId) {
   const order = await Order.findOne({ _id: id, user: userId });
@@ -247,7 +248,7 @@ export const getAdminReturns = asyncHandler(async (req, res) => {
       try {
         allRows.push(formatReturnRow(order, ret));
       } catch (err) {
-        console.error('formatReturnRow failed:', order.orderNumber, err.message);
+        logger.error('formatReturnRow failed:', order.orderNumber, err.message);
       }
     });
   });
