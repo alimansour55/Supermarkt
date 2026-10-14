@@ -70,6 +70,18 @@ export const orderService = {
   logDriverContactAttempt: (id, type) => api.post(`/orders/driver/deliveries/${id}/attempts`, { type }),
   returnDriverDelivery: (id) => api.post(`/orders/driver/deliveries/${id}/returned`),
   getDriverCash: () => api.get('/orders/driver/cash'),
+  getDriverPickups: () => api.get('/orders/driver/pickups'),
+  getDriverPickup: (orderId, returnId) => api.get(`/orders/driver/pickups/${orderId}/${returnId}`),
+  startDriverPickup: (orderId, returnId) => api.post(`/orders/driver/pickups/${orderId}/${returnId}/start`),
+  /** `fields`: { outcome: 'collected' | 'not_collected', condition?, note? } — multipart when a photo is attached. */
+  finishDriverPickup: (orderId, returnId, fields, photoFile) => {
+    const url = `/orders/driver/pickups/${orderId}/${returnId}/finish`;
+    if (!photoFile) return api.post(url, fields);
+    const form = new FormData();
+    form.append('pickupPhoto', photoFile);
+    Object.entries(fields).forEach(([k, v]) => { if (v != null && v !== '') form.append(k, String(v)); });
+    return api.post(url, form);
+  },
   failDriverDelivery: (id, data) => api.post(`/orders/driver/deliveries/${id}/fail`, data),
   updateDriverLocation: (id, data) => api.put(`/orders/${id}/tracking/location`, data),
   updateDriverShiftLocation: (data) => api.put('/orders/driver/location', data),

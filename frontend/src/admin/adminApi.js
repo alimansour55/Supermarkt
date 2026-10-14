@@ -150,6 +150,8 @@ export const adminApi = {
   requestOrderReturn: (id, data) => api.post(`/orders/admin/${id}/returns`, data),
   reviewReturn: (orderId, returnId, data) =>
     api.patch(`/orders/admin/${orderId}/returns/${returnId}`, data),
+  assignReturnPickupDriver: (orderId, returnId, driverId) =>
+    api.put(`/orders/admin/${orderId}/returns/${returnId}/pickup-driver`, { driverId }),
   updateReturnFulfillment: (orderId, returnId, fulfillmentStatus) =>
     api.patch(`/orders/admin/${orderId}/returns/${returnId}/fulfillment`, {
       fulfillmentStatus,

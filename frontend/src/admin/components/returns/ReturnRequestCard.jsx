@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import ReturnRejectForm from './ReturnRejectForm';
 import ReturnRejectedEditPanel from './ReturnRejectedEditPanel';
+import ReturnPickupDriverPicker from './ReturnPickupDriverPicker';
 import {
   Calendar,
   Check,
@@ -179,6 +180,12 @@ export default function ReturnRequestCard({
 
       {row.status === 'pending' && (
         <ReturnProgressLine returnItem={row} isAr={isAr} compact />
+      )}
+
+      {row.status === 'approved' && row.returnMethod === 'home_pickup' && (
+        row.fulfillmentStatus !== 'completed' || row.pickupOutcome
+      ) && (
+        <ReturnPickupDriverPicker row={row} isAr={isAr} />
       )}
 
       {row.status === 'approved' && (

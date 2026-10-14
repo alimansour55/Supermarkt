@@ -89,6 +89,17 @@ const orderReturnSchema = new mongoose.Schema(
     itemConditionLabelAr: { type: String, trim: true, default: '' },
     itemConditionLabelEn: { type: String, trim: true, default: '' },
     contactPhone: { type: String, trim: true, default: '' },
+    /** Home pickup by a driver: who, and what happened at the door. */
+    pickupDriver: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    pickupAssignedAt: { type: Date, default: null },
+    pickupOutcome: { type: String, enum: ['', 'collected', 'not_collected'], default: '' },
+    pickupOutcomeAt: { type: Date, default: null },
+    pickupCondition: { type: String, enum: ['', 'unopened', 'opened', 'damaged'], default: '' },
+    pickupNote: { type: String, trim: true, maxlength: 500, default: '' },
+    pickupPhoto: {
+      url: { type: String, trim: true, default: '' },
+      publicId: { type: String, trim: true, default: '' },
+    },
   },
   { _id: true, timestamps: true },
 );

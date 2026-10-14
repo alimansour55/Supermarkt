@@ -32,5 +32,6 @@ export const TodaysDealsPage = lazy(() => import('../pages/TodaysDealsPage'), 'T
 export const NotFoundPage = lazy(() => import('../pages/NotFoundPage'), 'NotFoundPage');
 export const DriverDeliveriesPage = lazy(() => import('../pages/driver/DriverDeliveriesPage'), 'DriverDeliveriesPage');
 export const DriverDeliveryPage = lazy(() => import('../pages/driver/DriverDeliveryPage'), 'DriverDeliveryPage');
+export const DriverPickupPage = lazy(() => import('../pages/driver/DriverPickupPage'), 'DriverPickupPage');
 export const DriverLoginPage = lazy(() => import('../pages/driver/DriverLoginPage'), 'DriverLoginPage');
 export const DriverAccountPage = lazy(() => import('../pages/driver/DriverAccountPage'), 'DriverAccountPage');

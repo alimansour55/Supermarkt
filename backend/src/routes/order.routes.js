@@ -86,6 +86,13 @@ import {
   getDriverStatsSummary,
 } from '../controllers/driver.controller.js';
 import {
+  assignReturnPickupDriver,
+  finishDriverPickup,
+  getDriverPickup,
+  getDriverPickups,
+  startDriverPickup,
+} from '../controllers/returnPickup.controller.js';
+import {
   adjustDriverCash,
   getDriverCashBalances,
   getDriverCashLedger,
@@ -163,6 +170,7 @@ router.get('/admin/:id/messages', ...adminOnly, getOrderMessages);
 router.post('/admin/:id/messages', ...adminOnly, addAdminMessage);
 router.post('/admin/:id/returns', ...adminOnly, requestAdminReturn);
 router.patch('/admin/:id/returns/:returnId/fulfillment', ...adminOnly, updateAdminReturnFulfillment);
+router.put('/admin/:id/returns/:returnId/pickup-driver', ...requirePermission('orders:write'), assignReturnPickupDriver);
 router.patch('/admin/:id/returns/:returnId', ...adminOnly, patchAdminReturn);
 
 router.post('/:id/payment-proof', uploadSingle('paymentProof'), uploadOrderPaymentProof);
@@ -181,6 +189,10 @@ router.get('/driver/deliveries', ...driverOnly, getDriverDeliveries);
 router.get('/driver/deliveries/history', ...driverOnly, getDriverHistory);
 router.get('/driver/cash', ...driverOnly, getDriverCash);
 router.get('/driver/stats', ...driverOnly, getDriverStatsSummary);
+router.get('/driver/pickups', ...driverOnly, getDriverPickups);
+router.get('/driver/pickups/:orderId/:returnId', ...driverOnly, getDriverPickup);
+router.post('/driver/pickups/:orderId/:returnId/start', ...driverOnly, startDriverPickup);
+router.post('/driver/pickups/:orderId/:returnId/finish', ...driverOnly, optionalUploadSingle('pickupPhoto'), finishDriverPickup);
 router.get('/driver/deliveries/:id', ...driverOnly, getDriverDeliveryById);
 router.post('/driver/deliveries/:id/accept', ...driverOnly, acceptDriverDelivery);
 router.post('/driver/deliveries/:id/reject', ...driverOnly, rejectDriverDelivery);

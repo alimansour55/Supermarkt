@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import {
-  Banknote, History, ListChecks, LocateFixed, Loader2, Package, RefreshCw, Route, Search, Truck, Wallet, X,
+  Banknote, History, ListChecks, LocateFixed, Loader2, Package, RefreshCw, RotateCcw, Route, Search, Truck, Wallet, X,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { orderService } from '../../services/apiServices';
@@ -17,6 +17,11 @@ import {
 
 async function fetchDeliveries() {
   const { data } = await orderService.getDriverDeliveries();
+  return data.data || [];
+}
+
+async function fetchPickups() {
+  const { data } = await orderService.getDriverPickups();
   return data.data || [];
 }
 
@@ -60,9 +65,10 @@ export default function DriverDeliveriesPage() {
     data: deliveries, loading, error, refetch,
   } = useAsyncData(fetchDeliveries, []);
   const { data: cashBalance, refetch: refetchCash } = useAsyncData(fetchCashBalance, []);
+  const { data: pickups, refetch: refetchPickups } = useAsyncData(fetchPickups, []);
   const refreshAll = useCallback(async () => {
-    await Promise.all([refetch(), refetchCash()]);
-  }, [refetch, refetchCash]);
+    await Promise.all([refetch(), refetchCash(), refetchPickups()]);
+  }, [refetch, refetchCash, refetchPickups]);
   const { refreshing } = usePullToRefresh(refreshAll, { disabled: loading });
 
   // A new assignment notice arrived (see DriverLayout) — refresh silently.
@@ -313,7 +319,7 @@ export default function DriverDeliveriesPage() {
             </div>
           )}
 
-          {!loading && list.length === 0 && upcomingList.length === 0 && !error && (
+          {!loading && list.length === 0 && upcomingList.length === 0 && !(pickups?.length) && !error && (
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
                 <Truck className="h-8 w-8" aria-hidden />
@@ -354,6 +360,40 @@ export default function DriverDeliveriesPage() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {pickups?.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-700">
+                <RotateCcw className="h-4 w-4 text-amber-600" aria-hidden />
+                {isAr ? 'استلام مرتجعات' : 'Return pickups'}
+                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">{pickups.length}</span>
+              </h2>
+              <ul className="space-y-3">
+                {pickups.map((p) => (
+                  <li key={p.returnId}>
+                    <Link
+                      to={`/driver/pickups/${p.orderId}/${p.returnId}`}
+                      className="block rounded-2xl border border-amber-200 bg-white px-4 py-3.5 shadow-sm transition hover:border-amber-300"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-mono text-lg font-bold tabular-nums text-slate-900">#{p.orderNumber}</p>
+                          <p className="truncate text-sm text-slate-600">{isAr ? p.item.nameAr || p.item.nameEn : p.item.nameEn || p.item.nameAr} × {p.item.quantity}</p>
+                        </div>
+                        <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                          {p.fulfillmentStatus === 'pickup_en_route' ? (isAr ? 'في الطريق' : 'On the way') : (isAr ? 'مرتجع' : 'Return')}
+                        </span>
+                      </div>
+                      <p className="mt-2 line-clamp-1 text-xs text-slate-500">{formatDriverAddress(p.shippingAddress, isAr)}</p>
+                      {(p.pickupSlotLabelAr || p.pickupSlotLabelEn) && (
+                        <p className="mt-1 text-xs font-medium text-indigo-700">{isAr ? p.pickupSlotLabelAr : p.pickupSlotLabelEn}</p>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           {upcomingList.length > 0 && (

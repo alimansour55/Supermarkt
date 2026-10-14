@@ -73,9 +73,9 @@ admin map (OSRM route cache, ETA), a wake lock, and SMS and notification hooks.
 - [x] Every tracking SMS (driver on the way, driver nearby, tracking link) printed **"undefined"** instead of
       the order number: `sendTrackingSms` spread a Mongoose document.
 - [x] The delivery map painted **over** the complete and fail dialogs (Leaflet z-index). The map is now `isolate`.
-- [ ] Not driver scope: the same enum gap also drops audit entries for `cancel`, `return_request` and
-      `return_fulfillment`, and for several entity types (`staff_account`, `support_conversation`, `chat_agent`,
-      `callback_request`, `product_category_integrity`).
+- [x] The same enum gap dropped audit entries for `cancel`, `return_request` and `return_fulfillment` (fixed in 2.5).
+- [ ] Not driver scope: audit entity types `staff_account`, `support_conversation`, `chat_agent`,
+      `callback_request` and `product_category_integrity` are still rejected by `AuditLog.entityType`.
 
 ---
 
@@ -133,8 +133,16 @@ assigned → accepted → picked_up → en_route → arrived → delivered
 - [ ] Customer self-service reschedule link (needs a slot picker on the storefront).
 
 ### 2.5 Return pickups
-- [ ] Home-pickup return requests become driver tasks (`type: 'pickup'`) in the same list,
-      with a distinct badge, item-condition check and photo, and "collected / not collected".
+- [x] Admin: on an approved home-pickup return, pick the **pickup driver** (return card in the order panel and the
+      Returns page). The driver gets a notice that links straight to the task.
+- [x] Driver app: a "Return pickups" section in the list, and a pickup screen with the item, reason, slot, address,
+      navigation, and call/WhatsApp.
+- [x] "On my way" → the customer's return tracker shows "Agent on the way", plus an in-app notice.
+- [x] "Collected" records the condition (and an optional photo), completes the return, and sets the order to `returned`.
+      A condition different from the customer's report alerts the store.
+- [x] "Not collected" needs a note. The return goes back to "confirmed" without a driver, and the store is alerted.
+- [x] Also fixed: return audit entries (`cancel`, `return_request`, `return_fulfillment`) were rejected by the
+      audit enum.
 
 ---
 

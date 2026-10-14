@@ -132,6 +132,12 @@ const DRIVER_NOTICE_COPY = {
     messageAr: (n) => `طلب #${n} في الطريق الآن — ابدأ التوصيل وشارك موقعك.`,
     messageEn: (n) => `Order #${n} is out for delivery — start the trip and share your location.`,
   },
+  pickup: {
+    titleAr: 'استلام مرتجع',
+    titleEn: 'Return pickup',
+    messageAr: (n) => `مطلوب استلام مرتجع من عميل طلب #${n}.`,
+    messageEn: (n) => `Collect a return from the customer of order #${n}.`,
+  },
   unassigned: {
     titleAr: 'تم سحب طلب منك',
     titleEn: 'Delivery removed',
@@ -145,7 +151,7 @@ const DRIVER_NOTICE_COPY = {
  * `assigned` | `dispatched` | `unassigned`. Never throws — a failed notice must not
  * fail the order update that triggered it.
  */
-export async function notifyDriver(driverId, order, kind) {
+export async function notifyDriver(driverId, order, kind, { returnId = null } = {}) {
   const copy = DRIVER_NOTICE_COPY[kind];
   if (!driverId || !copy || !order) return;
   const isActive = kind !== 'unassigned';
@@ -156,8 +162,10 @@ export async function notifyDriver(driverId, order, kind) {
     titleEn: copy.titleEn,
     messageAr: copy.messageAr(order.orderNumber),
     messageEn: copy.messageEn(order.orderNumber),
-    link: isActive ? `/driver/deliveries/${order._id}` : '/driver',
-    data: { orderId: order._id, orderNumber: order.orderNumber, kind },
+    link: kind === 'pickup' && returnId
+      ? `/driver/pickups/${order._id}/${returnId}`
+      : isActive ? `/driver/deliveries/${order._id}` : '/driver',
+    data: { orderId: order._id, orderNumber: order.orderNumber, kind, ...(returnId ? { returnId } : {}) },
   }).catch((err) => console.error('Driver notice failed:', err.message));
 }
 

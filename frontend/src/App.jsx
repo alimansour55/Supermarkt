@@ -50,6 +50,7 @@ function AppRoutes() {
         <Route index element={withSuspense(<P.DriverDeliveriesPage />)} />
         <Route path="account" element={withSuspense(<P.DriverAccountPage />)} />
         <Route path="deliveries/:id" element={withSuspense(<P.DriverDeliveryPage />)} />
+        <Route path="pickups/:orderId/:returnId" element={withSuspense(<P.DriverPickupPage />)} />
       </Route>
 
       <Route element={<Layout />}>
