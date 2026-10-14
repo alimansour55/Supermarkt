@@ -19,23 +19,34 @@ export default function PromoBannerTile({ banner = {}, isAr = false }) {
     : banner.ctaEn || 'Shop now';
   const href = banner.link || '/offers';
   const fallbackBg = banner.bg || 'bg-gradient-to-br from-primary-600 to-primary-800';
+  const image = banner.desktopImage || banner.image || banner.mobileImage;
+  // The words are part of the artwork — skip our overlay so they aren't doubled.
+  const textInImage = banner.showText === false && Boolean(image);
 
   return (
     <Link
       to={href}
+      aria-label={textInImage ? title : undefined}
       className={`group relative flex ${PROMO_BANNER_TILE_HEIGHT} w-full items-end overflow-hidden rounded-2xl ${fallbackBg} p-4 text-white shadow-sm ring-1 ring-black/5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 sm:p-5`}
     >
-      {banner.image && (
-        <img
-          src={banner.image}
-          alt=""
-          loading="lazy"
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+      {image && (
+        <picture>
+          {banner.mobileImage && banner.mobileImage !== image && (
+            <source media="(max-width: 640px)" srcSet={banner.mobileImage} />
+          )}
+          <img
+            src={image}
+            alt={textInImage ? title || '' : ''}
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        </picture>
       )}
+      {!textInImage && (
+      <>
       <div
         className={`absolute inset-0 ${
-          banner.image
+          image
             ? 'bg-gradient-to-t from-black/85 via-black/45 to-black/10'
             : 'bg-gradient-to-t from-black/35 to-transparent'
         }`}
@@ -58,6 +69,8 @@ export default function PromoBannerTile({ banner = {}, isAr = false }) {
           </span>
         </span>
       </div>
+      </>
+      )}
     </Link>
   );
 }

@@ -21,8 +21,16 @@ export default function HomepageSidebarBanners({ section, banners = [] }) {
             to={banner.link || '/products'}
             className="relative h-28 w-44 shrink-0 overflow-hidden rounded-xl shadow-sm sm:h-32 sm:w-52"
           >
-            {banner.image ? (
-              <img src={banner.image} alt="" className="h-full w-full object-cover" />
+            {banner.desktopImage || banner.image || banner.mobileImage ? (
+              <picture>
+                {banner.mobileImage && <source media="(max-width: 640px)" srcSet={banner.mobileImage} />}
+                <img
+                  src={banner.desktopImage || banner.image || banner.mobileImage}
+                  alt={isAr ? banner.titleAr || banner.titleEn : banner.titleEn || banner.titleAr}
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
+              </picture>
             ) : (
               <div className="flex h-full w-full items-end bg-primary-600 p-3 text-sm font-bold text-white">
                 {isAr ? banner.titleAr : banner.titleEn}

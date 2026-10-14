@@ -1,5 +1,7 @@
 /**
- * Banner fetching — uses API seed data with mockData fallback for offline/dev.
+ * Banner fetching. Demo banners from mockData are only used when the app runs
+ * without an API (VITE_USE_API=false) — never as a stand-in for real banners,
+ * so customers can't be shown campaigns the store never created.
  */
 import { bannerService } from './apiServices';
 import { HERO_SLIDES, PROMO_BANNERS } from '../data/mockData';
@@ -18,12 +20,12 @@ const PROMO_STYLES = [
   { bg: 'bg-gradient-to-l from-amber-500 to-orange-600', emoji: '🍞' },
 ];
 
-async function tryApi(fn, fallback) {
-  if (!useApi) return fallback();
+async function tryApi(fn, demo) {
+  if (!useApi) return demo();
   try {
     return await fn();
   } catch {
-    return fallback();
+    return [];
   }
 }
 
@@ -38,6 +40,8 @@ export function mapHeroBanner(banner, index = 0) {
     ctaAr: banner.ctaAr || 'تسوق الآن',
     ctaEn: banner.ctaEn || 'Shop Now',
     link: banner.link || '/offers',
+    showText: banner.showText !== false,
+    targetAudience: banner.targetAudience || 'all',
     image: banner.desktopImage || banner.image,
     desktopImage: banner.desktopImage || banner.image,
     mobileImage: banner.mobileImage || banner.desktopImage || banner.image,
@@ -54,6 +58,8 @@ export function mapPromoBanner(banner, index = 0) {
     titleAr: banner.titleAr,
     titleEn: banner.titleEn,
     link: banner.link || '/offers',
+    showText: banner.showText !== false,
+    targetAudience: banner.targetAudience || 'all',
     image: banner.desktopImage || banner.image,
     desktopImage: banner.desktopImage || banner.image,
     mobileImage: banner.mobileImage || banner.desktopImage || banner.image,
@@ -69,7 +75,7 @@ export async function fetchHeroBanners() {
     async () => {
       const { data } = await bannerService.getPublic('hero');
       const banners = data.data || [];
-      return banners.length ? banners.map(mapHeroBanner) : HERO_SLIDES;
+      return banners.map(mapHeroBanner);
     },
     () => HERO_SLIDES,
   );
@@ -80,7 +86,7 @@ export async function fetchPromoBanners() {
     async () => {
       const { data } = await bannerService.getPublic('promo');
       const banners = data.data || [];
-      return banners.length ? banners.map(mapPromoBanner) : PROMO_BANNERS;
+      return banners.map(mapPromoBanner);
     },
     () => PROMO_BANNERS,
   );

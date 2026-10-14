@@ -1,4 +1,7 @@
+import { useMemo } from 'react';
 import HeroSlider from './HeroSlider';
+import { filterBannersForViewer } from '../../utils/bannerAudience';
+import useBannerViewer from '../../hooks/useBannerViewer';
 import HomeFreeDeliveryBanner from './HomeFreeDeliveryBanner';
 import HomeBrowseHub from './HomeBrowseHub';
 import ProductSection from './ProductSection';
@@ -48,7 +51,14 @@ function SeoTextSection({ section, centered = false }) {
   );
 }
 
-export default function HomepageSectionRenderer({ section }) {
+export default function HomepageSectionRenderer({ section: rawSection }) {
+  const viewer = useBannerViewer();
+  const section = useMemo(() => (
+    Array.isArray(rawSection.banners)
+      ? { ...rawSection, banners: filterBannersForViewer(rawSection.banners, viewer, rawSection.bannerLimit) }
+      : rawSection
+  ), [rawSection, viewer]);
+
   switch (section.type) {
     case 'hero_slider':
       return (

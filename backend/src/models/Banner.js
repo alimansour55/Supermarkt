@@ -15,6 +15,9 @@ const bannerSchema = new mongoose.Schema(
     link: { type: String, trim: true, default: '/offers' },
     ctaAr: { type: String, trim: true, default: 'تسوق الآن' },
     ctaEn: { type: String, trim: true, default: 'Shop Now' },
+    // false when the words are already baked into the image — the storefront then
+    // skips the title/button overlay and makes the whole banner the link.
+    showText: { type: Boolean, default: true },
     placement: {
       type: String,
       enum: ['hero', 'promo', 'sidebar'],

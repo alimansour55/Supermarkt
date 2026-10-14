@@ -12,10 +12,12 @@ function StripTile({ entry, isAr }) {
   const image = entry.desktopImage || entry.image || entry.mobileImage;
   const title = isAr ? entry.titleAr || entry.titleEn : entry.titleEn || entry.titleAr;
   const cta = isAr ? entry.ctaAr || 'تسوق الآن' : entry.ctaEn || 'Shop now';
+  const textInImage = entry.showText === false && Boolean(image);
 
   return (
     <Link
       to={entry.link || '/products'}
+      aria-label={textInImage ? title : undefined}
       className={`group relative flex shrink-0 snap-start flex-col justify-end overflow-hidden rounded-2xl text-white shadow-sm transition-transform hover:scale-[1.02] ${
         image ? 'bg-slate-800' : 'bg-gradient-to-br from-primary-700 to-primary-900'
       }`}
@@ -32,15 +34,19 @@ function StripTile({ entry, isAr }) {
                 loading="lazy"
               />
             </picture>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+            {!textInImage && (
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+            )}
           </>
         )}
-        <div className="absolute inset-x-0 bottom-0 z-10 p-4">
-          <h3 className="line-clamp-2 text-base font-bold leading-snug md:text-lg">{title}</h3>
-          <span className="mt-1.5 inline-block text-xs font-semibold underline underline-offset-2 opacity-90 md:text-sm">
-            {cta}
-          </span>
-        </div>
+        {!textInImage && (
+          <div className="absolute inset-x-0 bottom-0 z-10 p-4">
+            <h3 className="line-clamp-2 text-base font-bold leading-snug md:text-lg">{title}</h3>
+            <span className="mt-1.5 inline-block text-xs font-semibold underline underline-offset-2 opacity-90 md:text-sm">
+              {cta}
+            </span>
+          </div>
+        )}
       </div>
     </Link>
   );

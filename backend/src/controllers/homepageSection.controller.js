@@ -4,6 +4,13 @@ import Banner from '../models/Banner.js';
 import Promotion from '../models/Promotion.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import {
+  BANNER_SORT,
+  PUBLIC_BANNER_AUDIENCES,
+  bannerIsLiveNow,
+  liveBannerFilter,
+  pickForAllViewers,
+} from '../utils/bannerRules.js';
 import { formatProduct } from '../utils/formatters.js';
 import { applyOffersOnlyFilter } from '../utils/offersFilter.js';
 import { mergeCategoryIntoProductFilter } from '../utils/categoryTree.js';
@@ -634,14 +641,9 @@ function formatBannerAsSlide(banner, overrides = {}) {
     link: overrides.link || banner.link || '/products',
     ctaAr: overrides.ctaAr || banner.ctaAr || 'تسوق الآن',
     ctaEn: overrides.ctaEn || banner.ctaEn || 'Shop Now',
+    showText: banner.showText !== false,
+    targetAudience: banner.targetAudience || 'all',
   };
-}
-
-function bannerIsLiveNow(banner, now = new Date()) {
-  if (!banner?.isActive) return false;
-  if (banner.startsAt && new Date(banner.startsAt) > now) return false;
-  if (banner.endsAt && new Date(banner.endsAt) < now) return false;
-  return true;
 }
 
 function getSchedulePhase(rotation, now = new Date()) {
@@ -749,24 +751,30 @@ async function resolveBannerSlots(section, { defaultPlacement = 'hero', limit = 
     const placement = section.campaignPlacement || defaultPlacement;
     const now = new Date();
     const queryLimit = limit ?? 12;
+    // Guests and logged-in customers can see different banners, but this response
+    // is publicly cached — so send enough for both and let the client filter.
     const banners = await Banner.find({
-      isActive: true,
+      ...liveBannerFilter(now),
       placement,
-      targetAudience: 'all',
-      $and: [
-        { $or: [{ startsAt: null }, { startsAt: { $lte: now } }] },
-        { $or: [{ endsAt: null }, { endsAt: { $gte: now } }] },
-      ],
-    }).sort({ priority: -1, sortOrder: 1, createdAt: -1 }).limit(queryLimit);
-    result = banners.map((b) => formatBannerAsSlide(b));
+      targetAudience: { $in: PUBLIC_BANNER_AUDIENCES },
+    }).sort(BANNER_SORT).limit(queryLimit * 2);
+    result = pickForAllViewers(banners, queryLimit).map((b) => formatBannerAsSlide(b));
   } else {
     result = await resolveCuratedHeroSlides(configuredSlides);
   }
 
-  if (limit && result.length > limit) {
-    return result.slice(0, limit);
+  return pickForAllViewers(result, limit);
+}
+
+/** How many banners a section shows — the client re-applies it after the audience filter. */
+function bannerLimitForSection(section) {
+  if (section.type === 'sidebar_banners') return 6;
+  if (section.type === 'promo_grid' || section.type === 'image_strip') {
+    const layout = section.layout || (section.type === 'image_strip' ? 'scroll' : 'grid');
+    if (layout === 'scroll') return 12;
+    return Math.min(4, Math.max(2, Number(section.gridColumns) || 3));
   }
-  return result;
+  return null;
 }
 
 async function resolvePromoBanners(section) {
@@ -801,15 +809,12 @@ async function bannersForSection(section) {
     ? Math.min(4, Math.max(2, Number(section.gridColumns) || 3))
     : section.type === 'sidebar_banners' ? 6 : 12;
 
-  return Banner.find({
-    isActive: true,
+  const banners = await Banner.find({
+    ...liveBannerFilter(now),
     placement,
-    targetAudience: 'all',
-    $and: [
-      { $or: [{ startsAt: null }, { startsAt: { $lte: now } }] },
-      { $or: [{ endsAt: null }, { endsAt: { $gte: now } }] },
-    ],
-  }).sort({ priority: -1, sortOrder: 1, createdAt: -1 }).limit(limit);
+    targetAudience: { $in: PUBLIC_BANNER_AUDIENCES },
+  }).sort(BANNER_SORT).limit(limit * 2);
+  return pickForAllViewers(banners, limit).map((b) => formatBannerAsSlide(b));
 }
 
 async function enrichSection(section) {
@@ -832,6 +837,7 @@ async function enrichSection(section) {
   attachSectionCategoryMeta(section, data);
   data.products = products;
   data.banners = banners;
+  data.bannerLimit = bannerLimitForSection(section);
   data.heroSlideCount = heroSlidesResolved.length;
   if ((section.type === 'hero_slider' || section.type === 'promo_grid' || section.type === 'image_strip' || section.type === 'sidebar_banners')
     && section.heroMode === 'weekly_rotation') {

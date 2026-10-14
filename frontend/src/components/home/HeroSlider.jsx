@@ -3,7 +3,6 @@ import { Link } from '../../app/router';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { fetchHeroBanners } from '../../services/bannerApi';
-import { HERO_SLIDES } from '../../data/mockData';
 import { HeroSkeleton } from '../ui/Skeleton';
 import { cloudinarySrcSet, cloudinaryUrl } from '../../utils/cloudinaryImage';
 
@@ -15,10 +14,10 @@ export default function HeroSlider({
   const { language } = useLanguage();
   const isAr = language === 'ar';
   const isManaged = managedSlides !== null && managedSlides !== undefined;
-  // CMS-managed slides render straight away (they are in the server HTML) — the
-  // demo slides are only a fallback while the standalone slider fetches banners.
+  // CMS-managed slides render straight away (they are in the server HTML); the
+  // standalone slider starts empty and shows a skeleton while it fetches.
   const [slides, setSlides] = useState(() => (
-    isManaged ? (Array.isArray(managedSlides) ? managedSlides : []) : HERO_SLIDES
+    isManaged && Array.isArray(managedSlides) ? managedSlides : []
   ));
   const [loading, setLoading] = useState(isManaged ? managedLoading : true);
   const [current, setCurrent] = useState(0);
@@ -96,6 +95,16 @@ export default function HeroSlider({
                       />
                     </picture>
                   </div>
+                  {slide.showText === false ? (
+                    slide.link && (
+                      <Link
+                        to={slide.link}
+                        className="absolute inset-0 z-10 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-primary-400"
+                        aria-label={title || cta}
+                      />
+                    )
+                  ) : (
+                  <>
                   <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 via-black/15 to-transparent" />
                   {(title || subtitle || slide.link) && (
                     <div className="absolute inset-x-0 bottom-0 z-10">
@@ -122,6 +131,8 @@ export default function HeroSlider({
                         )}
                       </div>
                     </div>
+                  )}
+                  </>
                   )}
                 </>
               ) : (

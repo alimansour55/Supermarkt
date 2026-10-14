@@ -4,7 +4,6 @@
 import { useEffect, useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { fetchPromoBanners } from '../../services/bannerApi';
-import { PROMO_BANNERS } from '../../data/mockData';
 import { centeredPromoGridClass } from '../../utils/tileGridShared';
 import { Skeleton } from '../ui/Skeleton';
 import PromoBannerTile, { PROMO_BANNER_TILE_HEIGHT } from './PromoBannerTile';
@@ -24,7 +23,7 @@ function PromoBannersSkeleton() {
 export default function PromoBanners() {
   const { language } = useLanguage();
   const isAr = language === 'ar';
-  const [banners, setBanners] = useState(PROMO_BANNERS);
+  const [banners, setBanners] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,6 +33,7 @@ export default function PromoBanners() {
   }, []);
 
   if (loading) return <PromoBannersSkeleton />;
+  if (!banners.length) return null;
 
   return (
     <section className="container-app py-6">
