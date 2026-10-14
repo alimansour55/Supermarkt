@@ -15,7 +15,10 @@ const emptyVariant = () => ({
   isDefault: false,
 });
 
-export default function ProductVariantsSection({ control, register, watch, setValue, isAr }) {
+const VARIANT_ERROR_FIELDS = ['valueAr', 'price', 'wholesalePrice', 'stock', 'sku', 'barcode'];
+const ERROR_BORDER = 'border-red-400 bg-red-50';
+
+export default function ProductVariantsSection({ control, register, watch, setValue, errors, isAr }) {
   const { fields, append, remove } = useFieldArray({ control, name: 'variants' });
   const parentSku = watch('sku');
 
@@ -48,6 +51,9 @@ export default function ProductVariantsSection({ control, register, watch, setVa
             const valueAr = watch(`variants.${idx}.valueAr`);
             const valueEn = watch(`variants.${idx}.valueEn`);
             const isDefault = watch(`variants.${idx}.isDefault`);
+            const rowErrors = errors?.variants?.[idx] || {};
+            const fieldClass = (key) => (rowErrors[key] ? ERROR_BORDER : 'border-border');
+            const rowMessages = VARIANT_ERROR_FIELDS.map((key) => rowErrors[key]?.message).filter(Boolean);
             return (
               <div key={field.id} className="rounded-xl border border-border bg-slate-50 p-4">
                 <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -59,12 +65,12 @@ export default function ProductVariantsSection({ control, register, watch, setVa
                     ))}
                   </select>
                   <input
-                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                    className={`rounded-lg border px-3 py-2 text-sm ${fieldClass('valueAr')}`}
                     placeholder={isAr ? 'القيمة (عربي)' : 'Value (Arabic)'}
                     {...register(`variants.${idx}.valueAr`)}
                   />
                   <input
-                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                    className={`rounded-lg border px-3 py-2 text-sm ${fieldClass('valueAr')}`}
                     placeholder={isAr ? 'القيمة (إنجليزي)' : 'Value (English)'}
                     {...register(`variants.${idx}.valueEn`)}
                   />
@@ -83,7 +89,7 @@ export default function ProductVariantsSection({ control, register, watch, setVa
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                   <div className="relative sm:col-span-2">
                     <input
-                      className="w-full rounded-lg border border-border px-3 py-2 pe-9 font-mono text-sm"
+                      className={`w-full rounded-lg border px-3 py-2 pe-9 font-mono text-sm ${fieldClass('sku')}`}
                       placeholder="SKU"
                       {...register(`variants.${idx}.sku`, {
                         onChange: (e) => setValue(`variants.${idx}.sku`, e.target.value.toUpperCase(), { shouldDirty: true }),
@@ -101,7 +107,7 @@ export default function ProductVariantsSection({ control, register, watch, setVa
                     )}
                   </div>
                   <input
-                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                    className={`rounded-lg border px-3 py-2 text-sm ${fieldClass('barcode')}`}
                     placeholder={isAr ? 'الباركود' : 'Barcode'}
                     {...register(`variants.${idx}.barcode`, {
                       onChange: (e) => setValue(`variants.${idx}.barcode`, e.target.value.replace(/\D/g, ''), { shouldDirty: true }),
@@ -113,7 +119,7 @@ export default function ProductVariantsSection({ control, register, watch, setVa
                       type="number"
                       min="0"
                       step={fkey === 'stock' ? '1' : '0.01'}
-                      className="rounded-lg border border-border px-3 py-2 text-sm"
+                      className={`rounded-lg border px-3 py-2 text-sm ${fieldClass(fkey)}`}
                       placeholder={fkey}
                       {...register(`variants.${idx}.${fkey}`)}
                     />
@@ -126,6 +132,11 @@ export default function ProductVariantsSection({ control, register, watch, setVa
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
+                {rowMessages.length > 0 && (
+                  <ul className="mt-2 space-y-0.5 text-xs text-red-600">
+                    {rowMessages.map((m) => <li key={m}>{m}</li>)}
+                  </ul>
+                )}
               </div>
             );
           })}

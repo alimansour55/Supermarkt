@@ -16,6 +16,8 @@ import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
 import { localizeAdminApiError } from '../constants/productCategoryErrors';
 import Loader from '../../components/ui/Loader';
+import { useConfirm } from '../components';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import {
   buildProductSchema,
   buildEmptyFormValues,
@@ -68,6 +70,7 @@ export default function ProductFormPage() {
   const prefillCategoryId = searchParams.get('category') || '';
   const { language } = useLanguage();
   const isAr = language === 'ar';
+  const confirm = useConfirm();
 
   const [categories, setCategories] = useState([]);
   const [meta, setMeta] = useState({ updatedAt: null, stockUpdatedAt: null, stockHistory: [] });
@@ -83,6 +86,9 @@ export default function ProductFormPage() {
   const [categoryPickerKey, setCategoryPickerKey] = useState(0);
   const [activeSection, setActiveSection] = useState('basics');
   const formTopRef = useRef(null);
+  // Set once the first create succeeds, so a retry (e.g. after a failed image upload)
+  // updates that product instead of creating a duplicate.
+  const createdIdRef = useRef(null);
 
   const safeCategories = Array.isArray(categories) ? categories : [];
   const categoriesRef = useRef(safeCategories);
@@ -96,12 +102,30 @@ export default function ProductFormPage() {
 
   const {
     register, control, handleSubmit, watch, setValue, reset, trigger,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm({
     resolver,
     defaultValues: buildEmptyFormValues(),
     mode: 'onBlur',
   });
+
+  const hasUnsavedChanges = (isDirty || files.length > 0) && !saving;
+  useUnsavedChangesGuard(hasUnsavedChanges);
+
+  const handleCancel = async () => {
+    if (hasUnsavedChanges) {
+      const ok = await confirm({
+        title: isAr ? 'تجاهل التغييرات؟' : 'Discard changes?',
+        message: isAr
+          ? 'لديك تغييرات غير محفوظة على هذا المنتج. هل تريد الخروج بدون حفظ؟'
+          : 'You have unsaved changes to this product. Leave without saving?',
+        confirmLabel: isAr ? 'خروج بدون حفظ' : 'Leave without saving',
+        cancelLabel: isAr ? 'متابعة التعديل' : 'Keep editing',
+      });
+      if (!ok) return;
+    }
+    navigate('/admin/products');
+  };
 
   const SECTIONS = useMemo(() => ([
     { id: 'basics', label: isAr ? 'الأساسيات' : 'Basics', icon: Info },
@@ -219,6 +243,7 @@ export default function ProductFormPage() {
     setMeta({ updatedAt: null, stockUpdatedAt: null, stockHistory: [] });
     setSubmitError('');
     setActiveSection('basics');
+    createdIdRef.current = null;
     if (prefillCategoryId) {
       navigate(adminNewProductUrl(), { replace: true });
     }
@@ -241,10 +266,9 @@ export default function ProductFormPage() {
     try {
       const payload = mapFormValuesToPayload(values, safeCategories);
 
-      let productId = id;
-      if (isEdit) {
-        const { data } = await adminApi.updateProduct(id, payload);
-        productId = data.data._id;
+      let productId = id || createdIdRef.current;
+      if (productId) {
+        const { data } = await adminApi.updateProduct(productId, payload);
         setMeta({
           updatedAt: data.data.updatedAt,
           stockUpdatedAt: data.data.stockUpdatedAt,
@@ -253,10 +277,25 @@ export default function ProductFormPage() {
       } else {
         const { data } = await adminApi.createProduct(payload);
         productId = data.data._id;
+        createdIdRef.current = productId;
+        // Keep the server-generated identifiers so a retry sends them back unchanged.
+        setValue('slug', data.data.slug || '');
+        setValue('sku', data.data.sku || '');
       }
 
       if (files.length) {
-        await adminApi.uploadImages(productId, files);
+        try {
+          await adminApi.uploadImages(productId, files);
+        } catch (uploadErr) {
+          const reason = uploadErr.response?.data?.message;
+          setSubmitError(isAr
+            ? `تم حفظ المنتج، لكن تعذّر رفع الصور${reason ? ` (${reason})` : ''}. راجع الملفات واضغط حفظ مرة أخرى.`
+            : `The product was saved, but the images could not be uploaded${reason ? ` (${reason})` : ''}. Check the files and press Save again.`);
+          setActiveSection('media');
+          scrollToTop();
+          return;
+        }
+        setFiles([]);
       }
 
       if (addAnother && !isEdit) {
@@ -332,7 +371,7 @@ export default function ProductFormPage() {
               saving={saving}
               onSave={() => submit(false)}
               onSaveAndAddAnother={() => submit(true)}
-              onCancel={() => navigate('/admin/products')}
+              onCancel={handleCancel}
               updatedAt={meta.updatedAt}
               stockUpdatedAt={meta.stockUpdatedAt}
             />
@@ -376,7 +415,7 @@ export default function ProductFormPage() {
             />
           </div>
           <div className={activeSection === 'variants' ? '' : 'hidden'}>
-            <ProductVariantsSection control={control} register={register} watch={watch} setValue={setValue} isAr={isAr} />
+            <ProductVariantsSection control={control} register={register} watch={watch} setValue={setValue} errors={errors} isAr={isAr} />
           </div>
           <div className={activeSection === 'seo' ? '' : 'hidden'}>
             <ProductSeoAdvancedSection

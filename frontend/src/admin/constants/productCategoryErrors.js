@@ -85,6 +85,12 @@ export function localizeProductCategoryApiError(message, isAr, fallbackKey = 're
 export function localizeAdminApiError(err, isAr, fallbackEn, fallbackAr) {
   const message = err?.response?.data?.message;
   if (message) {
+    const barcodeOwner = message.match(/^Barcode already used by "(.*)"$/);
+    if (barcodeOwner) {
+      return isAr
+        ? `الباركود مستخدم بالفعل في المنتج "${barcodeOwner[1]}" — غيّره أو احذفه من المنتج الآخر.`
+        : `This barcode is already used by "${barcodeOwner[1]}" — change it or remove it from the other product.`;
+    }
     const localized = localizeProductCategoryApiError(message, isAr);
     if (localized !== message) return localized;
     return message;

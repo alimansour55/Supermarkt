@@ -22,6 +22,7 @@ import {
   buildVariantSku,
 } from '../utils/productSku.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { assertBarcodeAvailable, findBarcodeOwner, normalizeBarcode } from '../utils/productBarcode.js';
 import { parsePagination, parseSort, paginationMeta } from '../utils/listQuery.js';
 import { toCsv, sendCsv, parseCsv } from '../utils/csvExport.js';
 import { logAudit, pickChanges } from '../services/auditLog.service.js';
@@ -1206,6 +1207,9 @@ export const createProduct = asyncHandler(async (req, res) => {
   const existing = await Product.findOne({ slug: productSlug });
   if (existing) throw new AppError('Product slug already exists', 400);
 
+  const normalizedBarcode = normalizeBarcode(barcode);
+  await assertBarcodeAvailable(normalizedBarcode);
+
   let categorySlug = '';
   if (categoryFields.category) {
     const cat = await Category.findById(categoryFields.category).select('slug').lean();
@@ -1244,7 +1248,7 @@ export const createProduct = asyncHandler(async (req, res) => {
     isActive: isActive ?? true,
     emoji,
     sku: resolvedSku,
-    barcode,
+    barcode: normalizedBarcode,
     variants: variants || [],
     specs: specs || [],
     frequentlyBoughtTogether: frequentlyBoughtTogether || [],
@@ -1312,9 +1316,18 @@ export const updateProduct = asyncHandler(async (req, res) => {
     Object.assign(updates, categoryFields);
   }
 
+  if (typeof updates.slug === 'string' && !updates.slug.trim()) delete updates.slug;
   if (updates.slug && updates.slug !== product.slug) {
     const exists = await Product.findOne({ slug: updates.slug, _id: { $ne: product._id } });
     if (exists) throw new AppError('Product slug already exists', 400);
+  }
+
+  if (updates.barcode !== undefined) {
+    updates.barcode = normalizeBarcode(updates.barcode);
+    // Only check when it changes, so legacy duplicates do not block unrelated edits.
+    if (updates.barcode && updates.barcode !== product.barcode) {
+      await assertBarcodeAvailable(updates.barcode, product._id);
+    }
   }
 
   if (updates.sku !== undefined) {
@@ -1540,7 +1553,7 @@ export const importAdminProducts = asyncHandler(async (req, res) => {
         descriptionAr: row.descriptionAr || '',
         ...categoryFields,
         sku: row.sku || undefined,
-        barcode: row.barcode || undefined,
+        barcode: normalizeBarcode(row.barcode),
         price: Number(row.sellingPrice || row.price || 0),
         wholesalePrice: Number(row.wholesalePrice || 0),
         stock: Number(row.stock || 0),
@@ -1554,6 +1567,9 @@ export const importAdminProducts = asyncHandler(async (req, res) => {
       };
 
       const existing = await Product.findOne({ slug });
+      if (payload.barcode && payload.barcode !== existing?.barcode) {
+        await assertBarcodeAvailable(payload.barcode, existing?._id);
+      }
       if (existing) {
         Object.assign(existing, payload);
         await existing.save();
@@ -1623,6 +1639,16 @@ export const checkProductSku = asyncHandler(async (req, res) => {
 
   const available = await isSkuAvailable(sku, excludeProductId);
   res.json({ success: true, available });
+});
+
+export const checkProductBarcode = asyncHandler(async (req, res) => {
+  const barcode = normalizeBarcode(req.query.barcode);
+  if (!barcode) {
+    return res.json({ success: true, available: true, owner: null });
+  }
+
+  const owner = await findBarcodeOwner(barcode, req.query.excludeId || undefined);
+  res.json({ success: true, available: !owner, owner });
 });
 
 export const getProductCategoryIntegrity = asyncHandler(async (req, res) => {

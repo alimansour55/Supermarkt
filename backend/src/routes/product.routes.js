@@ -28,6 +28,7 @@ import {
   repairProductCategoryIntegrity,
   suggestProductSku,
   checkProductSku,
+  checkProductBarcode,
 } from '../controllers/product.controller.js';
 
 const router = Router();
@@ -42,6 +43,7 @@ router.get('/category/:slug', getProductsByCategory);
 router.post('/admin/upload-images', ...adminOnly, uploadProductMediaMultiple('images', 10), uploadProductImages);
 router.post('/admin/sku/suggest', ...adminOnly, suggestProductSku);
 router.get('/admin/sku/check', ...adminOnly, checkProductSku);
+router.get('/admin/barcode/check', ...adminOnly, checkProductBarcode);
 router.put('/admin/:id/images/reorder', ...adminOnly, reorderProductImages);
 router.delete('/admin/:id/images', ...adminOnly, removeProductImage);
 router.get('/admin/export', ...adminOnly, exportAdminProducts);
