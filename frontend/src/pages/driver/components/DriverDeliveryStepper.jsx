@@ -1,32 +1,42 @@
-import { Check, MapPin, Navigation, PackageCheck, UserCheck, X } from 'lucide-react';
+import {
+  Check, MapPin, Navigation, PackageCheck, PackageOpen, UserCheck, X,
+} from 'lucide-react';
 
 const BASE_STEPS = [
   { key: 'assigned', icon: UserCheck, ar: 'مُعيّن', en: 'Assigned' },
-  { key: 'enroute', icon: Navigation, ar: 'في الطريق', en: 'On the way' },
+  { key: 'picked_up', icon: PackageOpen, ar: 'استلام', en: 'Picked up' },
+  { key: 'en_route', icon: Navigation, ar: 'في الطريق', en: 'On the way' },
   { key: 'arrived', icon: MapPin, ar: 'وصل', en: 'Arrived' },
   { key: 'done', icon: PackageCheck, ar: 'تم التسليم', en: 'Delivered' },
 ];
 
-/**
- * Derives the active stage purely from data the page already tracks —
- * no extra state, no backend round-trip.
- */
-export function computeDeliveryStep({ orderStatus, sharing, trackingActive, arrivedAt }) {
-  if (orderStatus === 'delivered' || orderStatus === 'delivery_failed') return 3;
-  if (arrivedAt) return 2;
-  if (trackingActive || sharing) return 1;
-  return 0;
+const STAGE_TO_STEP = {
+  assigned: 0,
+  accepted: 0,
+  picked_up: 1,
+  en_route: 2,
+  arrived: 3,
+  delivered: 4,
+  failed: 4,
+  returned: 4,
+};
+
+/** Active step from the server's delivery stage (`order.delivery.stage`). */
+export function computeDeliveryStep({ stage, orderStatus }) {
+  if (orderStatus === 'delivered' || orderStatus === 'delivery_failed') return 4;
+  return STAGE_TO_STEP[stage] ?? 0;
 }
 
 export default function DriverDeliveryStepper({ step, failed, isAr }) {
-  const steps = BASE_STEPS.map((s, i) => (i === 3 && failed ? { ...s, icon: X, ar: 'فشل التسليم', en: 'Failed' } : s));
+  const last = BASE_STEPS.length - 1;
+  const steps = BASE_STEPS.map((s, i) => (i === last && failed ? { ...s, icon: X, ar: 'فشل التسليم', en: 'Failed' } : s));
 
   return (
     <div className="flex items-center px-1">
       {steps.map((s, i) => {
         const Icon = s.icon;
         const state = i < step ? 'done' : i === step ? 'active' : 'upcoming';
-        const isFailedFinal = failed && i === 3 && state !== 'upcoming';
+        const isFailedFinal = failed && i === last && state !== 'upcoming';
         return (
           <div key={s.key} className="flex flex-1 items-center last:flex-none">
             <div className="flex flex-col items-center gap-1.5">

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import {
-  Banknote, History, ListChecks, LocateFixed, Loader2, Package, RefreshCw, Search, Truck, X,
+  Banknote, History, ListChecks, LocateFixed, Loader2, Package, RefreshCw, Search, Truck, Wallet, X,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { orderService } from '../../services/apiServices';
@@ -16,6 +16,11 @@ import { formatDriverAddress, haversineKm } from './driverUtils';
 async function fetchDeliveries() {
   const { data } = await orderService.getDriverDeliveries();
   return data.data || [];
+}
+
+async function fetchCashBalance() {
+  const { data } = await orderService.getDriverCash();
+  return data.data?.balance ?? 0;
 }
 
 async function fetchHistory() {
@@ -45,15 +50,19 @@ export default function DriverDeliveriesPage() {
   const {
     data: deliveries, loading, error, refetch,
   } = useAsyncData(fetchDeliveries, []);
-  const { refreshing } = usePullToRefresh(refetch, { disabled: loading });
+  const { data: cashBalance, refetch: refetchCash } = useAsyncData(fetchCashBalance, []);
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refetch(), refetchCash()]);
+  }, [refetch, refetchCash]);
+  const { refreshing } = usePullToRefresh(refreshAll, { disabled: loading });
 
   // A new assignment notice arrived (see DriverLayout) — refresh silently.
   const seenVersionRef = useRef(assignmentsVersion);
   useEffect(() => {
     if (assignmentsVersion === seenVersionRef.current) return;
     seenVersionRef.current = assignmentsVersion;
-    refetch();
-  }, [assignmentsVersion, refetch]);
+    refreshAll();
+  }, [assignmentsVersion, refreshAll]);
 
   const {
     data: history, loading: historyLoading, error: historyError, refetch: refetchHistory,
@@ -82,10 +91,7 @@ export default function DriverDeliveriesPage() {
     });
   }, [list, nearestOn, myPos]);
 
-  const codTotal = list
-    .filter((o) => o.paymentMethod === 'cod' && o.paymentStatus !== 'paid')
-    .reduce((sum, o) => sum + (o.total || 0), 0);
-  const itemTotal = list.reduce((sum, o) => sum + (o.itemCount || 0), 0);
+  const codTotal = activeDeliveries.reduce((sum, o) => sum + (o.cashDue || 0), 0);
 
   const todayHistory = historyList.filter((o) => groupHistoryByDay([o], isAr)[0]?.[0] === (isAr ? 'اليوم' : 'Today'));
   const deliveredToday = todayHistory.filter((o) => o.orderStatus === 'delivered').length;
@@ -135,7 +141,7 @@ export default function DriverDeliveriesPage() {
         </div>
         <button
           type="button"
-          onClick={() => (tab === 'active' ? refetch() : refetchHistory())}
+          onClick={() => (tab === 'active' ? refreshAll() : refetchHistory())}
           disabled={loading || refreshing || historyLoading}
           className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-teal-700 shadow-sm disabled:opacity-50"
           aria-label={isAr ? 'تحديث' : 'Refresh'}
@@ -184,15 +190,20 @@ export default function DriverDeliveriesPage() {
 
       {tab === 'active' && (
         <>
-          {!loading && activeDeliveries.length > 0 && (
+          {!loading && (activeDeliveries.length > 0 || cashBalance > 0) && (
             <div className="grid grid-cols-3 gap-2.5">
               <DriverStatCard icon={Truck} label={isAr ? 'نشطة' : 'Active'} value={activeDeliveries.length} accent="teal" />
-              <DriverStatCard icon={Package} label={isAr ? 'قطع' : 'Items'} value={itemTotal} accent="violet" />
               <DriverStatCard
                 icon={Banknote}
-                label={isAr ? 'تحصيل (ج.م)' : 'COD (EGP)'}
+                label={isAr ? 'للتحصيل (ج.م)' : 'To collect (EGP)'}
                 value={codTotal > 0 ? Math.round(codTotal) : '—'}
                 accent="amber"
+              />
+              <DriverStatCard
+                icon={Wallet}
+                label={isAr ? 'نقدية معك (ج.م)' : 'Cash held (EGP)'}
+                value={cashBalance > 0 ? Math.round(cashBalance) : '0'}
+                accent="violet"
               />
             </div>
           )}

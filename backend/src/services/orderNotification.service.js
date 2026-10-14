@@ -31,6 +31,8 @@ const SMS_TEMPLATES = {
       const eta = o.etaText ? ` (${o.etaText})` : '';
       return `سوق+: مندوب طلبك ${o.orderNumber} على وشك الوصول${eta}!`;
     },
+    driver_arrived: (o) => `سوق+: مندوب طلبك ${o.orderNumber} وصل إلى عنوانك.${o.deliveryPin ? ` كود الاستلام: ${o.deliveryPin}` : ''}`,
+    delivery_pin: (o) => `سوق+: كود استلام طلبك ${o.orderNumber} هو ${o.deliveryPin}. أعطه للمندوب عند الاستلام فقط.`,
   },
   en: {
     order_created: (o) => `MarketPlus: Order ${o.orderNumber} received. Total ${o.total} EGP. Thank you!`,
@@ -55,6 +57,8 @@ const SMS_TEMPLATES = {
       const eta = o.etaText ? ` (${o.etaText})` : '';
       return `MarketPlus: Your driver for order ${o.orderNumber} is almost there${eta}!`;
     },
+    driver_arrived: (o) => `MarketPlus: Your driver for order ${o.orderNumber} has arrived.${o.deliveryPin ? ` Delivery code: ${o.deliveryPin}` : ''}`,
+    delivery_pin: (o) => `MarketPlus: Your delivery code for order ${o.orderNumber} is ${o.deliveryPin}. Give it to the driver only at handover.`,
   },
 };
 
@@ -66,6 +70,7 @@ export async function sendOrderSms(phone, templateKey, order, lang = 'ar') {
   if (order?.trackUrl) templateData.trackUrl = order.trackUrl;
   if (order?.etaText) templateData.etaText = order.etaText;
   if (order?.driverName) templateData.driverName = order.driverName;
+  if (order?.deliveryPin) templateData.deliveryPin = order.deliveryPin;
 
   let body = await renderSmsTemplate(dbKey, lang, templateData);
   if (!body) {

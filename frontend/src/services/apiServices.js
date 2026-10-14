@@ -53,12 +53,22 @@ export const orderService = {
   getDriverDeliveries: () => api.get('/orders/driver/deliveries'),
   getDriverHistory: () => api.get('/orders/driver/deliveries/history'),
   getDriverDelivery: (id) => api.get(`/orders/driver/deliveries/${id}`),
-  completeDriverDelivery: (id, photoFile) => {
-    if (!photoFile) return api.post(`/orders/driver/deliveries/${id}/complete`);
+  /** `fields`: { cashCollected?, deliveryPin?, offsiteReason? } — sent as multipart when a photo is attached. */
+  completeDriverDelivery: (id, photoFile, fields = {}) => {
+    const body = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined && v !== ''));
+    if (!photoFile) return api.post(`/orders/driver/deliveries/${id}/complete`, body);
     const form = new FormData();
     form.append('proofPhoto', photoFile);
+    Object.entries(body).forEach(([key, value]) => form.append(key, String(value)));
     return api.post(`/orders/driver/deliveries/${id}/complete`, form);
   },
+  acceptDriverDelivery: (id) => api.post(`/orders/driver/deliveries/${id}/accept`),
+  rejectDriverDelivery: (id) => api.post(`/orders/driver/deliveries/${id}/reject`),
+  pickupDriverDelivery: (id, pickedItems) => api.post(`/orders/driver/deliveries/${id}/pickup`, { pickedItems }),
+  arriveDriverDelivery: (id) => api.post(`/orders/driver/deliveries/${id}/arrive`),
+  logDriverContactAttempt: (id, type) => api.post(`/orders/driver/deliveries/${id}/attempts`, { type }),
+  returnDriverDelivery: (id) => api.post(`/orders/driver/deliveries/${id}/returned`),
+  getDriverCash: () => api.get('/orders/driver/cash'),
   failDriverDelivery: (id, data) => api.post(`/orders/driver/deliveries/${id}/fail`, data),
   updateDriverLocation: (id, data) => api.put(`/orders/${id}/tracking/location`, data),
   getRecurringDeliveries: () => api.get('/orders/recurring-deliveries'),

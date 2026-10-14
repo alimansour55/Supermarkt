@@ -1,4 +1,5 @@
 import Order from '../models/Order.js';
+import DeliveryTracking from '../models/DeliveryTracking.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import {
@@ -9,6 +10,7 @@ import {
   isActiveDriverTrackingStatus,
   updateDriverTrackingLocation,
 } from '../services/deliveryTracking.service.js';
+import { pushStatusHistory } from '../services/orderManagement.service.js';
 import {
   applyDeliveryFailureReason,
   clearDeliveryFailureReason,
@@ -16,15 +18,40 @@ import {
 } from '../constants/deliveryFailureReasons.js';
 import { notifyOrderStatusChange } from '../utils/sendEmail.js';
 import { notifyOrderTimeline } from '../services/orderNotification.service.js';
-import { notifyCustomerDriverLocation, notifyCustomerOrderStatus } from '../services/orderTrackingNotify.service.js';
+import {
+  notifyCustomerDriverArrived,
+  notifyCustomerDriverLocation,
+  notifyCustomerOrderStatus,
+  notifyCustomerTrackingLive,
+} from '../services/orderTrackingNotify.service.js';
 import { awardPointsForOrder } from '../services/loyalty.service.js';
 import { logAudit } from '../services/auditLog.service.js';
+import { createNotification } from '../services/notification.service.js';
 import { getGpsDeliveryEnabled, getDriverSettings } from '../services/storeSettings.service.js';
+import { releaseAssignment } from '../services/deliveryDispatch.service.js';
+import {
+  CONTACT_FAILURE_REASONS,
+  MAX_PIN_FAILURES,
+  PICKUP_ORDER_STATUSES,
+  PRE_PICKUP_STAGES,
+  contactAttemptCount,
+  distanceToDestination,
+  ensureDeliveryRun,
+  isDeliveryPinRequired,
+  isProofPhotoRequired,
+} from '../services/deliveryRun.service.js';
+import {
+  codAmountDue,
+  getDriverCashSummary,
+  recordCodCollection,
+  roundMoney,
+} from '../services/driverCash.service.js';
 import User from '../models/User.js';
 import { CLOUDINARY_FOLDERS, deleteFromCloudinary, uploadFileToCloudinary } from '../utils/cloudinaryUpload.js';
 
 /** Statuses a driver can see before dispatch — assigned ahead of time, not yet on the road. */
 const DRIVER_UPCOMING_STATUSES = ['pending', 'confirmed', 'preparing'];
+const TERMINAL_STATUSES = ['delivered', 'delivery_failed', 'cancelled', 'refunded'];
 
 function formatDriverItems(items = []) {
   return items.map((item) => ({
@@ -39,14 +66,29 @@ function formatDriverItems(items = []) {
   }));
 }
 
-export function formatDriverOrder(order, {
-  gpsDeliveryEnabled = true,
-  pickingChecklistEnabled = true,
-  cashCalculatorEnabled = true,
-} = {}) {
+/** Stage of the delivery run; orders from before runs existed get the equivalent stage. */
+function effectiveStage(raw) {
+  if (raw.delivery?.stage) return raw.delivery.stage;
+  if (raw.orderStatus === 'delivered') return 'delivered';
+  if (raw.orderStatus === 'delivery_failed') return 'failed';
+  return raw.orderStatus === 'out_for_delivery' ? 'picked_up' : 'assigned';
+}
+
+export function formatDriverOrder(order, flags = {}) {
+  const {
+    gpsDeliveryEnabled = true,
+    pickingChecklistEnabled = true,
+    cashCalculatorEnabled = true,
+    settings = {},
+  } = flags;
   const raw = order.toObject?.() ?? order;
   const user = raw.user && typeof raw.user === 'object' ? raw.user : null;
   const items = formatDriverItems(raw.items);
+  const stage = effectiveStage(raw);
+  const isTerminal = TERMINAL_STATUSES.includes(raw.orderStatus);
+  const onTheRoad = raw.orderStatus === 'out_for_delivery';
+  const prePickup = PRE_PICKUP_STAGES.includes(stage);
+  const run = raw.delivery || {};
 
   return {
     _id: raw._id,
@@ -62,14 +104,42 @@ export function formatDriverOrder(order, {
     total: raw.total,
     paymentMethod: raw.paymentMethod,
     paymentStatus: raw.paymentStatus,
+    cashDue: codAmountDue(raw),
     items,
     itemCount: items.reduce((sum, item) => sum + (item.quantity || 0), 0),
     trackingEnabled: raw.trackingEnabled === true,
     gpsDeliveryEnabled,
     pickingChecklistEnabled,
     cashCalculatorEnabled,
+    delivery: {
+      stage,
+      assignedAt: run.assignedAt || raw.assignedDriverAt || null,
+      acceptedAt: run.acceptedAt || null,
+      pickedUpAt: run.pickedUpAt || null,
+      enRouteAt: run.enRouteAt || null,
+      arrivedAt: run.arrivedAt || null,
+      pickedItems: run.pickedItems || null,
+      missingItems: run.missingItems || null,
+      contactAttempts: contactAttemptCount(raw),
+      cashCollected: run.cashCollected ?? null,
+      changeGiven: run.changeGiven ?? null,
+    },
+    canAccept: !isTerminal && stage === 'assigned',
+    canReject: !isTerminal && prePickup && settings.allowReject !== false,
+    canPickup: !isTerminal && prePickup && PICKUP_ORDER_STATUSES.includes(raw.orderStatus),
+    canArrive: onTheRoad && !['arrived', 'delivered', 'failed'].includes(stage),
     canShareLocation: gpsDeliveryEnabled && isActiveDriverTrackingStatus(raw.orderStatus),
-    canComplete: raw.orderStatus === 'out_for_delivery',
+    canComplete: onTheRoad,
+    canReturn: raw.orderStatus === 'delivery_failed' && stage === 'failed',
+    requirements: {
+      deliveryPin: onTheRoad && isDeliveryPinRequired(raw, settings),
+      pinLocked: (run.pinFailures || 0) >= MAX_PIN_FAILURES,
+      proofPhoto: isProofPhotoRequired(raw, settings),
+      cashAmount: settings.cashTrackingEnabled !== false && codAmountDue(raw) > 0,
+      geofenceMeters: gpsDeliveryEnabled ? Number(settings.geofenceMeters) || 0 : 0,
+      minContactAttempts: Number(settings.failMinContactAttempts) || 0,
+      contactFailureReasons: CONTACT_FAILURE_REASONS,
+    },
     shippingAddress: raw.shippingAddress,
     deliveryZoneNameAr: raw.deliveryZoneNameAr,
     deliveryZoneNameEn: raw.deliveryZoneNameEn,
@@ -100,6 +170,9 @@ function formatDriverHistoryOrder(order) {
     deliveryFailureReasonAr: raw.deliveryFailureReasonAr || '',
     deliveryFailureReasonEn: raw.deliveryFailureReasonEn || '',
     deliveryProofPhoto: raw.deliveryProofPhoto?.url || null,
+    cashCollected: raw.delivery?.cashCollected ?? null,
+    stage: effectiveStage(raw),
+    canReturn: raw.orderStatus === 'delivery_failed' && effectiveStage(raw) === 'failed',
   };
 }
 
@@ -112,6 +185,7 @@ async function getDriverOrderFlags() {
     gpsDeliveryEnabled,
     pickingChecklistEnabled: driverSettings.pickingChecklistEnabled !== false,
     cashCalculatorEnabled: driverSettings.cashCalculatorEnabled !== false,
+    settings: driverSettings,
   };
 }
 
@@ -120,6 +194,30 @@ async function loadDriverOrder(orderId, driverId) {
     _id: orderId,
     assignedDriver: driverId,
   }).populate('user', 'name');
+}
+
+async function loadOwnedOrderOr404(req) {
+  const order = await loadDriverOrder(req.params.id, req.user._id);
+  if (!order) throw new AppError('Delivery not found', 404);
+  return order;
+}
+
+async function respondWithOrder(res, orderId, driverId) {
+  const [order, flags] = await Promise.all([loadDriverOrder(orderId, driverId), getDriverOrderFlags()]);
+  if (!order) throw new AppError('Delivery not found', 404);
+  res.json({ success: true, data: formatDriverOrder(order, flags) });
+}
+
+function alertStore({ titleAr, titleEn, messageAr, messageEn, order }) {
+  return createNotification({
+    type: 'delivery_alert',
+    titleAr,
+    titleEn,
+    messageAr,
+    messageEn,
+    link: `/admin/orders?order=${order._id}`,
+    data: { orderId: order._id, orderNumber: order.orderNumber },
+  }).catch((err) => console.error('Delivery alert failed:', err.message));
 }
 
 /**
@@ -131,7 +229,9 @@ async function loadDriverOrder(orderId, driverId) {
  * actually changed the status. A repeat of an already-applied transition returns
  * `changed: false` instead of an error, so client retries are safe.
  */
-async function finalizeDriverOrderStatus(order, nextStatus, { driverId, failurePayload, proofPhoto } = {}) {
+async function finalizeDriverOrderStatus(order, nextStatus, {
+  driverId, failurePayload, proofPhoto, deliverySet = {},
+} = {}) {
   const previousStatus = order.orderStatus;
   if (previousStatus === nextStatus) {
     return { previousStatus, nextStatus, changed: false, order };
@@ -151,13 +251,19 @@ async function finalizeDriverOrderStatus(order, nextStatus, { driverId, failureP
     clearDeliveryFailureReason(order);
   }
 
+  await ensureDeliveryRun(order);
+
   const now = new Date();
   const set = {
     orderStatus: nextStatus,
     deliveryFailureReasonKey: order.deliveryFailureReasonKey,
     deliveryFailureReasonAr: order.deliveryFailureReasonAr,
     deliveryFailureReasonEn: order.deliveryFailureReasonEn,
+    'delivery.stage': nextStatus === 'delivered' ? 'delivered' : 'failed',
   };
+  for (const [key, value] of Object.entries(deliverySet)) {
+    set[`delivery.${key}`] = value;
+  }
   if (nextStatus === 'delivered') {
     set.deliveredAt = now;
     if (order.paymentMethod === 'cod' && order.paymentStatus === 'pending') {
@@ -252,12 +358,7 @@ export const getDriverHistory = asyncHandler(async (req, res) => {
 });
 
 export const getDriverDeliveryById = asyncHandler(async (req, res) => {
-  const order = await loadDriverOrder(req.params.id, req.user._id);
-
-  if (!order) {
-    throw new AppError('Delivery not found', 404);
-  }
-
+  const order = await loadOwnedOrderOr404(req);
   const flags = await getDriverOrderFlags();
   res.json({ success: true, data: formatDriverOrder(order, flags) });
 });
@@ -270,7 +371,11 @@ export const getDriverConfig = asyncHandler(async (req, res) => {
       availabilityEnabled: driverSettings.availabilityEnabled !== false,
       pickingChecklistEnabled: driverSettings.pickingChecklistEnabled !== false,
       cashCalculatorEnabled: driverSettings.cashCalculatorEnabled !== false,
+      cashTrackingEnabled: driverSettings.cashTrackingEnabled !== false,
+      allowReject: driverSettings.allowReject !== false,
+      acceptTimeoutMin: Number(driverSettings.acceptTimeoutMin) || 0,
       driverAvailable: req.user.driverAvailable !== false,
+      cashBalance: roundMoney(req.user.driverCashBalance),
     },
   });
 });
@@ -288,6 +393,198 @@ export const updateDriverAvailability = asyncHandler(async (req, res) => {
   );
 
   res.json({ success: true, data: { driverAvailable: available } });
+});
+
+/** Driver confirms they will take the delivery (stops the accept timeout). */
+export const acceptDriverDelivery = asyncHandler(async (req, res) => {
+  const order = await loadOwnedOrderOr404(req);
+  if (TERMINAL_STATUSES.includes(order.orderStatus)) {
+    throw new AppError('This delivery is already closed', 400);
+  }
+  await ensureDeliveryRun(order);
+
+  const accepted = await Order.findOneAndUpdate(
+    { _id: order._id, assignedDriver: req.user._id, 'delivery.stage': 'assigned' },
+    { $set: { 'delivery.stage': 'accepted', 'delivery.acceptedAt': new Date() } },
+    { new: true },
+  );
+  if (accepted) {
+    await logAudit({
+      req,
+      action: 'driver_accept_delivery',
+      entityType: 'order',
+      entityId: order._id,
+      entityLabel: order.orderNumber,
+    });
+  }
+  // Not matched = already accepted or further along: idempotent.
+  await respondWithOrder(res, order._id, req.user._id);
+});
+
+/** Driver declines before pickup; the order goes back to the pool (or to the next driver). */
+export const rejectDriverDelivery = asyncHandler(async (req, res) => {
+  const settings = await getDriverSettings();
+  if (settings.allowReject === false) {
+    throw new AppError('Declining deliveries is disabled by the store', 403);
+  }
+  const order = await loadOwnedOrderOr404(req);
+  await ensureDeliveryRun(order);
+
+  const result = await releaseAssignment(order._id, req.user._id, { reason: 'reject', req });
+  if (!result) {
+    throw new AppError('This delivery can no longer be declined — it was already picked up', 409);
+  }
+  res.json({ success: true, data: { released: true, orderId: order._id } });
+});
+
+/**
+ * Driver collects the order at the store. Records the picking checklist and, when the
+ * order was still being prepared, dispatches it (out for delivery) — the store does not
+ * need to change the status by hand.
+ */
+export const pickupDriverDelivery = asyncHandler(async (req, res) => {
+  const order = await loadOwnedOrderOr404(req);
+  if (!PICKUP_ORDER_STATUSES.includes(order.orderStatus)) {
+    throw new AppError('This order is not ready for pickup yet', 400, 'NOT_READY');
+  }
+  await ensureDeliveryRun(order);
+
+  const itemCount = order.items?.length || 0;
+  const rawPicked = Array.isArray(req.body.pickedItems) ? req.body.pickedItems : null;
+  const pickedItems = rawPicked
+    ? [...new Set(rawPicked.map(Number).filter((i) => Number.isInteger(i) && i >= 0 && i < itemCount))]
+    : null;
+  const missingItems = pickedItems
+    ? [...Array(itemCount).keys()].filter((i) => !pickedItems.includes(i))
+    : null;
+
+  const now = new Date();
+  const claimed = await Order.findOneAndUpdate(
+    {
+      _id: order._id,
+      assignedDriver: req.user._id,
+      'delivery.stage': { $in: PRE_PICKUP_STAGES },
+      orderStatus: { $in: PICKUP_ORDER_STATUSES },
+    },
+    {
+      $set: {
+        'delivery.stage': 'picked_up',
+        'delivery.pickedUpAt': now,
+        ...(pickedItems ? { 'delivery.pickedItems': pickedItems, 'delivery.missingItems': missingItems } : {}),
+      },
+    },
+    { new: true },
+  );
+
+  if (!claimed) {
+    // Retried tap after a successful pickup → just return the current state.
+    await respondWithOrder(res, order._id, req.user._id);
+    return;
+  }
+
+  const previousStatus = claimed.orderStatus;
+  if (previousStatus !== 'out_for_delivery') {
+    claimed.orderStatus = 'out_for_delivery';
+    pushStatusHistory(claimed, 'out_for_delivery', { changedBy: req.user._id, note: 'Picked up by driver' });
+  }
+  await ensureOrderTracking(claimed);
+  await claimed.save();
+
+  await logAudit({
+    req,
+    action: 'driver_pickup',
+    entityType: 'order',
+    entityId: claimed._id,
+    entityLabel: claimed.orderNumber,
+    changes: {
+      orderStatus: { from: previousStatus, to: claimed.orderStatus },
+      ...(missingItems?.length ? { missingItems } : {}),
+    },
+  });
+
+  if (missingItems?.length) {
+    const namesIn = (lang) => missingItems
+      .map((i) => (lang === 'ar'
+        ? order.items[i]?.nameAr || order.items[i]?.nameEn
+        : order.items[i]?.nameEn || order.items[i]?.nameAr))
+      .filter(Boolean);
+    alertStore({
+      order: claimed,
+      titleAr: 'أصناف ناقصة عند الاستلام',
+      titleEn: 'Items missing at pickup',
+      messageAr: `المندوب استلم طلب #${claimed.orderNumber} بدون: ${namesIn('ar').join('، ')}`,
+      messageEn: `Driver picked up order #${claimed.orderNumber} without: ${namesIn('en').join(', ')}`,
+    });
+  }
+
+  if (previousStatus !== 'out_for_delivery') {
+    (async () => {
+      await notifyOrderStatusChange(claimed._id, 'out_for_delivery', previousStatus).catch(() => {});
+      const populated = await Order.findById(claimed._id).populate('user', 'name email phone');
+      if (!populated?.user) return;
+      await notifyOrderTimeline(populated, populated.user, 'out_for_delivery').catch(() => {});
+      await notifyCustomerOrderStatus(populated, populated.user, 'out_for_delivery', previousStatus).catch(() => {});
+      await notifyCustomerTrackingLive(populated, populated.user).catch(() => {});
+    })().catch((err) => console.error('Pickup notify failed:', err.message));
+  }
+
+  await respondWithOrder(res, claimed._id, req.user._id);
+});
+
+/** Driver is at the customer's door. */
+export const arriveDriverDelivery = asyncHandler(async (req, res) => {
+  const order = await loadOwnedOrderOr404(req);
+  if (order.orderStatus !== 'out_for_delivery') {
+    throw new AppError('Only out-for-delivery orders can be marked as arrived', 400);
+  }
+  await ensureDeliveryRun(order);
+
+  const arrived = await Order.findOneAndUpdate(
+    {
+      _id: order._id,
+      assignedDriver: req.user._id,
+      orderStatus: 'out_for_delivery',
+      'delivery.stage': { $in: ['assigned', 'accepted', 'picked_up', 'en_route'] },
+    },
+    { $set: { 'delivery.stage': 'arrived', 'delivery.arrivedAt': new Date() } },
+    { new: true },
+  ).populate('user', 'name email phone');
+
+  if (arrived) {
+    await DeliveryTracking.updateOne({ orderId: arrived._id }, { $set: { status: 'arrived' } });
+    await logAudit({
+      req,
+      action: 'driver_arrive',
+      entityType: 'order',
+      entityId: arrived._id,
+      entityLabel: arrived.orderNumber,
+    });
+    if (arrived.user) {
+      const settings = await getDriverSettings();
+      notifyCustomerDriverArrived(arrived, arrived.user, {
+        includePin: isDeliveryPinRequired(arrived, settings),
+      }).catch((err) => console.error('Arrival notify failed:', err.message));
+    }
+  }
+  await respondWithOrder(res, order._id, req.user._id);
+});
+
+/** Log a contact attempt (call / WhatsApp / knocking at the door). */
+export const logDriverContactAttempt = asyncHandler(async (req, res) => {
+  const type = String(req.body.type || '');
+  if (!['call', 'whatsapp', 'door'].includes(type)) {
+    throw new AppError('Invalid contact attempt type', 400);
+  }
+  const order = await loadOwnedOrderOr404(req);
+  if (order.orderStatus !== 'out_for_delivery') {
+    throw new AppError('Contact attempts are only logged while out for delivery', 400);
+  }
+  await ensureDeliveryRun(order);
+  await Order.updateOne(
+    { _id: order._id, assignedDriver: req.user._id },
+    { $push: { 'delivery.attempts': { $each: [{ type, at: new Date() }], $slice: -30 } } },
+  );
+  await respondWithOrder(res, order._id, req.user._id);
 });
 
 export const updateDriverOrderLocation = asyncHandler(async (req, res) => {
@@ -309,7 +606,7 @@ export const updateDriverOrderLocation = asyncHandler(async (req, res) => {
     lng,
     heading,
     speed,
-    status: status || 'en_route',
+    status: status || (order.delivery?.stage === 'arrived' ? 'arrived' : 'en_route'),
   };
 
   // Hot path (every ~20 s per driver): one write in the common case. The order and
@@ -326,6 +623,15 @@ export const updateDriverOrderLocation = asyncHandler(async (req, res) => {
 
   if (!tracking) {
     throw new AppError('Tracking record not found for this order', 404);
+  }
+
+  // First movement after pickup: the run is now en route.
+  if (!order.delivery?.stage || ['assigned', 'accepted', 'picked_up'].includes(order.delivery.stage)) {
+    if (!order.delivery?.stage) await ensureDeliveryRun(order);
+    await Order.updateOne(
+      { _id: order._id, 'delivery.stage': { $in: ['assigned', 'accepted', 'picked_up'] } },
+      { $set: { 'delivery.stage': 'en_route', 'delivery.enRouteAt': new Date() } },
+    );
   }
 
   res.json({
@@ -356,9 +662,73 @@ async function notifyCustomerAfterPing(orderId, tracking) {
   });
 }
 
+/**
+ * Validate what the store requires at handover (delivery code, cash amount, proof
+ * photo, geofence). Throws with a `code` the app can react to. Returns the extra
+ * fields to store on the delivery run.
+ */
+async function checkCompletionRequirements(order, req, settings, gpsDeliveryEnabled) {
+  const deliverySet = {};
+
+  if (isDeliveryPinRequired(order, settings)) {
+    const failures = order.delivery?.pinFailures || 0;
+    if (failures >= MAX_PIN_FAILURES) {
+      throw new AppError('Too many wrong delivery codes — contact the store to complete this order', 423, 'PIN_LOCKED');
+    }
+    const entered = String(req.body.deliveryPin || '').trim();
+    if (!entered || entered !== order.deliveryPin) {
+      const after = await Order.findOneAndUpdate(
+        { _id: order._id },
+        { $inc: { 'delivery.pinFailures': 1 } },
+        { new: true },
+      ).select('delivery.pinFailures orderNumber');
+      if ((after?.delivery?.pinFailures || 0) >= MAX_PIN_FAILURES) {
+        alertStore({
+          order,
+          titleAr: 'كود الاستلام مقفل',
+          titleEn: 'Delivery code locked',
+          messageAr: `تم إدخال كود خاطئ ${MAX_PIN_FAILURES} مرات لطلب #${order.orderNumber}. أكمل الطلب من لوحة التحكم بعد التحقق.`,
+          messageEn: `${MAX_PIN_FAILURES} wrong delivery codes for order #${order.orderNumber}. Complete it from the admin panel after checking.`,
+        });
+      }
+      throw new AppError('Wrong delivery code — ask the customer for the 4-digit code', 400, 'PIN_INVALID');
+    }
+  }
+
+  if (isProofPhotoRequired(order, settings) && !req.file) {
+    throw new AppError('A proof-of-delivery photo is required', 400, 'PHOTO_REQUIRED');
+  }
+
+  const due = codAmountDue(order);
+  if (settings.cashTrackingEnabled !== false && due > 0) {
+    const collected = roundMoney(req.body.cashCollected);
+    if (req.body.cashCollected === undefined || req.body.cashCollected === '' || !(collected >= due)) {
+      throw new AppError(`Enter the cash received — at least ${due} EGP is due`, 400, 'CASH_REQUIRED');
+    }
+    deliverySet.cashDue = due;
+    deliverySet.cashCollected = collected;
+    deliverySet.changeGiven = roundMoney(collected - due);
+  }
+
+  const fence = Number(settings.geofenceMeters) || 0;
+  if (gpsDeliveryEnabled && fence > 0) {
+    const tracking = await DeliveryTracking.findOne({ orderId: order._id }).select('lat lng').lean();
+    const distance = distanceToDestination(order, tracking);
+    if (distance == null || distance > fence) {
+      const reason = String(req.body.offsiteReason || '').trim();
+      if (reason.length < 3) {
+        const where = distance == null ? 'Your location is unknown' : `You are ${distance} m from the address`;
+        throw new AppError(`${where} — add a reason to complete away from the door`, 400, 'OUTSIDE_GEOFENCE');
+      }
+      deliverySet.offsite = { distanceMeters: distance, reason: reason.slice(0, 300) };
+    }
+  }
+
+  return deliverySet;
+}
+
 export const completeDriverDelivery = asyncHandler(async (req, res) => {
-  const order = await loadDriverOrder(req.params.id, req.user._id);
-  if (!order) throw new AppError('Delivery not found', 404);
+  const order = await loadOwnedOrderOr404(req);
 
   const flags = await getDriverOrderFlags();
   if (order.orderStatus === 'delivered') {
@@ -369,6 +739,9 @@ export const completeDriverDelivery = asyncHandler(async (req, res) => {
   if (order.orderStatus !== 'out_for_delivery') {
     throw new AppError('Only out-for-delivery orders can be updated by the driver', 400);
   }
+
+  await ensureDeliveryRun(order);
+  const deliverySet = await checkCompletionRequirements(order, req, flags.settings, flags.gpsDeliveryEnabled);
 
   // Upload only once the order is known to be completable, and clean up if the
   // completion does not go through, so failed attempts leave no orphan photos.
@@ -383,6 +756,7 @@ export const completeDriverDelivery = asyncHandler(async (req, res) => {
     result = await finalizeDriverOrderStatus(order, 'delivered', {
       driverId: req.user._id,
       proofPhoto,
+      deliverySet,
     });
   } catch (err) {
     if (proofPhoto?.publicId) await deleteFromCloudinary(proofPhoto.publicId);
@@ -393,13 +767,29 @@ export const completeDriverDelivery = asyncHandler(async (req, res) => {
   }
 
   if (result.changed) {
+    if (deliverySet.cashDue > 0) {
+      await recordCodCollection({ order: result.order, driverId: req.user._id, amount: deliverySet.cashDue });
+    }
+    if (deliverySet.offsite) {
+      alertStore({
+        order: result.order,
+        titleAr: 'تسليم بعيد عن العنوان',
+        titleEn: 'Delivered away from the address',
+        messageAr: `طلب #${order.orderNumber} سُلّم على بعد ${deliverySet.offsite.distanceMeters ?? '؟'} م. السبب: ${deliverySet.offsite.reason}`,
+        messageEn: `Order #${order.orderNumber} completed ${deliverySet.offsite.distanceMeters ?? '?'} m away. Reason: ${deliverySet.offsite.reason}`,
+      });
+    }
     await logAudit({
       req,
       action: 'driver_complete_delivery',
       entityType: 'order',
       entityId: order._id,
       entityLabel: order.orderNumber,
-      changes: { orderStatus: { from: result.previousStatus, to: result.nextStatus } },
+      changes: {
+        orderStatus: { from: result.previousStatus, to: result.nextStatus },
+        ...(deliverySet.cashCollected != null ? { cashCollected: deliverySet.cashCollected } : {}),
+        ...(deliverySet.offsite ? { offsite: deliverySet.offsite } : {}),
+      },
     });
   }
 
@@ -407,10 +797,24 @@ export const completeDriverDelivery = asyncHandler(async (req, res) => {
 });
 
 export const failDriverDelivery = asyncHandler(async (req, res) => {
-  const order = await loadDriverOrder(req.params.id, req.user._id);
-  if (!order) throw new AppError('Delivery not found', 404);
+  const order = await loadOwnedOrderOr404(req);
 
   const { deliveryFailureReasonKey, deliveryFailureReason } = req.body;
+  const settings = await getDriverSettings();
+  const minAttempts = Number(settings.failMinContactAttempts) || 0;
+  if (
+    order.orderStatus === 'out_for_delivery'
+    && minAttempts > 0
+    && CONTACT_FAILURE_REASONS.includes(deliveryFailureReasonKey)
+    && contactAttemptCount(order) < minAttempts
+  ) {
+    throw new AppError(
+      `Try to reach the customer first — at least ${minAttempts} call or WhatsApp attempts are required`,
+      400,
+      'ATTEMPTS_REQUIRED',
+    );
+  }
+
   const result = await finalizeDriverOrderStatus(order, 'delivery_failed', {
     driverId: req.user._id,
     failurePayload: { deliveryFailureReasonKey, deliveryFailureReason },
@@ -432,4 +836,33 @@ export const failDriverDelivery = asyncHandler(async (req, res) => {
 
   const flags = await getDriverOrderFlags();
   res.json({ success: true, data: formatDriverOrder(result.order, flags) });
+});
+
+export const getDriverCash = asyncHandler(async (req, res) => {
+  const data = await getDriverCashSummary(req.user._id, { limit: 50 });
+  res.json({ success: true, data });
+});
+
+/** After a failed delivery, the driver confirms the items are back at the store. */
+export const returnDriverDelivery = asyncHandler(async (req, res) => {
+  const order = await loadOwnedOrderOr404(req);
+  if (order.orderStatus !== 'delivery_failed') {
+    throw new AppError('Only failed deliveries can be returned to the store', 400);
+  }
+  await ensureDeliveryRun(order);
+  const returned = await Order.findOneAndUpdate(
+    { _id: order._id, assignedDriver: req.user._id, orderStatus: 'delivery_failed', 'delivery.stage': 'failed' },
+    { $set: { 'delivery.stage': 'returned', 'delivery.returnedAt': new Date() } },
+    { new: true },
+  );
+  if (returned) {
+    alertStore({
+      order: returned,
+      titleAr: 'طلب رجع للفرع',
+      titleEn: 'Order returned to store',
+      messageAr: `المندوب أرجع أصناف طلب #${returned.orderNumber} للفرع — أعد المحاولة أو ألغِ الطلب.`,
+      messageEn: `The driver returned order #${returned.orderNumber} to the store — reattempt or cancel it.`,
+    });
+  }
+  await respondWithOrder(res, order._id, req.user._id);
 });

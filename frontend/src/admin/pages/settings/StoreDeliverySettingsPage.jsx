@@ -320,6 +320,82 @@ export default function StoreDeliverySettingsPage() {
 
           <SettingToggleCard
             accent="amber"
+            checked={driver.cashTrackingEnabled !== false}
+            onChange={(v) => updateNested('driverSettings', 'cashTrackingEnabled', v)}
+            title={isAr ? 'تسجيل نقدية التحصيل' : 'Track collected cash'}
+            description={isAr
+              ? 'المندوب يُدخل المبلغ المستلم عند كل طلب دفع عند الاستلام، ويُحسب رصيد نقدي لكل مندوب تستلمه منه في صفحة «نقدية المناديب».'
+              : 'Drivers enter the cash received on every cash-on-delivery order; each driver gets a cash balance you settle on the "Driver cash" page.'}
+          />
+
+          <SettingToggleCard
+            accent="sky"
+            checked={driver.allowReject !== false}
+            onChange={(v) => updateNested('driverSettings', 'allowReject', v)}
+            title={isAr ? 'السماح للمندوب بالاعتذار' : 'Drivers may decline'}
+            description={isAr
+              ? 'يستطيع المندوب الاعتذار عن طلب قبل استلامه؛ يُعاد الطلب لمندوب آخر أو يظهر لك تنبيه.'
+              : 'A driver can decline an order before pickup; it goes to another driver or you get an alert.'}
+          />
+
+          <div className="grid gap-4 rounded-xl border border-border p-4 sm:grid-cols-2">
+            <Input
+              label={isAr ? 'مهلة قبول الطلب بالدقائق (0 = بلا مهلة)' : 'Minutes to accept an assignment (0 = no limit)'}
+              type="number"
+              min="0"
+              max="120"
+              value={driver.acceptTimeoutMin ?? 0}
+              onChange={(e) => updateNested('driverSettings', 'acceptTimeoutMin', e.target.value)}
+            />
+            <Input
+              label={isAr ? 'نطاق التسليم بالمتر (0 = إيقاف)' : 'Delivery geofence in metres (0 = off)'}
+              type="number"
+              min="0"
+              max="5000"
+              value={driver.geofenceMeters ?? 0}
+              onChange={(e) => updateNested('driverSettings', 'geofenceMeters', e.target.value)}
+            />
+            <Input
+              label={isAr ? 'محاولات التواصل قبل «العميل لا يرد»' : 'Contact attempts before "customer unreachable"'}
+              type="number"
+              min="0"
+              max="10"
+              value={driver.failMinContactAttempts ?? 0}
+              onChange={(e) => updateNested('driverSettings', 'failMinContactAttempts', e.target.value)}
+            />
+            <label className="block text-sm">
+              <span className="mb-1.5 block font-medium">{isAr ? 'كود الاستلام من العميل' : 'Customer delivery code'}</span>
+              <select
+                value={driver.requireDeliveryPin || 'off'}
+                onChange={(e) => updateNested('driverSettings', 'requireDeliveryPin', e.target.value)}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5"
+              >
+                <option value="off">{isAr ? 'إيقاف' : 'Off'}</option>
+                <option value="cod">{isAr ? 'طلبات الدفع عند الاستلام فقط' : 'Cash-on-delivery orders only'}</option>
+                <option value="all">{isAr ? 'كل الطلبات' : 'All orders'}</option>
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1.5 block font-medium">{isAr ? 'صورة إثبات التسليم' : 'Proof-of-delivery photo'}</span>
+              <select
+                value={driver.requireProofPhoto || 'off'}
+                onChange={(e) => updateNested('driverSettings', 'requireProofPhoto', e.target.value)}
+                className="w-full rounded-xl border border-border bg-white px-3 py-2.5"
+              >
+                <option value="off">{isAr ? 'اختيارية' : 'Optional'}</option>
+                <option value="no_pin">{isAr ? 'مطلوبة عند عدم استخدام الكود' : 'Required when no code is used'}</option>
+                <option value="always">{isAr ? 'مطلوبة دائماً' : 'Always required'}</option>
+              </select>
+            </label>
+            <p className="text-xs leading-relaxed text-text-muted sm:col-span-2">
+              {isAr
+                ? 'الكود يُرسل للعميل في رسالة عند خروج الطلب، ويظهر في صفحة طلبه. النطاق يطلب سبباً إذا أكّد المندوب التسليم بعيداً عن العنوان، ويصلك تنبيه.'
+                : 'The code is texted to the customer when the order leaves and shown on their order page. The geofence asks for a reason if the driver completes away from the address, and alerts you.'}
+            </p>
+          </div>
+
+          <SettingToggleCard
+            accent="amber"
             checked={driver.cashCalculatorEnabled !== false}
             onChange={(v) => updateNested('driverSettings', 'cashCalculatorEnabled', v)}
             title={isAr ? 'حاسبة الباقي للدفع عند الاستلام' : 'Cash-on-delivery change calculator'}

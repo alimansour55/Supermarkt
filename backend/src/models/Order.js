@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { ORDER_STATUS_VALUES } from '../constants/orderStatuses.js';
 import geoFields from '../schemas/geoFields.js';
@@ -134,6 +135,60 @@ const orderMessageSchema = new mongoose.Schema(
     isInternal: { type: Boolean, default: false },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
+);
+
+export const DELIVERY_STAGES = [
+  'assigned',
+  'accepted',
+  'picked_up',
+  'en_route',
+  'arrived',
+  'delivered',
+  'failed',
+  'returned',
+];
+
+/** Driver-side progress of a delivery run. `orderStatus` stays the customer-facing status. */
+const deliveryRunSchema = new mongoose.Schema(
+  {
+    stage: { type: String, enum: DELIVERY_STAGES, default: 'assigned' },
+    assignedAt: { type: Date, default: null },
+    acceptedAt: { type: Date, default: null },
+    pickedUpAt: { type: Date, default: null },
+    enRouteAt: { type: Date, default: null },
+    arrivedAt: { type: Date, default: null },
+    returnedAt: { type: Date, default: null },
+    /** Item indexes the driver confirmed at pickup / reported missing. */
+    pickedItems: { type: [Number], default: undefined },
+    missingItems: { type: [Number], default: undefined },
+    /** Contact attempts while trying to deliver (call / WhatsApp / at the door). */
+    attempts: {
+      type: [
+        {
+          type: { type: String, enum: ['call', 'whatsapp', 'door'], required: true },
+          at: { type: Date, default: Date.now },
+          _id: false,
+        },
+      ],
+      default: undefined,
+    },
+    /** Cash on delivery: amount due, what the driver received, change handed back. */
+    cashDue: { type: Number, min: 0, default: null },
+    cashCollected: { type: Number, min: 0, default: null },
+    changeGiven: { type: Number, min: 0, default: null },
+    /** Wrong delivery codes entered; completion locks after too many. */
+    pinFailures: { type: Number, min: 0, default: 0 },
+    /** Completed away from the address (geofence): how far, and the driver's reason. */
+    offsite: {
+      type: {
+        distanceMeters: { type: Number, default: null },
+        reason: { type: String, trim: true, maxlength: 300, default: '' },
+        _id: false,
+      },
+      default: undefined,
+    },
+  },
+  { _id: false },
 );
 
 const shippingAddressSchema = new mongoose.Schema(
@@ -325,6 +380,9 @@ const orderSchema = new mongoose.Schema(
       default: null,
     },
     assignedDriverAt: { type: Date, default: null },
+    delivery: { type: deliveryRunSchema, default: null },
+    /** 4-digit code the customer gives the driver at handover (see driverSettings.requireDeliveryPin). */
+    deliveryPin: { type: String, trim: true, default: '' },
     fulfillmentLocationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'FulfillmentLocation',
@@ -394,6 +452,18 @@ orderSchema.index({ 'trash.stage': 1, createdAt: -1 });
 // `trash.purgeAt` passes. Documents with `purgeAt: null` (i.e. not in bin2)
 // are ignored by the TTL monitor, so this only ever affects bin2 orders.
 orderSchema.index({ 'trash.purgeAt': 1 }, { expireAfterSeconds: 0 });
+
+export function generateDeliveryPin() {
+  return String(crypto.randomInt(0, 10000)).padStart(4, '0');
+}
+
+// Every order gets its delivery code the moment it goes out for delivery.
+orderSchema.pre('save', function assignDeliveryPin(next) {
+  if (this.orderStatus === 'out_for_delivery' && !this.deliveryPin) {
+    this.deliveryPin = generateDeliveryPin();
+  }
+  next();
+});
 
 orderSchema.pre('validate', function validateOrderStatus(next) {
   if (this.orderStatus && !ORDER_STATUS_VALUES.includes(this.orderStatus)) {

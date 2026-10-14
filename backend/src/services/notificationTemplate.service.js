@@ -59,6 +59,8 @@ export async function getSmsTemplateKeyForEvent(event) {
     driver_assigned: 'order_sms_driver_assigned',
     driver_location: 'order_sms_driver_location',
     driver_nearby: 'order_sms_driver_nearby',
+    driver_arrived: 'order_sms_driver_arrived',
+    delivery_pin: 'order_sms_delivery_pin',
   };
   return map[event] || null;
 }

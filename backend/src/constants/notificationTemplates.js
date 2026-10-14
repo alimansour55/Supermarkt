@@ -16,6 +16,8 @@ export const NOTIFICATION_TEMPLATE_KEYS = [
   'order_sms_driver_assigned',
   'order_sms_driver_location',
   'order_sms_driver_nearby',
+  'order_sms_driver_arrived',
+  'order_sms_delivery_pin',
   'review_request_email',
 ];
 
@@ -204,6 +206,26 @@ export const DEFAULT_NOTIFICATION_TEMPLATES = [
     smsBodyAr: 'سوق+: مندوب طلبك {{order.orderNumber}} على وشك الوصول!',
     smsBodyEn: 'MarketPlus: Your driver for order {{order.orderNumber}} is almost there!',
     placeholders: ['order.orderNumber', 'etaText'],
+    isActive: true,
+  },
+  {
+    key: 'order_sms_driver_arrived',
+    nameAr: 'SMS — المندوب وصل',
+    nameEn: 'SMS — driver arrived',
+    channel: 'sms',
+    smsBodyAr: 'سوق+: مندوب طلبك {{order.orderNumber}} وصل إلى عنوانك.',
+    smsBodyEn: 'MarketPlus: Your driver for order {{order.orderNumber}} has arrived.',
+    placeholders: ['order.orderNumber'],
+    isActive: true,
+  },
+  {
+    key: 'order_sms_delivery_pin',
+    nameAr: 'SMS — كود الاستلام',
+    nameEn: 'SMS — delivery code',
+    channel: 'sms',
+    smsBodyAr: 'سوق+: كود استلام طلبك {{order.orderNumber}} هو {{deliveryPin}}. أعطه للمندوب عند الاستلام فقط.',
+    smsBodyEn: 'MarketPlus: Your delivery code for order {{order.orderNumber}} is {{deliveryPin}}. Give it to the driver only at handover.',
+    placeholders: ['order.orderNumber', 'deliveryPin'],
     isActive: true,
   },
   {

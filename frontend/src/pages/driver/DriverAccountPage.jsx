@@ -7,11 +7,17 @@ import { useAsyncData } from '../../hooks/useAsyncData';
 import Button from '../../components/ui/Button';
 import DriverAvailabilityToggle from '../../components/driver/DriverAvailabilityToggle';
 import DriverStatCard from './components/DriverStatCard';
+import DriverCashCard from './components/DriverCashCard';
 import { isToday } from './driverUtils';
 
 async function fetchHistory() {
   const { data } = await orderService.getDriverHistory();
   return data.data || [];
+}
+
+async function fetchCash() {
+  const { data } = await orderService.getDriverCash();
+  return data.data || null;
 }
 
 function Row({ icon: Icon, label, value }) {
@@ -31,6 +37,7 @@ export default function DriverAccountPage() {
   const isAr = language === 'ar';
   const { config, setAvailability, availabilityBusy } = useOutletContext() || {};
   const { data: history } = useAsyncData(fetchHistory, []);
+  const { data: cash } = useAsyncData(fetchCash, []);
 
   const availabilityEnabled = config?.availabilityEnabled === true;
   const todayOrders = (history || []).filter((o) => isToday(o.deliveredAt));
@@ -57,6 +64,8 @@ export default function DriverAccountPage() {
           </div>
         </div>
       )}
+
+      {config?.cashTrackingEnabled !== false && <DriverCashCard summary={cash} isAr={isAr} />}
 
       {availabilityEnabled && (
         <DriverAvailabilityToggle

@@ -18,6 +18,7 @@ import {
 } from '../services/orderManagement.service.js';
 import { reverseOrderWallet } from '../services/wallet.service.js';
 import { getActiveDeliveryCounts, notifyDriver } from '../services/deliveryDispatch.service.js';
+import { isDeliveryPinRequired, newDeliveryRun } from '../services/deliveryRun.service.js';
 import { notifyOrderCustomerMessage } from '../services/notification.service.js';
 import {
   countUnreadCustomerMessages,
@@ -112,6 +113,10 @@ async function formatOrderResponse(order, { isStaff = false, gpsDeliveryEnabled 
   formatted.canEditReasonEn = getCustomerEditBlockReason(order, 'en');
   formatted.trackingEnabled = order.trackingEnabled === true;
   formatted.canTrack = canShowOrderTracking(order, { gpsDeliveryEnabled: gpsEnabled });
+  // The customer shows this code to the driver at the door (only when the store requires it).
+  formatted.deliveryPinRequired = order.orderStatus === 'out_for_delivery'
+    && Boolean(order.deliveryPin)
+    && isDeliveryPinRequired(order, await getDriverSettings());
   return formatted;
 }
 
@@ -340,6 +345,7 @@ export const assignDriver = asyncHandler(async (req, res) => {
   if (!driverId) {
     order.assignedDriver = null;
     order.assignedDriverAt = null;
+    order.delivery = null;
   } else {
     const driver = await User.findById(driverId);
     if (!driver || driver.role !== 'driver') {
@@ -348,6 +354,7 @@ export const assignDriver = asyncHandler(async (req, res) => {
     if (previousDriverId !== String(driver._id)) {
       order.assignedDriver = driver._id;
       order.assignedDriverAt = new Date();
+      order.delivery = newDeliveryRun(order.assignedDriverAt);
     }
 
     const { assignDispatchesOrder } = await getDriverSettings();
@@ -587,3 +594,56 @@ export const uploadOrderPaymentProof = asyncHandler(async (req, res) => {
 });
 
 export { formatOrderResponse };
+
+/**
+ * After a failed delivery: send it out again. The order goes back to "preparing" with a
+ * fresh delivery run (same driver unless another is given); the driver picks it up again.
+ */
+export const reattemptDelivery = asyncHandler(async (req, res) => {
+  const order = await loadOrderForAdmin(req.params.id);
+  if (order.orderStatus !== 'delivery_failed') {
+    throw new AppError('Only failed deliveries can be reattempted', 400);
+  }
+
+  const previousDriverId = order.assignedDriver ? String(order.assignedDriver._id || order.assignedDriver) : null;
+  let driverId = req.body.driverId ? String(req.body.driverId) : previousDriverId;
+  if (driverId) {
+    const driver = await User.findById(driverId);
+    if (!driver || driver.role !== 'driver') throw new AppError('Invalid delivery staff member', 400);
+    driverId = String(driver._id);
+  }
+
+  const now = new Date();
+  order.orderStatus = 'preparing';
+  order.deliveryFailureReasonKey = '';
+  order.deliveryFailureReasonAr = '';
+  order.deliveryFailureReasonEn = '';
+  order.assignedDriver = driverId || null;
+  order.assignedDriverAt = driverId ? now : null;
+  order.delivery = driverId ? newDeliveryRun(now) : null;
+  order.deliveryPin = '';
+  pushStatusHistory(order, 'preparing', { changedBy: req.user._id, note: 'Delivery reattempt' });
+  await clearOrderTracking(order._id);
+  await order.save();
+
+  if (previousDriverId && previousDriverId !== driverId) notifyDriver(previousDriverId, order, 'unassigned');
+  if (driverId) notifyDriver(driverId, order, 'assigned');
+
+  const populated = await Order.findById(order._id).populate('user', 'name email phone');
+  if (populated?.user) {
+    notifyCustomerOrderStatus(populated, populated.user, 'preparing', 'delivery_failed')
+      .catch((err) => console.error('Reattempt notify failed:', err.message));
+  }
+
+  await logAudit({
+    req,
+    action: 'status_change',
+    entityType: 'order',
+    entityId: order._id,
+    entityLabel: order.orderNumber,
+    changes: { orderStatus: { from: 'delivery_failed', to: 'preparing' }, reattempt: true, assignedDriver: driverId },
+  });
+
+  await order.populate('assignedDriver', 'name phone');
+  res.json({ success: true, order: await formatOrderResponse(order, { isStaff: true }) });
+});

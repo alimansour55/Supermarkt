@@ -11,6 +11,7 @@ import { configureNodemailer } from './config/nodemailer.js';
 import { configureSms } from './config/sms.js';
 import { logMobileAccessHints } from './utils/lanAddress.js';
 import { startChatAutoCloseJob } from './controllers/supportConversation.controller.js';
+import { startAssignmentExpiryJob } from './services/deliveryDispatch.service.js';
 
 const PORT = Number(process.env.PORT) || 5001;
 const FRONTEND_PORT = Number(process.env.FRONTEND_PORT) || 5173;
@@ -20,6 +21,7 @@ const startServer = async () => {
     validateEnv();
     await connectDB();
     startChatAutoCloseJob();
+    startAssignmentExpiryJob();
 
     initCloudinary();
     configureStripe();

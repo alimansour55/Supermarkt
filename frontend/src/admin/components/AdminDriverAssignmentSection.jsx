@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import AdminOrderTrackingSection from './AdminOrderTrackingSection';
+import AdminDeliveryRunCard from './AdminDeliveryRunCard';
 import { formatDate } from '../../utils/formatters';
 import { useAdminPanel } from '../context/AdminPanelContext';
 
@@ -89,11 +90,13 @@ export default function AdminDriverAssignmentSection({
   isAr,
   updating,
   onAssign,
+  onReattempt,
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pendingDriverId, setPendingDriverId] = useState('');
   const { driverSettings } = useAdminPanel();
   const autoAssignEnabled = driverSettings?.autoAssignEnabled === true;
+  const dispatchOnAssign = driverSettings?.assignDispatchesOrder !== false;
 
   const sortedDrivers = useMemo(
     () => [...drivers].sort((a, b) => {
@@ -116,7 +119,7 @@ export default function AdminDriverAssignmentSection({
 
   const handleConfirmAssign = () => {
     if (!pendingDriverId) return;
-    const willShip = ['pending', 'confirmed', 'preparing'].includes(currentStatus);
+    const willShip = dispatchOnAssign && ['pending', 'confirmed', 'preparing'].includes(currentStatus);
     const driver = drivers.find((d) => String(d._id) === pendingDriverId);
     const name = driver?.name || '';
     const msg = willShip
@@ -331,11 +334,23 @@ export default function AdminDriverAssignmentSection({
 
         {['pending', 'confirmed', 'preparing'].includes(currentStatus) && canAssign && !assignedId && (
           <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900">
-            {isAr
-              ? '💡 عند التعيين سيتحول الطلب تلقائياً إلى «في الطريق» ويظهر عند المندوب.'
-              : '💡 Assigning will automatically set the order to "Out for delivery" and show it in the driver app.'}
+            {dispatchOnAssign
+              ? (isAr
+                ? '💡 عند التعيين سيتحول الطلب تلقائياً إلى «في الطريق» ويظهر عند المندوب.'
+                : '💡 Assigning will automatically set the order to "Out for delivery" and show it in the driver app.')
+              : (isAr
+                ? '💡 سيظهر الطلب عند المندوب كطلب قادم، ويتحول إلى «في الطريق» عندما يستلمه من الفرع.'
+                : '💡 The driver sees it as upcoming; it goes out for delivery when they pick it up at the store.')}
           </p>
         )}
+
+        <AdminDeliveryRunCard
+          order={order}
+          isAr={isAr}
+          canWrite={canAssign}
+          updating={updating}
+          onReattempt={onReattempt}
+        />
 
         {showTracking && (
           <AdminOrderTrackingSection
@@ -346,7 +361,7 @@ export default function AdminDriverAssignmentSection({
           />
         )}
 
-        {assignedId && currentStatus !== 'out_for_delivery' && canAssign && (
+        {assignedId && currentStatus !== 'out_for_delivery' && canAssign && dispatchOnAssign && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
             {isAr
               ? 'لتفعيل التتبع المباشر، غيّر حالة الطلب إلى «في الطريق».'

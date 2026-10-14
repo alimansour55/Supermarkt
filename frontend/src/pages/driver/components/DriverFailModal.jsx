@@ -3,11 +3,16 @@ import { AlertTriangle } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import { DELIVERY_FAILURE_PRESETS } from '../../../constants/deliveryFailureReasons';
 
-export default function DriverFailModal({ open, isAr, onClose, onConfirm, loading }) {
+export default function DriverFailModal({
+  open, isAr, onClose, onConfirm, loading, error = '', contactAttempts = 0, minContactAttempts = 0, contactReasons = [],
+}) {
   const [reasonKey, setReasonKey] = useState('');
   const [customReason, setCustomReason] = useState('');
 
   if (!open) return null;
+
+  // Some reasons ("could not reach", "customer unavailable") need logged call/WhatsApp attempts first.
+  const needsAttempts = (key) => minContactAttempts > 0 && contactReasons.includes(key) && contactAttempts < minContactAttempts;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -60,7 +65,16 @@ export default function DriverFailModal({ open, isAr, onClose, onConfirm, loadin
                   onChange={() => setReasonKey(preset.key)}
                   className="mt-0.5"
                 />
-                <span>{isAr ? preset.labelAr : preset.labelEn}</span>
+                <span>
+                  {isAr ? preset.labelAr : preset.labelEn}
+                  {needsAttempts(preset.key) && (
+                    <span className="mt-0.5 block text-xs text-amber-700">
+                      {isAr
+                        ? `يتطلب ${minContactAttempts} محاولات تواصل (سجّلت ${contactAttempts}) — اتصل أو راسل العميل أولاً`
+                        : `Needs ${minContactAttempts} contact attempts (${contactAttempts} logged) — call or message the customer first`}
+                    </span>
+                  )}
+                </span>
               </label>
             ))}
             <label
@@ -95,6 +109,12 @@ export default function DriverFailModal({ open, isAr, onClose, onConfirm, loadin
             />
           )}
 
+          {error && (
+            <p className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-800 ring-1 ring-red-200" role="alert">
+              {error}
+            </p>
+          )}
+
           <div className="flex gap-2 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={loading}>
               {isAr ? 'إلغاء' : 'Cancel'}
@@ -102,7 +122,7 @@ export default function DriverFailModal({ open, isAr, onClose, onConfirm, loadin
             <Button
               type="submit"
               className="flex-1 bg-red-600 hover:bg-red-700"
-              disabled={loading || !reasonKey || (reasonKey === 'custom' && customReason.trim().length < 3)}
+              disabled={loading || !reasonKey || needsAttempts(reasonKey) || (reasonKey === 'custom' && customReason.trim().length < 3)}
             >
               {loading ? (isAr ? 'جاري الإرسال...' : 'Sending...') : (isAr ? 'تأكيد' : 'Confirm')}
             </Button>

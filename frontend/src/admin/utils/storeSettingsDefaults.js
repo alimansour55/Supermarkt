@@ -5,9 +5,21 @@ export const DEFAULT_DRIVER_SETTINGS = {
   autoAssignEnabled: false,
   autoAssignMaxActive: 0,
   assignDispatchesOrder: true,
+  acceptTimeoutMin: 0,
+  allowReject: true,
+  cashTrackingEnabled: true,
+  requireDeliveryPin: 'off',
+  requireProofPhoto: 'off',
+  geofenceMeters: 0,
+  failMinContactAttempts: 0,
   availabilityEnabled: true,
   pickingChecklistEnabled: true,
   cashCalculatorEnabled: true,
+};
+
+const clampInt = (value, min, max) => {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
 };
 
 export function normalizeDriverSettings(raw = {}) {
@@ -17,6 +29,13 @@ export function normalizeDriverSettings(raw = {}) {
     autoAssignEnabled: data.autoAssignEnabled === true,
     autoAssignMaxActive: Number.isFinite(maxActive) ? Math.min(50, Math.max(0, maxActive)) : 0,
     assignDispatchesOrder: data.assignDispatchesOrder !== false,
+    acceptTimeoutMin: clampInt(data.acceptTimeoutMin, 0, 120),
+    allowReject: data.allowReject !== false,
+    cashTrackingEnabled: data.cashTrackingEnabled !== false,
+    requireDeliveryPin: ['off', 'cod', 'all'].includes(data.requireDeliveryPin) ? data.requireDeliveryPin : 'off',
+    requireProofPhoto: ['off', 'no_pin', 'always'].includes(data.requireProofPhoto) ? data.requireProofPhoto : 'off',
+    geofenceMeters: clampInt(data.geofenceMeters, 0, 5000),
+    failMinContactAttempts: clampInt(data.failMinContactAttempts, 0, 10),
     availabilityEnabled: data.availabilityEnabled !== false,
     pickingChecklistEnabled: data.pickingChecklistEnabled !== false,
     cashCalculatorEnabled: data.cashCalculatorEnabled !== false,

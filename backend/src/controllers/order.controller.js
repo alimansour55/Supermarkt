@@ -24,6 +24,7 @@ import {
   notifyCustomerTrackingLive,
 } from '../services/orderTrackingNotify.service.js';
 import { autoAssignDriverToOrder, notifyDriver } from '../services/deliveryDispatch.service.js';
+import { newDeliveryRun } from '../services/deliveryRun.service.js';
 import { pushStatusHistory } from '../services/orderManagement.service.js';
 import { ORDER_STATUS_VALUES } from '../constants/orderStatuses.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
@@ -1003,6 +1004,11 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
         autoAssignedDriver = await autoAssignDriverToOrder(order, { req });
       }
       if (order.assignedDriver) {
+        // Sent out again by hand after a closed run (e.g. a failed attempt): new run, on the road.
+        if (['failed', 'returned', 'delivered'].includes(order.delivery?.stage)) {
+          const now = new Date();
+          order.delivery = { ...newDeliveryRun(now), stage: 'picked_up', pickedUpAt: now };
+        }
         await ensureOrderTracking(order);
       }
     }

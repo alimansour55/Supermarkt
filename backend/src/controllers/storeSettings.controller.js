@@ -472,12 +472,27 @@ const pickSettings = (payload) => {
       return value === true || value === 'true' || value === '1';
     };
     const maxActive = Math.round(Number(raw.autoAssignMaxActive));
+    const clampInt = (value, min, max, fallback) => {
+      const n = Math.round(Number(value));
+      return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+    };
     updates.driverSettings = {
       autoAssignEnabled: toBool(raw.autoAssignEnabled, DEFAULT_DRIVER_SETTINGS.autoAssignEnabled),
       autoAssignMaxActive: Number.isFinite(maxActive)
         ? Math.min(50, Math.max(0, maxActive))
         : DEFAULT_DRIVER_SETTINGS.autoAssignMaxActive,
       assignDispatchesOrder: toBool(raw.assignDispatchesOrder, DEFAULT_DRIVER_SETTINGS.assignDispatchesOrder),
+      acceptTimeoutMin: clampInt(raw.acceptTimeoutMin, 0, 120, DEFAULT_DRIVER_SETTINGS.acceptTimeoutMin),
+      allowReject: toBool(raw.allowReject, DEFAULT_DRIVER_SETTINGS.allowReject),
+      cashTrackingEnabled: toBool(raw.cashTrackingEnabled, DEFAULT_DRIVER_SETTINGS.cashTrackingEnabled),
+      requireDeliveryPin: ['off', 'cod', 'all'].includes(raw.requireDeliveryPin)
+        ? raw.requireDeliveryPin
+        : DEFAULT_DRIVER_SETTINGS.requireDeliveryPin,
+      requireProofPhoto: ['off', 'no_pin', 'always'].includes(raw.requireProofPhoto)
+        ? raw.requireProofPhoto
+        : DEFAULT_DRIVER_SETTINGS.requireProofPhoto,
+      geofenceMeters: clampInt(raw.geofenceMeters, 0, 5000, DEFAULT_DRIVER_SETTINGS.geofenceMeters),
+      failMinContactAttempts: clampInt(raw.failMinContactAttempts, 0, 10, DEFAULT_DRIVER_SETTINGS.failMinContactAttempts),
       availabilityEnabled: toBool(raw.availabilityEnabled, DEFAULT_DRIVER_SETTINGS.availabilityEnabled),
       pickingChecklistEnabled: toBool(raw.pickingChecklistEnabled, DEFAULT_DRIVER_SETTINGS.pickingChecklistEnabled),
       cashCalculatorEnabled: toBool(raw.cashCalculatorEnabled, DEFAULT_DRIVER_SETTINGS.cashCalculatorEnabled),

@@ -118,6 +118,13 @@ export const ADMIN_NAV_GROUPS = [
         permission: 'orders:read',
       },
       {
+        path: '/admin/driver-cash',
+        labelAr: 'نقدية المناديب',
+        labelEn: 'Driver cash',
+        Icon: Banknote,
+        permission: 'orders:read',
+      },
+      {
         path: '/admin/recurring-deliveries',
         labelAr: 'التوصيل الدوري',
         labelEn: 'Recurring delivery',

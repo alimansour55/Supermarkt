@@ -6,6 +6,8 @@ import {
   createUserNotification,
   wasRecentlyNotified,
 } from './userNotification.service.js';
+import { getDriverSettings } from './storeSettings.service.js';
+import { isDeliveryPinRequired } from './deliveryRun.service.js';
 
 const LOCATION_NOTIFY_THROTTLE_MS = 2 * 60 * 1000;
 const ETA_NEARBY_SECONDS = 20 * 60;
@@ -99,6 +101,11 @@ export async function notifyCustomerOrderStatus(order, user, newStatus, previous
     orderNumber,
     extra: { status: newStatus, previousStatus },
   });
+
+  if (newStatus === 'out_for_delivery') {
+    await sendDeliveryPinIfRequired(order, user, lang)
+      .catch((err) => console.error('Delivery code notify failed:', err.message));
+  }
 
   if (['out_for_delivery', 'delivered', 'delivery_failed', 'cancelled'].includes(newStatus)) {
     if (newStatus === 'out_for_delivery' && trackUrl) {
@@ -280,4 +287,43 @@ export async function notifyTrackingUpdateFromOrder(order, options = {}) {
       await notifyCustomerDriverLocation(order, user, tracking, routeMeta, lang);
     }
   }
+}
+
+/** Send the customer their delivery code when the store requires one for this order. */
+async function sendDeliveryPinIfRequired(order, user, lang = 'ar') {
+  if (!order?.deliveryPin) return;
+  const settings = await getDriverSettings();
+  if (!isDeliveryPinRequired(order, settings)) return;
+
+  await notifyInApp({
+    userId: resolveUserId(order, user),
+    type: 'order_status',
+    titleAr: 'كود استلام طلبك',
+    titleEn: 'Your delivery code',
+    messageAr: `كود استلام طلب #${order.orderNumber} هو ${order.deliveryPin}. أعطه للمندوب عند الاستلام فقط.`,
+    messageEn: `Your delivery code for order #${order.orderNumber} is ${order.deliveryPin}. Give it to the driver only at handover.`,
+    orderId: order._id,
+    orderNumber: order.orderNumber,
+    extra: { status: 'out_for_delivery', deliveryPin: true },
+  });
+  await sendTrackingSms(resolvePhone(order, user), 'delivery_pin', order, lang, { deliveryPin: order.deliveryPin });
+}
+
+/** The driver marked themselves at the door. */
+export async function notifyCustomerDriverArrived(order, user, { includePin = false, lang = 'ar' } = {}) {
+  await notifyInApp({
+    userId: resolveUserId(order, user),
+    type: 'order_eta_update',
+    titleAr: 'المندوب وصل',
+    titleEn: 'Your driver has arrived',
+    messageAr: `مندوب طلب #${order.orderNumber} عند عنوانك الآن.`,
+    messageEn: `Your driver for order #${order.orderNumber} is at your address now.`,
+    orderId: order._id,
+    orderNumber: order.orderNumber,
+    extra: { arrived: true },
+  });
+  // The order carries its code; blank it unless this store wants it repeated on arrival.
+  await sendTrackingSms(resolvePhone(order, user), 'driver_arrived', order, lang, {
+    deliveryPin: includePin ? order.deliveryPin : '',
+  });
 }

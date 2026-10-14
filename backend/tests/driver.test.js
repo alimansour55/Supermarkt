@@ -1,128 +1,12 @@
 /**
- * Driver delivery flow — integration tests against a real (in-memory) MongoDB.
- *
- *   npm test
- *
- * mongodb-memory-server downloads a mongod binary on first run. Set
- * MONGOMS_SYSTEM_BINARY to use an existing mongod instead.
+ * Driver delivery flow (Phase 1) — integration tests against a real (in-memory) MongoDB.
+ * Run with `npm test` (see tests/helpers.js).
  */
-import { after, before, beforeEach, describe, test } from 'node:test';
+import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import jwt from 'jsonwebtoken';
-import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
-
-process.env.NODE_ENV = 'test';
-process.env.JWT_SECRET = 'driver-tests-secret';
-
-const { default: app } = await import('../src/app.js');
-const { default: User } = await import('../src/models/User.js');
-const { default: Order } = await import('../src/models/Order.js');
-const { default: StoreSettings } = await import('../src/models/StoreSettings.js');
-const { default: DeliveryTracking } = await import('../src/models/DeliveryTracking.js');
-const { default: UserNotification } = await import('../src/models/UserNotification.js');
-const { default: AuditLog } = await import('../src/models/AuditLog.js');
-const { invalidateStoreSettingsCache } = await import('../src/services/storeSettings.service.js');
-
-// SMS is simulated in tests (no gateway configured) and logged to the console — capture it.
-const smsLog = [];
-const realLog = console.log;
-console.log = (...args) => {
-  const line = args.join(' ');
-  if (smsLog.capture) smsLog.push(line);
-  if (!process.env.TEST_QUIET) realLog(...args);
-};
-
-let mongo;
-let server;
-let baseUrl;
-let orderSeq = 0;
-
-before(async () => {
-  mongo = await MongoMemoryServer.create();
-  await mongoose.connect(mongo.getUri());
-  server = app.listen(0);
-  baseUrl = `http://127.0.0.1:${server.address().port}/api`;
-});
-
-after(async () => {
-  server?.close();
-  await mongoose.disconnect();
-  await mongo?.stop();
-});
-
-beforeEach(async () => {
-  await mongoose.connection.db.dropDatabase();
-  await Promise.all(mongoose.modelNames().map((name) => mongoose.model(name).syncIndexes()));
-  invalidateStoreSettingsCache();
-});
-
-function tokenFor(user) {
-  return jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-}
-
-async function api(method, path, user, body) {
-  const res = await fetch(`${baseUrl}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(user ? { Authorization: `Bearer ${tokenFor(user)}` } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const json = await res.json().catch(() => ({}));
-  return { status: res.status, body: json };
-}
-
-let userSeq = 0;
-async function makeUser(role, extra = {}) {
-  userSeq += 1;
-  return User.create({
-    name: `${role} ${userSeq}`,
-    role,
-    phone: `0100000${String(userSeq).padStart(4, '0')}`,
-    ...(role === 'user' ? {} : { username: `${role}${userSeq}`, password: 'Passw0rd!123' }),
-    ...extra,
-  });
-}
-
-async function makeOrder({ customer, driver = null, status = 'out_for_delivery', ...extra }) {
-  orderSeq += 1;
-  return Order.create({
-    orderNumber: `T${1000 + orderSeq}`,
-    user: customer._id,
-    items: [{ nameAr: 'منتج', nameEn: 'Item', price: 50, quantity: 2 }],
-    shippingAddress: { street: 'Tahrir St', city: 'Cairo', lat: 30.05, lng: 31.24 },
-    phone: '01000000000',
-    subtotal: 100,
-    total: 100,
-    paymentMethod: 'cod',
-    paymentStatus: 'pending',
-    orderStatus: status,
-    assignedDriver: driver?._id || null,
-    assignedDriverAt: driver ? new Date() : null,
-    ...extra,
-  });
-}
-
-async function setDriverSettings(driverSettings) {
-  await StoreSettings.findOneAndUpdate(
-    { key: 'main' },
-    { $set: { driverSettings } },
-    { upsert: true, setDefaultsOnInsert: true },
-  );
-  invalidateStoreSettingsCache();
-}
-
-/** Driver notices are fire-and-forget; wait briefly for them to land. */
-async function waitForNotifications(filter, count = 1) {
-  for (let i = 0; i < 40; i += 1) {
-    const found = await UserNotification.find(filter).lean();
-    if (found.length >= count) return found;
-    await new Promise((r) => setTimeout(r, 25));
-  }
-  return UserNotification.find(filter).lean();
-}
+import {
+  AuditLog, DeliveryTracking, Order, api, makeOrder, makeUser, setDriverSettings, smsLog, waitForNotifications,
+} from './helpers.js';
 
 describe('driver completes / fails a delivery', () => {
   test('double "complete" applies once: one history entry, one audit log, both requests succeed', async () => {
@@ -131,8 +15,8 @@ describe('driver completes / fails a delivery', () => {
     const order = await makeOrder({ customer, driver });
 
     const [a, b] = await Promise.all([
-      api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver),
-      api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver),
+      api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver, { cashCollected: 100 }),
+      api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver, { cashCollected: 100 }),
     ]);
     assert.equal(a.status, 200, JSON.stringify(a.body));
     assert.equal(b.status, 200, JSON.stringify(b.body));
@@ -144,7 +28,7 @@ describe('driver completes / fails a delivery', () => {
     assert.equal(saved.statusHistory.filter((h) => h.status === 'delivered').length, 1);
     assert.equal(await AuditLog.countDocuments({ action: 'driver_complete_delivery' }), 1);
 
-    const retry = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver);
+    const retry = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver, { cashCollected: 100 });
     assert.equal(retry.status, 200);
     assert.equal(retry.body.data.orderStatus, 'delivered');
   });
@@ -155,7 +39,7 @@ describe('driver completes / fails a delivery', () => {
     const driver = await makeUser('driver');
     const order = await makeOrder({ customer, driver });
 
-    const res = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver);
+    const res = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver, { cashCollected: 100 });
     assert.equal(res.status, 200);
     assert.equal(res.body.data.cashCalculatorEnabled, false);
     assert.equal(res.body.data.pickingChecklistEnabled, false);
@@ -166,7 +50,7 @@ describe('driver completes / fails a delivery', () => {
     const driver = await makeUser('driver');
     const order = await makeOrder({ customer, driver, status: 'preparing' });
 
-    const res = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver);
+    const res = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver, { cashCollected: 100 });
     assert.equal(res.status, 400);
     assert.equal((await Order.findById(order._id).lean()).orderStatus, 'preparing');
   });
@@ -177,7 +61,7 @@ describe('driver completes / fails a delivery', () => {
     const other = await makeUser('driver');
     const order = await makeOrder({ customer, driver: owner });
 
-    const res = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, other);
+    const res = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, other, { cashCollected: 100 });
     assert.equal(res.status, 404);
     const loc = await api('PUT', `/orders/${order._id}/tracking/location`, other, { lat: 30, lng: 31 });
     assert.equal(loc.status, 403);
@@ -203,7 +87,7 @@ describe('driver completes / fails a delivery', () => {
     assert.equal(saved.deliveryFailureReasonAr, 'Customer not home');
     assert.equal(saved.statusHistory.filter((h) => h.status === 'delivery_failed').length, 1);
 
-    const completeAfterFail = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver);
+    const completeAfterFail = await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver, { cashCollected: 100 });
     assert.equal(completeAfterFail.status, 400);
   });
 });
@@ -287,7 +171,7 @@ describe('live tracking', () => {
     const order = await makeOrder({ customer, driver });
     await api('PUT', `/orders/${order._id}/tracking/location`, driver, { lat: 30.07, lng: 31.26 });
 
-    await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver);
+    await api('POST', `/orders/driver/deliveries/${order._id}/complete`, driver, { cashCollected: 100 });
     assert.equal((await DeliveryTracking.findOne({ orderId: order._id }).lean()).status, 'completed');
 
     const late = await api('PUT', `/orders/${order._id}/tracking/location`, driver, { lat: 30.08, lng: 31.27 });

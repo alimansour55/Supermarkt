@@ -13,7 +13,7 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       required: true,
-      enum: ['new_order', 'low_stock', 'order_customer_message', 'driver_unassigned', 'support_chat_message'],
+      enum: ['new_order', 'low_stock', 'order_customer_message', 'driver_unassigned', 'support_chat_message', 'delivery_alert'],
       index: true,
     },
     titleAr: { type: String, required: true, trim: true },

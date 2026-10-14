@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, MessageCircle, Package, ShoppingCart } from 'lucide-react';
+import {
+  AlertTriangle, Bell, MessageCircle, Package, ShoppingCart, Truck,
+} from 'lucide-react';
 import { adminApi } from '../adminApi';
 import { formatRelativeTime } from '../../utils/formatters';
 
@@ -8,11 +10,15 @@ const TYPE_ICONS = {
   new_order: ShoppingCart,
   low_stock: Package,
   order_customer_message: MessageCircle,
+  driver_unassigned: Truck,
+  delivery_alert: AlertTriangle,
 };
 
 function notificationIconClass(type) {
   if (type === 'low_stock') return 'bg-amber-100 text-amber-700';
   if (type === 'order_customer_message') return 'bg-rose-100 text-rose-700';
+  if (type === 'delivery_alert') return 'bg-orange-100 text-orange-700';
+  if (type === 'driver_unassigned') return 'bg-sky-100 text-sky-700';
   return 'bg-primary-100 text-primary-700';
 }
 

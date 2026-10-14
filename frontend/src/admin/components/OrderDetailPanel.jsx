@@ -296,6 +296,7 @@ export default function OrderDetailPanel({
         isAr={isAr}
         updating={updating}
         onAssign={(driverId) => onAction?.('assignDriver', { driverId })}
+        onReattempt={() => onAction?.('reattemptDelivery', {})}
       />
 
       {order.fulfillmentLocation && (

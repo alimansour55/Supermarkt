@@ -26,7 +26,19 @@ export default function DriverDeliveryCard({ order, isAr }) {
             <p className="mt-0.5 truncate text-sm text-slate-600">{order.customerName}</p>
           )}
         </div>
-        <DriverStatusBadge status={order.orderStatus || 'out_for_delivery'} isAr={isAr} size="sm" />
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <DriverStatusBadge status={order.orderStatus || 'out_for_delivery'} isAr={isAr} size="sm" />
+          {order.canAccept && (
+            <span className="rounded-full bg-teal-600 px-2 py-0.5 text-[10px] font-bold text-white">
+              {isAr ? 'جديد — بانتظار قبولك' : 'New — accept it'}
+            </span>
+          )}
+          {order.delivery?.stage === 'arrived' && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+              {isAr ? 'عند العميل' : 'At the door'}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="px-4 py-3">
@@ -50,7 +62,7 @@ export default function DriverDeliveryCard({ order, isAr }) {
               {slot}
             </span>
           )}
-          {isCod && (
+          {isCod && order.cashDue > 0 && (
             <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 font-semibold text-amber-900">
               <Banknote className="h-3.5 w-3.5" aria-hidden />
               {formatOrderTotal(order)}

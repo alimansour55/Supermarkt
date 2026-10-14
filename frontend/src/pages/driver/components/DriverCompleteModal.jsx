@@ -1,16 +1,54 @@
 import { useRef, useState } from 'react';
-import { Camera, CheckCircle2, ImagePlus, X } from 'lucide-react';
+import {
+  Banknote, Camera, CheckCircle2, ImagePlus, KeyRound, MapPinOff, X,
+} from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import { formatPrice } from '../../../utils/formatters';
 
+const parseAmount = (value) => {
+  const n = Number(String(value ?? '').replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) ? n : NaN;
+};
+
+/**
+ * Confirm a delivery. What it asks for follows the store's rules, sent by the API in
+ * `requirements`: cash received (COD), the customer's delivery code, a proof photo, and —
+ * after the server reports the driver is away from the address — a reason.
+ */
 export default function DriverCompleteModal({
-  open, isAr, loading, isCod, total, onClose, onConfirm,
+  open,
+  isAr,
+  loading,
+  cashDue = 0,
+  requirements = {},
+  initialCash = '',
+  error = '',
+  errorCode = '',
+  onClose,
+  onConfirm,
 }) {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState('');
+  // The parent mounts this only while open, so initial values are fresh each time.
+  const [cash, setCash] = useState(initialCash || '');
+  const [pin, setPin] = useState('');
+  const [offsiteReason, setOffsiteReason] = useState('');
   const inputRef = useRef(null);
 
   if (!open) return null;
+
+  const needsCash = requirements.cashAmount && cashDue > 0;
+  const needsPin = requirements.deliveryPin;
+  const needsPhoto = requirements.proofPhoto;
+  const askOffsite = errorCode === 'OUTSIDE_GEOFENCE';
+
+  const cashNum = parseAmount(cash);
+  const cashOk = !needsCash || (cash !== '' && cashNum >= cashDue);
+  const change = needsCash && cash !== '' && Number.isFinite(cashNum) ? cashNum - cashDue : null;
+  const pinOk = !needsPin || /^\d{4}$/.test(pin);
+  const photoOk = !needsPhoto || Boolean(photoFile);
+  const offsiteOk = !askOffsite || offsiteReason.trim().length >= 3;
+  const canSubmit = cashOk && pinOk && photoOk && offsiteOk && !requirements.pinLocked;
 
   const pickPhoto = (file) => {
     if (!file) return;
@@ -33,18 +71,25 @@ export default function DriverCompleteModal({
 
   const handleClose = () => {
     clearPhoto();
+    setPin('');
+    setOffsiteReason('');
     onClose?.();
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onConfirm?.(photoFile);
+    if (!canSubmit || loading) return;
+    onConfirm?.(photoFile, {
+      cashCollected: needsCash ? cashNum : undefined,
+      deliveryPin: needsPin ? pin : undefined,
+      offsiteReason: askOffsite ? offsiteReason.trim() : undefined,
+    });
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"
+        className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="complete-delivery-title"
@@ -58,17 +103,89 @@ export default function DriverCompleteModal({
               {isAr ? 'تأكيد التسليم' : 'Confirm delivery'}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              {isCod
-                ? (isAr ? `تأكيد التسليم وتحصيل ${formatPrice(total)} نقداً` : `Confirm delivery and collect ${formatPrice(total)} cash`)
+              {cashDue > 0
+                ? (isAr ? `تأكيد التسليم وتحصيل ${formatPrice(cashDue)} نقداً` : `Confirm delivery and collect ${formatPrice(cashDue)} cash`)
                 : (isAr ? 'تأكيد أن الطلب وصل للعميل' : 'Confirm the order reached the customer')}
             </p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {needsCash && (
+            <div>
+              <label htmlFor="complete-cash" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <Banknote className="h-3.5 w-3.5" aria-hidden />
+                {isAr ? 'المبلغ المستلم من العميل' : 'Cash received from customer'}
+              </label>
+              <input
+                id="complete-cash"
+                inputMode="decimal"
+                value={cash}
+                onChange={(e) => setCash(e.target.value)}
+                placeholder={String(cashDue)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-lg font-semibold tabular-nums focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              />
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCash(String(cashDue))}
+                  className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-200"
+                >
+                  {isAr ? 'المبلغ بالضبط' : 'Exact amount'}
+                </button>
+                {change != null && (
+                  <span className={`text-xs font-semibold ${change < 0 ? 'text-red-700' : 'text-emerald-800'}`}>
+                    {change < 0
+                      ? (isAr ? `ناقص ${formatPrice(-change)}` : `Short by ${formatPrice(-change)}`)
+                      : (isAr ? `الباقي للعميل: ${formatPrice(change)}` : `Change to return: ${formatPrice(change)}`)}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {needsPin && (
+            <div>
+              <label htmlFor="complete-pin" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <KeyRound className="h-3.5 w-3.5" aria-hidden />
+                {isAr ? 'كود الاستلام من العميل' : "Customer's delivery code"}
+              </label>
+              {requirements.pinLocked ? (
+                <p className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-800 ring-1 ring-red-200">
+                  {isAr
+                    ? 'تم إدخال كود خاطئ عدة مرات — اتصل بالفرع لإكمال الطلب.'
+                    : 'Too many wrong codes — call the store to complete this order.'}
+                </p>
+              ) : (
+                <>
+                  <input
+                    id="complete-pin"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={4}
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="••••"
+                    dir="ltr"
+                    className={`w-full rounded-xl border px-3 py-2.5 text-center font-mono text-2xl tracking-[0.5em] focus:outline-none focus:ring-2 ${
+                      errorCode === 'PIN_INVALID'
+                        ? 'border-red-300 focus:ring-red-100'
+                        : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-100'
+                    }`}
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    {isAr ? 'اطلب الكود المكوّن من 4 أرقام من العميل — وصله في رسالة.' : 'Ask the customer for the 4-digit code they received by SMS.'}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
           <div>
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {isAr ? 'صورة إثبات التسليم (اختياري)' : 'Proof-of-delivery photo (optional)'}
+              {needsPhoto
+                ? (isAr ? 'صورة إثبات التسليم (مطلوبة)' : 'Proof-of-delivery photo (required)')
+                : (isAr ? 'صورة إثبات التسليم (اختياري)' : 'Proof-of-delivery photo (optional)')}
             </p>
             {photoPreview ? (
               <div className="relative overflow-hidden rounded-xl border border-slate-200">
@@ -86,7 +203,9 @@ export default function DriverCompleteModal({
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className="flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-slate-200 py-6 text-sm font-medium text-slate-500 hover:border-teal-300 hover:text-teal-700"
+                className={`flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed py-5 text-sm font-medium hover:border-teal-300 hover:text-teal-700 ${
+                  needsPhoto ? 'border-amber-300 text-amber-800' : 'border-slate-200 text-slate-500'
+                }`}
               >
                 <Camera className="h-6 w-6" aria-hidden />
                 {isAr ? 'التقط صورة عند الباب' : 'Take a photo at the door'}
@@ -112,14 +231,37 @@ export default function DriverCompleteModal({
             )}
           </div>
 
-          <div className="flex gap-2 pt-2">
+          {askOffsite && (
+            <div>
+              <label htmlFor="complete-offsite" className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-800">
+                <MapPinOff className="h-3.5 w-3.5" aria-hidden />
+                {isAr ? 'لماذا تسلّم بعيداً عن العنوان؟' : 'Why are you delivering away from the address?'}
+              </label>
+              <textarea
+                id="complete-offsite"
+                rows={2}
+                value={offsiteReason}
+                onChange={(e) => setOffsiteReason(e.target.value)}
+                placeholder={isAr ? 'مثال: العميل قابلني عند البوابة الرئيسية' : 'e.g. the customer met me at the main gate'}
+                className="w-full rounded-xl border border-amber-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-100"
+              />
+            </div>
+          )}
+
+          {error && (
+            <p className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-800 ring-1 ring-red-200" role="alert">
+              {error}
+            </p>
+          )}
+
+          <div className="flex gap-2 pt-1">
             <Button type="button" variant="outline" className="flex-1" onClick={handleClose} disabled={loading}>
               {isAr ? 'إلغاء' : 'Cancel'}
             </Button>
             <Button
               type="submit"
               className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-              disabled={loading}
+              disabled={loading || !canSubmit}
             >
               {loading ? (isAr ? 'جاري الإرسال...' : 'Sending...') : (isAr ? 'تأكيد التسليم' : 'Confirm delivered')}
             </Button>

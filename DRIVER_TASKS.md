@@ -82,44 +82,55 @@ admin map (OSRM route cache, ETA), a wake lock, and SMS and notification hooks.
 ## Phase 2: Real delivery workflow
 
 ### 2.1 Delivery lifecycle (server-side, visible to everyone)
-New `order.delivery` sub-document (keep `orderStatus` for compatibility):
+New `order.delivery` sub-document (`orderStatus` stays the customer-facing status):
 
 ```
 assigned → accepted → picked_up → en_route → arrived → delivered
-                 ↘ rejected (→ auto-reassign)      ↘ failed → reattempt | returned_to_store
+   ↘ declined / expired (→ next driver or admin alert)      ↘ failed → returned → reattempt
 ```
 
-- [ ] `models/Order.js`: `delivery: { stage, acceptedAt, pickedUpAt, arrivedAt, attempts[], returnedAt }`
-- [ ] Endpoints: `POST /driver/deliveries/:id/accept | reject | pickup | arrive`
-- [ ] Optional accept timeout (`driverSettings.acceptTimeoutSec`). After it expires, auto-reassign
-      (`pickAutoAssignDriver({ excludeId })`) and alert the admin.
-- [ ] Picking checklist is saved on the server at pickup (`pickedItems`), and missing items are flagged to the admin.
-- [ ] `arrive` sets tracking `status: 'arrived'`, so the customer sees "Driver at your door" and gets an SMS.
-- [ ] `DriverDeliveryStepper` reads its step from the server, not localStorage.
+- [x] `models/Order.js`: `delivery: { stage, assignedAt, acceptedAt, pickedUpAt, enRouteAt, arrivedAt, returnedAt,
+      pickedItems, missingItems, attempts[], cashDue, cashCollected, changeGiven, pinFailures, offsite }`.
+      Orders created before this get a matching run on first use.
+- [x] Endpoints: `POST /driver/deliveries/:id/accept | reject | pickup | arrive | attempts | returned`.
+      Each is a guarded atomic update, so a repeated tap is a no-op.
+- [x] **Pickup dispatches the order**: picking up a confirmed or preparing order moves it to out-for-delivery,
+      records it in the history, starts tracking, generates the delivery code, and notifies the customer.
+- [x] Accept timeout (`driverSettings.acceptTimeoutMin`, 0 = off): a job every minute releases assignments
+      nobody accepted and offers them to the next driver (auto-assign) or alerts the admin.
+- [x] Picking checklist is saved on the server at pickup, and missing items alert the admin.
+- [x] `arrive` sets tracking `status: 'arrived'`, and the customer gets an in-app notice and an SMS.
+- [x] The first GPS ping after pickup moves the run to `en_route`.
+- [x] `DriverDeliveryStepper` reads the server stage (Assigned → Picked up → On the way → Arrived → Delivered).
+- [x] `driverSettings.allowReject` (default on).
+- [ ] Flip `assignDispatchesOrder` to `false` by default once stores have tried the pickup flow
+      (left `true` so existing behaviour doesn't change).
 
 ### 2.2 Proof of delivery
-- [ ] **Delivery PIN**: a 4-digit code generated when the order goes `out_for_delivery`, shown on the
-      customer's order page and in the SMS. The driver enters it to complete.
-      Setting: `driverSettings.requireDeliveryPin` (off / COD only / all).
-- [ ] **Geofence**: on complete, compare the last GPS fix with the destination. Beyond
-      `driverSettings.geofenceMeters` (default 300 m), require a reason and flag the order for the admin.
-- [ ] Setting `requireProofPhoto` (off / when no PIN / always).
+- [x] **Delivery code**: 4 digits, generated when the order goes out for delivery. It is texted to the customer and
+      shown on their order page, and never sent to the driver app. Wrong codes are counted; after 5 the
+      order locks and the admin is alerted. Setting: `requireDeliveryPin` (off / COD only / all).
+- [x] **Geofence** (`geofenceMeters`, 0 = off): completing farther than the limit, or with no GPS fix, needs a
+      reason. The distance and reason are stored and the admin is alerted.
+- [x] `requireProofPhoto` (optional / when no code / always).
+- [x] API errors carry a `code` (`PIN_INVALID`, `PIN_LOCKED`, `PHOTO_REQUIRED`, `CASH_REQUIRED`,
+      `OUTSIDE_GEOFENCE`, `ATTEMPTS_REQUIRED`, `NOT_READY`, `EXCEEDS_BALANCE`). The driver app shows them in Arabic or English.
 
 ### 2.3 Cash on delivery and reconciliation
-- [ ] On complete for COD: the driver enters `cashCollected`. The server stores `cashCollected` and `changeGiven`,
-      and flags a mismatch against the amount due (`total`, already net of wallet and discounts).
-- [ ] `models/DriverCashLedger.js`: one entry per collection, plus `handover` entries.
-      Reuse the atomic ledger pattern from `wallet.service.js`.
-- [ ] Driver home: "Cash in hand: 1,240 EGP".
-- [ ] Admin: **Cash handover** screen. The admin confirms the amount received from a driver, which writes a ledger
-      entry, records the difference, and logs an audit entry.
+- [x] COD completion requires the cash received (at least the amount due); `cashCollected` and `changeGiven`
+      are stored. Setting `cashTrackingEnabled` (default on).
+- [x] `models/DriverCashLedger.js` + `User.driverCashBalance`. Collections are idempotent per order (unique index).
+- [x] Driver app: a "Cash held" stat card, and the balance and movements on the account page.
+- [x] Admin **Driver cash** page (`/admin/driver-cash`): balances, ledger, record handover (cannot exceed the
+      balance), and correct the balance (reason required). Both actions are audited.
 
 ### 2.4 Failed delivery → next step
-- [ ] Log call attempts (tap "Call" → `attempts[{ at, type: 'call' }]`). The "customer not answering" reason
-      requires at least N attempts and a wait of X minutes (settings).
-- [ ] After a failure, the admin chooses **Reattempt** (new slot, same or another driver) or **Return to store**.
-      When the driver confirms "items returned", stock is restored if the order is cancelled.
-- [ ] Notify the customer with a reschedule link.
+- [x] Call and WhatsApp taps log contact attempts. "Could not reach" and "customer unavailable" need
+      `failMinContactAttempts` first (the dialog explains how many are missing).
+- [x] The driver confirms "items returned to the store" (stage `returned`), and the admin is alerted.
+- [x] The admin **Reattempt** button on a failed order: back to preparing, a fresh run, and a new code.
+      The driver picks it up again. To give up, the admin uses the existing cancel (which restores stock).
+- [ ] Customer self-service reschedule link (needs a slot picker on the storefront).
 
 ### 2.5 Return pickups
 - [ ] Home-pickup return requests become driver tasks (`type: 'pickup'`) in the same list,

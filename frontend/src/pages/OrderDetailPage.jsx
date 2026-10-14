@@ -322,6 +322,21 @@ export default function OrderDetailPage() {
           )}
         </div>
         <OrderTimeline order={order} isAr={isAr} />
+        {order.deliveryPinRequired && order.deliveryPin && (
+          <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-emerald-900">
+                {isAr ? 'كود الاستلام' : 'Delivery code'}
+              </p>
+              <p className="mt-0.5 text-xs text-emerald-800">
+                {isAr ? 'أعطِ هذا الكود للمندوب عند استلام الطلب فقط.' : 'Give this code to the driver only when you receive your order.'}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg bg-white px-3 py-1.5 font-mono text-2xl font-bold tracking-[0.3em] text-emerald-900 ring-1 ring-emerald-200" dir="ltr">
+              {order.deliveryPin}
+            </span>
+          </div>
+        )}
         {showTrackDelivery && (
           <OrderTrackingPanel
             orderId={order._id}

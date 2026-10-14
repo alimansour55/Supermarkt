@@ -13,6 +13,7 @@ export const AdminBrandsPage = lazy(() => import('../admin/pages/BrandsPage'), '
 export const AdminOrdersPage = lazy(() => import('../admin/pages/OrdersPage'), 'OrdersPage');
 export const InvoicesPage = lazy(() => import('../admin/pages/InvoicesPage'), 'InvoicesPage');
 export const LiveDeliveriesPage = lazy(() => import('../admin/pages/LiveDeliveriesPage'), 'LiveDeliveriesPage');
+export const DriverCashPage = lazy(() => import('../admin/pages/DriverCashPage'), 'DriverCashPage');
 export const OrderChatsPage = lazy(() => import('../admin/pages/OrderChatsPage'), 'OrderChatsPage');
 export const OrderReturnsPage = lazy(() => import('../admin/pages/OrderReturnsPage'), 'OrderReturnsPage');
 export const CallbackRequestsPage = lazy(() => import('../admin/pages/CallbackRequestsPage'), 'CallbackRequestsPage');

@@ -754,6 +754,20 @@ const driverSettingsSchema = new mongoose.Schema(
     autoAssignMaxActive: { type: Number, min: 0, max: 50, default: 0 },
     /** Assigning a driver to a pending/confirmed/preparing order also moves it to out-for-delivery. */
     assignDispatchesOrder: { type: Boolean, default: true },
+    /** Minutes a driver has to accept an assignment before it is offered to another driver (0 = off). */
+    acceptTimeoutMin: { type: Number, min: 0, max: 120, default: 0 },
+    /** Drivers may decline an assignment before pickup. */
+    allowReject: { type: Boolean, default: true },
+    /** Record the cash collected on COD orders and keep a per-driver cash balance. */
+    cashTrackingEnabled: { type: Boolean, default: true },
+    /** Customer delivery code the driver must enter to complete: off | cod (COD orders) | all. */
+    requireDeliveryPin: { type: String, enum: ['off', 'cod', 'all'], default: 'off' },
+    /** Proof photo on completion: off | no_pin (when no delivery code was used) | always. */
+    requireProofPhoto: { type: String, enum: ['off', 'no_pin', 'always'], default: 'off' },
+    /** Completing farther than this from the address needs a reason and flags the order (0 = off). */
+    geofenceMeters: { type: Number, min: 0, max: 5000, default: 0 },
+    /** Contact attempts required before "customer unavailable / unreachable" can be reported. */
+    failMinContactAttempts: { type: Number, min: 0, max: 10, default: 0 },
     /** Show the online/offline control in the driver app and honour it in auto-assign. */
     availabilityEnabled: { type: Boolean, default: true },
     /** Show the picking checklist on the driver delivery screen. */

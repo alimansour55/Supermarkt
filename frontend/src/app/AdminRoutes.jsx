@@ -23,6 +23,7 @@ export default function AdminRoutes() {
         <Route path="orders" element={withSuspense(<P.AdminOrdersPage />)} />
         <Route path="invoices" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.InvoicesPage /></P.AdminPermissionRoute>)} />
         <Route path="live-deliveries" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.LiveDeliveriesPage /></P.AdminPermissionRoute>)} />
+        <Route path="driver-cash" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.DriverCashPage /></P.AdminPermissionRoute>)} />
         <Route path="recurring-deliveries" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.AdminRecurringDeliveriesPage /></P.AdminPermissionRoute>)} />
         <Route path="order-chats" element={withSuspense(<P.OrderChatsPage />)} />
         <Route path="returns" element={withSuspense(<P.OrderReturnsPage />)} />

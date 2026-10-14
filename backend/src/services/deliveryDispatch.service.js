@@ -4,6 +4,8 @@ import { logAudit } from './auditLog.service.js';
 import { createNotification } from './notification.service.js';
 import { createUserNotification } from './userNotification.service.js';
 import { getDriverSettings } from './storeSettings.service.js';
+import { clearOrderTracking, ensureOrderTracking } from './deliveryTracking.service.js';
+import { newDeliveryRun, PRE_PICKUP_STAGES } from './deliveryRun.service.js';
 
 /**
  * Active delivery count per driver — orders currently out for delivery.
@@ -80,6 +82,7 @@ export async function autoAssignDriverToOrder(order, { req } = {}) {
 
   order.assignedDriver = driver._id;
   order.assignedDriverAt = new Date();
+  order.delivery = newDeliveryRun(order.assignedDriverAt);
 
   await logAudit({
     req,
@@ -133,4 +136,98 @@ export async function notifyDriver(driverId, order, kind) {
     link: isActive ? `/driver/deliveries/${order._id}` : '/driver',
     data: { orderId: order._id, orderNumber: order.orderNumber, kind },
   }).catch((err) => console.error('Driver notice failed:', err.message));
+}
+
+/**
+ * Take an order back from a driver who declined it (or let it expire) before pickup,
+ * and offer it to the next best driver when auto-assign is on. Atomic: only succeeds
+ * while that driver still holds the order in a pre-pickup stage.
+ * Returns { order, nextDriver } or null when the order had moved on.
+ */
+export async function releaseAssignment(orderId, driverId, { reason, req } = {}) {
+  const released = await Order.findOneAndUpdate(
+    { _id: orderId, assignedDriver: driverId, 'delivery.stage': { $in: PRE_PICKUP_STAGES } },
+    { $set: { assignedDriver: null, assignedDriverAt: null, delivery: null } },
+    { new: true },
+  );
+  if (!released) return null;
+
+  await clearOrderTracking(released._id);
+  await logAudit({
+    req,
+    action: reason === 'timeout' ? 'driver_assignment_expired' : 'driver_reject_delivery',
+    entityType: 'order',
+    entityId: released._id,
+    entityLabel: released.orderNumber,
+    changes: { assignedDriver: { from: String(driverId), to: null } },
+  });
+  if (reason === 'timeout') notifyDriver(driverId, released, 'unassigned');
+
+  const settings = await getDriverSettings();
+  let nextDriver = null;
+  if (settings.autoAssignEnabled) {
+    nextDriver = await pickAutoAssignDriver(settings, { excludeId: driverId });
+    if (nextDriver) {
+      const now = new Date();
+      const claimed = await Order.findOneAndUpdate(
+        { _id: released._id, assignedDriver: null },
+        { $set: { assignedDriver: nextDriver._id, assignedDriverAt: now, delivery: newDeliveryRun(now) } },
+        { new: true },
+      );
+      if (claimed) {
+        if (claimed.orderStatus === 'out_for_delivery') await ensureOrderTracking(claimed);
+        await claimed.save();
+        notifyDriver(nextDriver._id, claimed, claimed.orderStatus === 'out_for_delivery' ? 'dispatched' : 'assigned');
+        return { order: claimed, nextDriver };
+      }
+      nextDriver = null;
+    }
+  }
+
+  const why = reason === 'timeout'
+    ? { ar: 'لم يقبل المندوب الطلب في الوقت المحدد', en: 'the driver did not accept in time' }
+    : { ar: 'رفض المندوب الطلب', en: 'the driver declined it' };
+  await createNotification({
+    type: 'driver_unassigned',
+    titleAr: 'طلب يحتاج مندوباً',
+    titleEn: 'Order needs a driver',
+    messageAr: `طلب #${released.orderNumber} بدون مندوب — ${why.ar}.`,
+    messageEn: `Order #${released.orderNumber} has no driver — ${why.en}.`,
+    link: `/admin/orders?order=${released._id}`,
+    data: { orderId: released._id, orderNumber: released.orderNumber },
+  }).catch((err) => console.error('Release alert failed:', err.message));
+
+  return { order: released, nextDriver: null };
+}
+
+/** Release assignments nobody accepted within `acceptTimeoutMin`. Returns how many moved. */
+export async function releaseExpiredAssignments(now = Date.now()) {
+  const settings = await getDriverSettings();
+  const minutes = Number(settings.acceptTimeoutMin) || 0;
+  if (minutes <= 0) return 0;
+
+  const cutoff = new Date(now - minutes * 60 * 1000);
+  const expired = await Order.find({
+    assignedDriver: { $ne: null },
+    'delivery.stage': 'assigned',
+    'delivery.assignedAt': { $lte: cutoff },
+    orderStatus: { $in: ['pending', 'confirmed', 'preparing', 'out_for_delivery'] },
+  }).select('_id assignedDriver').limit(50).lean();
+
+  let moved = 0;
+  for (const row of expired) {
+    const result = await releaseAssignment(row._id, row.assignedDriver, { reason: 'timeout' })
+      .catch((err) => { console.error('Assignment release failed:', err.message); return null; });
+    if (result) moved += 1;
+  }
+  return moved;
+}
+
+let expiryTimer = null;
+export function startAssignmentExpiryJob(intervalMs = 60 * 1000) {
+  if (expiryTimer) return;
+  expiryTimer = setInterval(() => {
+    releaseExpiredAssignments().catch((err) => console.error('Assignment expiry job failed:', err.message));
+  }, intervalMs);
+  expiryTimer.unref?.();
 }

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Banknote, Calculator, Check, CheckCircle2, ChevronDown, ChevronUp,
-  Clock, Copy, ListChecks, MapPin, MessageCircle, Navigation, Package, Phone,
-  Radio, RefreshCw, Ruler, Square, Sun, Timer, User, XCircle,
+  Clock, Copy, Hand, ListChecks, MapPin, MessageCircle, Navigation, Package, PackageOpen, Phone,
+  Radio, RefreshCw, Ruler, Square, Store, Sun, Timer, User, XCircle,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { orderService } from '../../services/apiServices';
@@ -33,6 +33,17 @@ import {
 } from './driverUtils';
 
 const TERMINAL_STATUSES = ['delivered', 'delivery_failed'];
+
+/** Driver-facing messages for the API's rule codes (see driver.controller.js). */
+const ERROR_COPY = {
+  PIN_INVALID: { ar: 'الكود غير صحيح — اطلب من العميل الكود المكوّن من 4 أرقام.', en: 'Wrong delivery code — ask the customer for the 4-digit code.' },
+  PIN_LOCKED: { ar: 'تم إدخال كود خاطئ عدة مرات — اتصل بالفرع لإكمال الطلب.', en: 'Too many wrong codes — call the store to complete this order.' },
+  PHOTO_REQUIRED: { ar: 'صورة إثبات التسليم مطلوبة.', en: 'A proof-of-delivery photo is required.' },
+  CASH_REQUIRED: { ar: 'أدخل المبلغ المستلم — لا يقل عن المطلوب.', en: 'Enter the cash received — at least the amount due.' },
+  OUTSIDE_GEOFENCE: { ar: 'موقعك غير معروف أو بعيد عن العنوان — اكتب السبب لإكمال التسليم.', en: 'Your location is unknown or away from the address — add a reason to complete.' },
+  ATTEMPTS_REQUIRED: { ar: 'حاول التواصل مع العميل أولاً (اتصال أو واتساب).', en: 'Try to reach the customer first (call or WhatsApp).' },
+  NOT_READY: { ar: 'الطلب غير جاهز للاستلام بعد.', en: 'This order is not ready for pickup yet.' },
+};
 const UPCOMING_STATUSES = ['pending', 'confirmed', 'preparing'];
 const REFRESH_MS = 30000;
 
@@ -88,10 +99,11 @@ export default function DriverDeliveryPage() {
   const [failOpen, setFailOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [actionCode, setActionCode] = useState('');
   const [, setTick] = useState(0);
 
+  // Local ticks while picking; once picked up, the server's record is the source of truth.
   const [picked, setPicked] = useLocalStorage(`driver:picked:${id}`, {});
-  const [arrivedAt, setArrivedAt] = useLocalStorage(`driver:arrived:${id}`, null);
 
   const loadOrder = useCallback(async () => {
     try {
@@ -184,15 +196,15 @@ export default function DriverDeliveryPage() {
     return haversineKm(driverPin, { lat: Number(addr.lat), lng: Number(addr.lng) });
   }, [driverPin, hasMapCoords, addr]);
 
-  const step = computeDeliveryStep({
-    orderStatus: order?.orderStatus,
-    sharing,
-    trackingActive,
-    arrivedAt,
-  });
+  const stage = order?.delivery?.stage;
+  const arrivedAt = order?.delivery?.arrivedAt || null;
+  const step = computeDeliveryStep({ stage, orderStatus: order?.orderStatus });
+  const pickupDone = Boolean(order?.delivery?.pickedUpAt) || ['picked_up', 'en_route', 'arrived', 'delivered'].includes(stage);
+  const serverPicked = order?.delivery?.pickedItems;
 
   const items = order?.items || [];
-  const pickedCount = items.reduce((n, _, i) => n + (picked?.[i] ? 1 : 0), 0);
+  const isPicked = (i) => (pickupDone && Array.isArray(serverPicked) ? serverPicked.includes(i) : Boolean(picked?.[i]));
+  const pickedCount = items.reduce((n, _, i) => n + (isPicked(i) ? 1 : 0), 0);
   const allPicked = items.length > 0 && pickedCount === items.length;
 
   const cashNum = Number(String(cashReceived).replace(/[^\d.]/g, ''));
@@ -206,48 +218,97 @@ export default function DriverDeliveryPage() {
     setRefreshing(false);
   };
 
-  const handleComplete = async (photoFile) => {
+  const reportError = (err) => {
+    const code = err.response?.data?.code || '';
+    const serverMessage = err.response?.data?.message || err.message;
+    // Known rule violations get a message in the driver's language; others show the server text.
+    const copy = ERROR_COPY[code];
+    let message = copy ? (isAr ? copy.ar : copy.en) : serverMessage;
+    if (code === 'OUTSIDE_GEOFENCE') {
+      const meters = serverMessage.match(/(\d+) m/)?.[1];
+      if (meters) message = isAr ? `أنت على بعد ${meters} م من العنوان — اكتب السبب لإكمال التسليم.` : `You are ${meters} m from the address — add a reason to complete.`;
+    }
+    setActionError(message);
+    setActionCode(code);
+    // Someone else (admin, or an earlier retry) already changed this order.
+    if (err.response?.status === 409) {
+      setCompleteOpen(false);
+      setFailOpen(false);
+      loadOrder();
+    }
+  };
+
+  /** Run a driver action that returns the updated order. */
+  const runAction = async (request, { after } = {}) => {
     setActionLoading(true);
     setActionError('');
+    setActionCode('');
     try {
-      const { data } = await orderService.completeDriverDelivery(id, photoFile);
-      setOrder(data.data);
-      stop();
-      setTrackingActive(false);
-      setCompleteOpen(false);
+      const { data } = await request();
+      if (data?.data?.orderNumber) setOrder(data.data);
+      after?.(data?.data);
+      return true;
     } catch (err) {
-      setActionError(err.response?.data?.message || err.message);
-      // Someone else (admin, or an earlier retry) already changed this order.
-      if (err.response?.status === 409) {
-        setCompleteOpen(false);
-        setFailOpen(false);
-        loadOrder();
-      }
+      reportError(err);
+      return false;
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleFail = async (payload) => {
-    setActionLoading(true);
-    setActionError('');
-    try {
-      const { data } = await orderService.failDriverDelivery(id, payload);
-      setOrder(data.data);
-      setFailOpen(false);
-      stop();
-      setTrackingActive(false);
-    } catch (err) {
-      setActionError(err.response?.data?.message || err.message);
-      // Someone else (admin, or an earlier retry) already changed this order.
-      if (err.response?.status === 409) {
+  const handleComplete = (photoFile, fields) => runAction(
+    () => orderService.completeDriverDelivery(id, photoFile, fields),
+    {
+      after: () => {
+        stop();
+        setTrackingActive(false);
         setCompleteOpen(false);
+      },
+    },
+  );
+
+  const handleFail = (payload) => runAction(
+    () => orderService.failDriverDelivery(id, payload),
+    {
+      after: () => {
         setFailOpen(false);
-        loadOrder();
-      }
-    } finally {
-      setActionLoading(false);
-    }
+        stop();
+        setTrackingActive(false);
+      },
+    },
+  );
+
+  const handleAccept = () => runAction(() => orderService.acceptDriverDelivery(id));
+
+  const handleReject = async () => {
+    const ok = window.confirm(isAr
+      ? 'هل تريد الاعتذار عن هذا الطلب؟ سيُعاد للفرع لتعيين مندوب آخر.'
+      : 'Decline this delivery? It goes back to the store for another driver.');
+    if (!ok) return;
+    const done = await runAction(() => orderService.rejectDriverDelivery(id));
+    if (done) navigate('/driver');
+  };
+
+  const handlePickup = () => {
+    const pickedItems = items.map((_, i) => i).filter((i) => picked?.[i]);
+    return runAction(
+      () => orderService.pickupDriverDelivery(id, showPicking ? pickedItems : undefined),
+      {
+        // On the road now — start sharing location straight away.
+        after: (next) => { if (next?.canShareLocation) setTrackingActive(true); },
+      },
+    );
+  };
+
+  const handleArrive = () => runAction(() => orderService.arriveDriverDelivery(id));
+  const handleReturned = () => runAction(() => orderService.returnDriverDelivery(id));
+
+  /** Calls and WhatsApp count as contact attempts (needed before "customer unreachable"). */
+  const logAttempt = (type) => {
+    if (order?.orderStatus !== 'out_for_delivery') return;
+    orderService.logDriverContactAttempt(id, type)
+      .then(({ data }) => { if (data?.data?.orderNumber) setOrder(data.data); })
+      .catch(() => {});
   };
 
   if (loading) {
@@ -304,9 +365,13 @@ export default function DriverDeliveryPage() {
             {isAr ? 'الطلب لم يخرج للتوصيل بعد' : 'Not dispatched yet'}
           </p>
           <p className="mt-1 text-amber-800">
-            {isAr
-              ? 'الطلب معيّن لك وما زال قيد التجهيز. ستتمكن من بدء التوصيل ومشاركة موقعك عندما يحوّله المتجر إلى «في الطريق».'
-              : "This order is assigned to you and still being prepared. You can start the trip and share your location once the store marks it out for delivery."}
+            {order.canPickup
+              ? (isAr
+                ? 'استلم الطلب من الفرع وراجع الأصناف، ثم اضغط «تم الاستلام — ابدأ التوصيل».'
+                : 'Collect the order at the store, check the items, then tap "Picked up — start delivery".')
+              : (isAr
+                ? 'الطلب لم يُؤكَّد بعد. ستتمكن من استلامه عندما يؤكده الفرع.'
+                : 'The order is not confirmed yet. You can pick it up once the store confirms it.')}
           </p>
         </section>
       )}
@@ -502,6 +567,7 @@ export default function DriverDeliveryPage() {
           <div className="mt-3 grid grid-cols-2 gap-2">
             <a
               href={`tel:${order.phone}`}
+              onClick={() => logAttempt('call')}
               className="flex items-center justify-center gap-2 rounded-xl border-2 border-teal-200 bg-teal-50 py-3 text-sm font-semibold text-teal-800 hover:bg-teal-100"
             >
               <Phone className="h-4 w-4" aria-hidden />
@@ -511,12 +577,20 @@ export default function DriverDeliveryPage() {
               href={whatsappUrl(order.phone)}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => logAttempt('whatsapp')}
               className="flex items-center justify-center gap-2 rounded-xl border-2 border-emerald-200 bg-emerald-50 py-3 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
             >
               <MessageCircle className="h-4 w-4" aria-hidden />
               WhatsApp
             </a>
           </div>
+        )}
+        {order.delivery?.contactAttempts > 0 && (
+          <p className="mt-2 text-xs text-slate-500">
+            {isAr
+              ? `محاولات التواصل المسجّلة: ${order.delivery.contactAttempts}`
+              : `Contact attempts logged: ${order.delivery.contactAttempts}`}
+          </p>
         )}
         {order.phone && (
           <p className="mt-2 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
@@ -527,6 +601,7 @@ export default function DriverDeliveryPage() {
         {order.alternatePhone && (
           <a
             href={`tel:${order.alternatePhone}`}
+            onClick={() => logAttempt('call')}
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-100"
           >
             <Phone className="h-4 w-4" aria-hidden />
@@ -576,23 +651,30 @@ export default function DriverDeliveryPage() {
           {itemsOpen && (
             <>
               <div className="flex items-center justify-end gap-2 px-4 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setPicked(allPicked ? {} : Object.fromEntries(items.map((_, i) => [i, true])))}
-                  className="text-xs font-semibold text-teal-700 hover:underline"
-                >
-                  {allPicked ? (isAr ? 'إلغاء الكل' : 'Clear all') : (isAr ? 'تحديد الكل' : 'Check all')}
-                </button>
+                {pickupDone ? (
+                  <span className="text-xs font-medium text-slate-500">
+                    {isAr ? 'تم تسجيل الاستلام' : 'Pickup recorded'}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setPicked(allPicked ? {} : Object.fromEntries(items.map((_, i) => [i, true])))}
+                    className="text-xs font-semibold text-teal-700 hover:underline"
+                  >
+                    {allPicked ? (isAr ? 'إلغاء الكل' : 'Clear all') : (isAr ? 'تحديد الكل' : 'Check all')}
+                  </button>
+                )}
               </div>
               <ul className="divide-y divide-slate-100 px-4">
                 {items.map((item, idx) => {
-                  const on = Boolean(picked?.[idx]);
+                  const on = isPicked(idx);
                   return (
                     <li key={idx}>
                       <label className="flex cursor-pointer items-center gap-3 py-3">
                         <input
                           type="checkbox"
                           checked={on}
+                          disabled={pickupDone}
                           onChange={() => setPicked((prev) => ({ ...prev, [idx]: !prev?.[idx] }))}
                           className="h-5 w-5 shrink-0 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
                         />
@@ -743,7 +825,7 @@ export default function DriverDeliveryPage() {
         </section>
       )}
 
-      {/* Arrival marker */}
+      {/* Arrival */}
       {canComplete && (
         <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -751,36 +833,33 @@ export default function DriverDeliveryPage() {
             {isAr ? 'الوصول للعميل' : 'Arrival'}
           </h2>
           {arrivedAt ? (
-            <div className="mt-2 flex items-center justify-between">
-              <p className="text-sm text-slate-600">
-                {isAr ? 'وصلت ' : 'Arrived '}
-                {new Date(arrivedAt).toLocaleTimeString(isAr ? 'ar-EG' : undefined, { hour: '2-digit', minute: '2-digit' })}
-                {' · '}
-                {isAr ? 'انتظار ' : 'waiting '}{relAgo(arrivedAt, isAr)}
-              </p>
-              <button
-                type="button"
-                onClick={() => setArrivedAt(null)}
-                className="text-xs font-medium text-slate-400 hover:text-slate-600"
-              >
-                {isAr ? 'تراجع' : 'Undo'}
-              </button>
-            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              {isAr ? 'وصلت ' : 'Arrived '}
+              {new Date(arrivedAt).toLocaleTimeString(isAr ? 'ar-EG' : undefined, { hour: '2-digit', minute: '2-digit' })}
+              {' · '}
+              {isAr ? 'انتظار ' : 'waiting '}{relAgo(arrivedAt, isAr)}
+            </p>
           ) : (
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-3 w-full"
-              onClick={() => setArrivedAt(new Date().toISOString())}
-            >
-              <MapPin className="h-4 w-4" aria-hidden />
-              {isAr ? 'وصلت إلى موقع العميل' : "I've arrived at the customer"}
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 w-full"
+                onClick={handleArrive}
+                disabled={actionLoading || !order.canArrive}
+              >
+                <MapPin className="h-4 w-4" aria-hidden />
+                {isAr ? 'وصلت إلى موقع العميل' : "I've arrived at the customer"}
+              </Button>
+              <p className="mt-1.5 text-xs text-slate-500">
+                {isAr ? 'سيصل للعميل إشعار بأنك عند الباب.' : 'The customer is notified that you are at the door.'}
+              </p>
+            </>
           )}
         </section>
       )}
 
-      {actionError && (
+      {actionError && !completeOpen && !failOpen && (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{actionError}</p>
       )}
 
@@ -810,16 +889,94 @@ export default function DriverDeliveryPage() {
           <p className="font-semibold text-red-900">
             {isAr ? 'تم تسجيل فشل التسليم' : 'Delivery failure recorded'}
           </p>
+          {order.canReturn && (
+            <>
+              <p className="mt-2 text-sm text-red-800">
+                {isAr ? 'أرجع الأصناف للفرع ثم أكّد هنا.' : 'Bring the items back to the store, then confirm here.'}
+              </p>
+              <Button
+                type="button"
+                className="mt-3 w-full bg-slate-800 hover:bg-slate-900"
+                onClick={handleReturned}
+                disabled={actionLoading}
+              >
+                <Store className="h-4 w-4" aria-hidden />
+                {isAr ? 'تم إرجاع الطلب للفرع' : 'Items returned to the store'}
+              </Button>
+            </>
+          )}
+          {order.delivery?.stage === 'returned' && (
+            <p className="mt-2 text-sm font-medium text-slate-700">
+              {isAr ? 'تم تسجيل إرجاع الطلب للفرع.' : 'Return to store recorded.'}
+            </p>
+          )}
           <Button type="button" variant="outline" className="mt-4" onClick={() => navigate('/driver')}>
             {isAr ? 'العودة للطلبات' : 'Back to deliveries'}
           </Button>
         </div>
       )}
 
+      {/* Pre-pickup actions: accept / pick up / decline */}
+      {!isTerminal && (order.canAccept || order.canPickup || order.canReject) && !canComplete && (
+        <div className="sticky bottom-20 z-20 -mx-4 space-y-2 rounded-t-2xl border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md">
+          {order.canPickup && showPicking && !allPicked && (
+            <p className="text-center text-xs font-medium text-amber-700">
+              {isAr
+                ? `${items.length - pickedCount} صنف لم يُحدَّد — سيُبلَّغ الفرع بالنواقص`
+                : `${items.length - pickedCount} item(s) unchecked — the store will be told they are missing`}
+            </p>
+          )}
+          {order.canPickup && (
+            <Button
+              type="button"
+              className="w-full bg-violet-600 py-3 text-base hover:bg-violet-700"
+              onClick={handlePickup}
+              disabled={actionLoading}
+            >
+              <PackageOpen className="h-5 w-5" aria-hidden />
+              {isAr ? 'تم الاستلام — ابدأ التوصيل' : 'Picked up — start delivery'}
+            </Button>
+          )}
+          {order.canAccept && (
+            <Button
+              type="button"
+              variant={order.canPickup ? 'outline' : undefined}
+              className={order.canPickup ? 'w-full' : 'w-full bg-teal-600 py-3 text-base hover:bg-teal-700'}
+              onClick={handleAccept}
+              disabled={actionLoading}
+            >
+              <Hand className="h-4 w-4" aria-hidden />
+              {isAr ? 'قبول الطلب' : 'Accept delivery'}
+            </Button>
+          )}
+          {order.canReject && (
+            <button
+              type="button"
+              onClick={handleReject}
+              disabled={actionLoading}
+              className="w-full py-1.5 text-sm font-medium text-red-700 hover:underline disabled:opacity-50"
+            >
+              {isAr ? 'اعتذار عن الطلب' : 'Decline this delivery'}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Sticky actions */}
       {canComplete && (
         <div className="sticky bottom-20 z-20 -mx-4 space-y-2 rounded-t-2xl border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur-md">
-          {showPicking && !allPicked && (
+          {order.canAccept && (
+            <Button
+              type="button"
+              className="w-full bg-teal-600 hover:bg-teal-700"
+              onClick={handleAccept}
+              disabled={actionLoading}
+            >
+              <Hand className="h-4 w-4" aria-hidden />
+              {isAr ? 'قبول الطلب' : 'Accept delivery'}
+            </Button>
+          )}
+          {showPicking && !allPicked && !pickupDone && (
             <p className="text-center text-xs font-medium text-amber-700">
               {isAr
                 ? `${items.length - pickedCount} صنف لم يُجهَّز بعد`
@@ -833,8 +990,8 @@ export default function DriverDeliveryPage() {
             disabled={actionLoading}
           >
             <CheckCircle2 className="h-5 w-5" aria-hidden />
-            {isCod
-              ? (isAr ? `تم التسليم — تحصيل ${formatPrice(order.total)}` : `Delivered — collect ${formatPrice(order.total)}`)
+            {order.cashDue > 0
+              ? (isAr ? `تم التسليم — تحصيل ${formatPrice(order.cashDue)}` : `Delivered — collect ${formatPrice(order.cashDue)}`)
               : (isAr ? 'تم التسليم' : 'Mark delivered')}
           </Button>
           <Button
@@ -850,22 +1007,33 @@ export default function DriverDeliveryPage() {
         </div>
       )}
 
-      <DriverFailModal
-        open={failOpen}
-        isAr={isAr}
-        loading={actionLoading}
-        onClose={() => setFailOpen(false)}
-        onConfirm={handleFail}
-      />
-      <DriverCompleteModal
-        open={completeOpen}
-        isAr={isAr}
-        loading={actionLoading}
-        isCod={isCod}
-        total={order.total}
-        onClose={() => setCompleteOpen(false)}
-        onConfirm={handleComplete}
-      />
+      {failOpen && (
+        <DriverFailModal
+          open
+          isAr={isAr}
+          loading={actionLoading}
+          error={actionError}
+          contactAttempts={order.delivery?.contactAttempts || 0}
+          minContactAttempts={order.requirements?.minContactAttempts || 0}
+          contactReasons={order.requirements?.contactFailureReasons || []}
+          onClose={() => { setFailOpen(false); setActionError(''); setActionCode(''); }}
+          onConfirm={handleFail}
+        />
+      )}
+      {completeOpen && (
+        <DriverCompleteModal
+          open
+          isAr={isAr}
+          loading={actionLoading}
+          cashDue={order.cashDue || 0}
+          requirements={order.requirements || {}}
+          initialCash={cashReceived}
+          error={actionError}
+          errorCode={actionCode}
+          onClose={() => { setCompleteOpen(false); setActionError(''); setActionCode(''); }}
+          onConfirm={handleComplete}
+        />
+      )}
     </div>
   );
 }

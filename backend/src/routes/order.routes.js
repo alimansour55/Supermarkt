@@ -33,6 +33,7 @@ import {
   suggestSubstitution,
   respondToSubstitution,
   assignDriver,
+  reattemptDelivery,
   getDeliveryStaff,
   addCustomerMessage,
   addAdminMessage,
@@ -74,7 +75,20 @@ import {
   updateDriverOrderLocation,
   completeDriverDelivery,
   failDriverDelivery,
+  acceptDriverDelivery,
+  rejectDriverDelivery,
+  pickupDriverDelivery,
+  arriveDriverDelivery,
+  logDriverContactAttempt,
+  getDriverCash,
+  returnDriverDelivery,
 } from '../controllers/driver.controller.js';
+import {
+  adjustDriverCash,
+  getDriverCashBalances,
+  getDriverCashLedger,
+  recordDriverCashHandover,
+} from '../controllers/driverCash.controller.js';
 import {
   startDriverSimulation,
   stopDriverSimulation,
@@ -99,6 +113,10 @@ router.patch('/recurring-deliveries/:id/resume', resumeMyRecurringDelivery);
 router.patch('/recurring-deliveries/:id/cancel', cancelMyRecurringDelivery);
 
 router.get('/admin/delivery-staff', ...adminOnly, getDeliveryStaff);
+router.get('/admin/drivers/cash', ...requirePermission('orders:read'), getDriverCashBalances);
+router.get('/admin/drivers/:driverId/cash', ...requirePermission('orders:read'), getDriverCashLedger);
+router.post('/admin/drivers/:driverId/cash/handover', ...requirePermission('orders:write'), recordDriverCashHandover);
+router.post('/admin/drivers/:driverId/cash/adjust', ...requirePermission('orders:write'), adjustDriverCash);
 router.get('/admin/live-deliveries', ...requirePermission('orders:read'), getAdminLiveDeliveries);
 router.get('/admin/recurring-deliveries/stats', ...adminOnly, getAdminRecurringStats);
 router.get('/admin/recurring-deliveries', ...adminOnly, getAdminRecurringDeliveries);
@@ -130,6 +148,7 @@ router.post('/admin/:id/cancel', ...adminOnly, cancelAdminOrder);
 router.post('/admin/:id/refund', ...adminOnly, refundAdminOrder);
 router.post('/admin/:id/substitutions', ...adminOnly, suggestSubstitution);
 router.put('/admin/:id/assign-driver', ...adminOnly, assignDriver);
+router.post('/admin/:id/delivery/reattempt', ...requirePermission('orders:write'), reattemptDelivery);
 router.get('/admin/:id/tracking', ...requirePermission('orders:read'), getAdminOrderTracking);
 router.put('/admin/:id/tracking', ...requirePermission('orders:write'), adminTrackingUpdateLimiter, updateAdminOrderTracking);
 // Dev-only driver simulator (no-op in production — see the controller).
@@ -155,7 +174,14 @@ router.get('/driver/config', ...driverOnly, getDriverConfig);
 router.put('/driver/availability', ...driverOnly, updateDriverAvailability);
 router.get('/driver/deliveries', ...driverOnly, getDriverDeliveries);
 router.get('/driver/deliveries/history', ...driverOnly, getDriverHistory);
+router.get('/driver/cash', ...driverOnly, getDriverCash);
 router.get('/driver/deliveries/:id', ...driverOnly, getDriverDeliveryById);
+router.post('/driver/deliveries/:id/accept', ...driverOnly, acceptDriverDelivery);
+router.post('/driver/deliveries/:id/reject', ...driverOnly, rejectDriverDelivery);
+router.post('/driver/deliveries/:id/pickup', ...driverOnly, pickupDriverDelivery);
+router.post('/driver/deliveries/:id/arrive', ...driverOnly, arriveDriverDelivery);
+router.post('/driver/deliveries/:id/attempts', ...driverOnly, logDriverContactAttempt);
+router.post('/driver/deliveries/:id/returned', ...driverOnly, returnDriverDelivery);
 router.post('/driver/deliveries/:id/complete', ...driverOnly, optionalUploadSingle('proofPhoto'), completeDriverDelivery);
 router.post('/driver/deliveries/:id/fail', ...driverOnly, validate(driverFailDeliveryValidation), failDriverDelivery);
 router.put('/:id/tracking/location', ...driverOnly, driverLocationLimiter, validate(driverTrackingLocationValidation), updateDriverOrderLocation);

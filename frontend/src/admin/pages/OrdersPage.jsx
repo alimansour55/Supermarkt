@@ -207,6 +207,11 @@ export default function OrdersPage() {
           refreshDrivers();
           break;
         }
+        case 'reattemptDelivery':
+          ({ data } = await adminApi.reattemptDelivery(selectedId, payload));
+          toast.success(isAr ? 'أُعيد الطلب للتجهيز — سيستلمه المندوب من جديد' : 'Back to preparing — the driver will pick it up again');
+          refreshDrivers();
+          break;
         case 'message':
           await sendThreadMessage(payload);
           toast.success(isAr ? 'تم إرسال الرسالة' : 'Message sent');
