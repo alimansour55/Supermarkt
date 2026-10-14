@@ -172,6 +172,8 @@ export const adminApi = {
   advanceRecurringDelivery: (id) => api.post(`/orders/admin/recurring-deliveries/${id}/advance`),
 
   getUsers: (params) => api.get('/admin/users', { params }),
+  getUsersSummary: () => api.get('/admin/users/summary'),
+  exportUsers: (params) => api.get('/admin/users/export', { params, responseType: 'blob' }),
   createUser: (data) => api.post('/admin/users', data),
   getUser: (id) => api.get(`/admin/users/${id}`),
   bulkUsers: (ids, action) => api.post('/admin/users/bulk', { ids, action }),

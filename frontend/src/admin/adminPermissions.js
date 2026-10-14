@@ -8,6 +8,8 @@ export const ROLE_LABELS = {
   admin: { en: 'Store admin', ar: 'إدارة المتجر' },
   super_admin: { en: 'Owner', ar: 'مالك النظام' },
   driver: { en: 'Delivery driver', ar: 'مندوب توصيل' },
+  seller_owner: { en: 'Seller (owner)', ar: 'بائع (مالك)' },
+  seller_staff: { en: 'Seller staff', ar: 'موظف بائع' },
 };
 
 /**
@@ -279,6 +281,9 @@ export function roleLabel(role, isAr) {
 }
 
 export const ASSIGNABLE_ROLES = ['user', 'manager', 'admin', 'super_admin', 'driver'];
+
+/** Roles the customers page may switch between — staff roles are managed on the Admin team page. */
+export const CUSTOMER_PAGE_ROLES = ['user', 'driver'];
 
 export const STAFF_ACCOUNT_ROLES = ['manager', 'admin', 'super_admin', 'driver'];
 

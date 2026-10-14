@@ -12,6 +12,7 @@ const ACTION_LABELS = {
   delete: { en: 'Deleted', ar: 'حذف' },
   status_change: { en: 'Status change', ar: 'تغيير حالة' },
   bulk: { en: 'Bulk action', ar: 'إجراء جماعي' },
+  export: { en: 'Exported', ar: 'تصدير' },
 };
 
 const ENTITY_LABELS = {

@@ -12,7 +12,7 @@ const auditLogSchema = new mongoose.Schema(
     action: {
       type: String,
       required: true,
-      enum: ['create', 'update', 'delete', 'status_change', 'bulk', 'refund', 'adjust', 'approve', 'reject', 'assign_driver', 'auto_assign_driver', 'trash', 'restore', 'reset'],
+      enum: ['create', 'update', 'delete', 'status_change', 'bulk', 'refund', 'adjust', 'approve', 'reject', 'assign_driver', 'auto_assign_driver', 'trash', 'restore', 'reset', 'export'],
       index: true,
     },
     entityType: {

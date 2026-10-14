@@ -30,6 +30,7 @@ export default function AdminListPage({
   emptyAction,
   pagination,
   onPageChange,
+  renderMobileCard,
 }) {
   return (
     <div className="space-y-4">
@@ -76,6 +77,7 @@ export default function AdminListPage({
           emptyDescription={emptyDescription}
           emptyAction={emptyAction}
           isAr={isAr}
+          renderMobileCard={renderMobileCard}
         />
 
         {!loading && pagination?.total > 0 && (

@@ -1,30 +1,43 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from '../../app/router';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { ADMIN_PAGE_SIZE } from '../adminConstants';
+import { readListUrlState, writeListUrlState } from '../utils/listUrlState';
 
+/**
+ * @param {object} options
+ * @param {boolean} [options.syncUrl] keep search, filters, sort and page in the URL so views
+ *   survive a reload and can be shared.
+ */
 export function useAdminListPage({
   fetchFn,
   initialFilters = {},
   initialSort = { field: 'createdAt', order: 'desc' },
   pageSize = ADMIN_PAGE_SIZE,
+  syncUrl = false,
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [initial] = useState(() => (syncUrl
+    ? readListUrlState(searchParams, { initialFilters, initialSort, pageSize })
+    : { q: '', page: 1, pageSize, filters: initialFilters, sort: initialSort }));
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState('');
-  const [page, setPage] = useState(1);
-  const [pageSizeState, setPageSizeState] = useState(pageSize);
-  const [filters, setFilters] = useState(initialFilters);
-  const [sort, setSort] = useState(initialSort);
+  const [q, setQ] = useState(initial.q);
+  const [page, setPage] = useState(initial.page);
+  const [pageSizeState, setPageSizeState] = useState(initial.pageSize);
+  const [filters, setFilters] = useState(initial.filters);
+  const [sort, setSort] = useState(initial.sort);
   const [selectedIds, setSelectedIds] = useState([]);
   const [pagination, setPagination] = useState({
     page: 1,
     pages: 1,
     total: 0,
-    limit: pageSize,
+    limit: initial.pageSize,
   });
   const [loadError, setLoadError] = useState('');
 
   const debouncedQ = useDebouncedValue(q);
+  const urlQ = syncUrl ? debouncedQ : '';
   const fetchRef = useRef(fetchFn);
   fetchRef.current = fetchFn;
 
@@ -68,6 +81,20 @@ export function useAdminListPage({
     [debouncedQ, filters, pageSizeState],
   );
   const filterKeyRef = useRef(filterKey);
+
+  useEffect(() => {
+    if (!syncUrl) return;
+    const next = writeListUrlState(
+      searchParams,
+      {
+        q: urlQ, page, pageSize: pageSizeState, sort, filters,
+      },
+      { initialFilters, initialSort, pageSize },
+    );
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+    // initialFilters / initialSort / pageSize are the page's fixed defaults.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncUrl, urlQ, page, pageSizeState, sort, filters, searchParams, setSearchParams]);
 
   useEffect(() => {
     // When filters/search/page-size change, reset to page 1 first and skip

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from '../../app/router';
 import { Save, Wallet, Search, Users, Clock, Check, X } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { adminApi } from '../adminApi';
@@ -166,6 +167,14 @@ export default function WalletPage() {
       toast.error(isAr ? 'تعذر تحميل العميل' : 'Failed to load customer');
     }
   };
+
+  // Deep link from the customers page: /admin/wallet?user=<id> opens that customer.
+  const [searchParams] = useSearchParams();
+  const linkedUserId = searchParams.get('user');
+  useEffect(() => {
+    if (linkedUserId) loadUser(linkedUserId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkedUserId]);
 
   const applyAdjust = async () => {
     if (!selectedUser) return;

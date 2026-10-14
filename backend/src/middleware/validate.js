@@ -32,10 +32,23 @@ export const createAdminUserValidation = [
   body('role').optional().isIn(['user', 'driver']).withMessage('Role must be customer or driver'),
 ];
 
+export const updateAdminUserValidation = [
+  body('name').optional().trim().isLength({ min: 2, max: 100 }).withMessage('Name must be 2–100 characters'),
+  body('phone').optional().custom((value) => {
+    if (!normalizePhone(String(value))) {
+      throw new Error('Invalid Egyptian mobile number (e.g. 01xxxxxxxxx)');
+    }
+    return true;
+  }),
+  // `role` is checked in the controller: the detail panel re-sends a staff user's unchanged role.
+  body(['isActive', 'isPhoneVerified', 'isEmailVerified', 'reviewBlocked']).optional().isBoolean(),
+  body('adminNote').optional({ values: 'null' }).isString().isLength({ max: 1000 }).withMessage('Note must be 1000 characters or fewer'),
+];
+
 export const bulkAdminUsersValidation = [
   body('ids').isArray({ min: 1 }).withMessage('Select at least one user'),
   body('ids.*').isMongoId().withMessage('Invalid user id'),
-  body('action').isIn(['delete', 'suspend', 'activate']).withMessage('Invalid bulk action'),
+  body('action').isIn(['delete', 'suspend', 'activate', 'signout', 'verify_phone']).withMessage('Invalid bulk action'),
 ];
 
 export const adminLoginValidation = [

@@ -231,6 +231,18 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    /** Private note staff keep about this customer — never shown to the customer. */
+    adminNote: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: '',
+    },
+    /** Set when an admin deletes a customer who has order/wallet history: the record is anonymized, not removed. */
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -244,7 +256,7 @@ userSchema.pre('validate', function requirePhoneForCustomers(next) {
   // Seller accounts sign in with email + password; their phone lives on the Seller doc,
   // so a seller can also keep a separate customer account on the same phone number.
   const isSellerWithEmail = SELLER_ROLES.includes(this.role) && this.email;
-  if (!isStaffWithUsername && !isSellerWithEmail && !this.phone) {
+  if (!isStaffWithUsername && !isSellerWithEmail && !this.deletedAt && !this.phone) {
     this.invalidate('phone', 'Phone number is required');
   }
   next();

@@ -10,6 +10,7 @@ export default function BulkActionsBar({
   onMarkOurProduct,
   onUnmarkOurProduct,
   showActivate = true,
+  extraActions,
   onClear,
 }) {
   if (!count) return null;
@@ -44,6 +45,7 @@ export default function BulkActionsBar({
           {isAr ? 'تعطيل' : 'Deactivate'}
         </Button>
       )}
+      {extraActions}
       {onDelete && (
         <Button size="sm" variant="danger" onClick={onDelete}>
           {isAr ? 'حذف' : 'Delete'}

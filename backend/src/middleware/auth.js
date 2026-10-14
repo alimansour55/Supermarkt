@@ -29,6 +29,9 @@ export const protect = async (req, res, next) => {
     if ((user.sessionVersion || 0) !== (decoded.sv || 0)) {
       throw new AppError('Your session has ended — please sign in again', 401);
     }
+    if (user.isActive === false) {
+      throw new AppError('This account has been suspended. Please contact support.', 403);
+    }
 
     req.user = user;
     next();
@@ -55,7 +58,10 @@ export const optionalProtect = async (req, res, next) => {
     const user = await User.findById(decoded.id);
     // Optional auth: a missing/expired/invalid token must never block a public
     // route — just continue as an anonymous visitor.
-    if (user) req.user = user;
+    // Suspended accounts and revoked sessions browse as anonymous visitors.
+    if (user && user.isActive !== false && (user.sessionVersion || 0) === (decoded.sv || 0)) {
+      req.user = user;
+    }
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
