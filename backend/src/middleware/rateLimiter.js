@@ -59,6 +59,16 @@ export const driverLocationLimiter = rateLimit({
   message: jsonMessage('Too many location updates. Please wait before sending again.'),
 });
 
+/** Driver shift-wide GPS (one stream for all their orders) — adaptive 5–30 s on the client. */
+export const driverShiftLocationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.user?._id ? `driver-shift-loc:${req.user._id}` : ipKeyGenerator(req.ip)),
+  message: jsonMessage('Too many location updates. Please wait before sending again.'),
+});
+
 /** Store AI assistant chat */
 export const assistantChatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,

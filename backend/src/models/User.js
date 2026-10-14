@@ -110,6 +110,16 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    /** Delivery drivers only — last GPS fix from the driver app (shift-wide, any order). */
+    driverLastLocation: {
+      type: {
+        lat: Number,
+        lng: Number,
+        at: Date,
+        _id: false,
+      },
+      default: undefined,
+    },
     /** Delivery drivers only — cash collected on delivery and not yet handed over to the store. */
     driverCashBalance: { type: Number, default: 0 },
     /** Delivery drivers only — whether the driver is on shift and can receive auto-assigned orders. */

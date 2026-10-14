@@ -71,6 +71,7 @@ export const orderService = {
   getDriverCash: () => api.get('/orders/driver/cash'),
   failDriverDelivery: (id, data) => api.post(`/orders/driver/deliveries/${id}/fail`, data),
   updateDriverLocation: (id, data) => api.put(`/orders/${id}/tracking/location`, data),
+  updateDriverShiftLocation: (data) => api.put('/orders/driver/location', data),
   getRecurringDeliveries: () => api.get('/orders/recurring-deliveries'),
   updateRecurringDelivery: (id, data) => api.patch(`/orders/recurring-deliveries/${id}`, data),
   pauseRecurringDelivery: (id) => api.patch(`/orders/recurring-deliveries/${id}/pause`),

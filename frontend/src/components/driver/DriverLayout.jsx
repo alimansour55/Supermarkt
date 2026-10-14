@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { ListChecks, UserRound } from 'lucide-react';
+import { ListChecks, Navigation, NavigationOff, UserRound } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../ui/Toast';
 import { orderService } from '../../services/apiServices';
 import DriverAvailabilityToggle from './DriverAvailabilityToggle';
 import UserNotificationBell from '../layout/UserNotificationBell';
+import { useDriverShiftLocation } from '../../hooks/useDriverShiftLocation';
+import { useWakeLock } from '../../hooks/useWakeLock';
+import { DRIVER_DELIVERIES_CHANGED } from './driverEvents';
+
+const CONFIG_REFRESH_MS = 60000;
 
 function initialsOf(name) {
   return (name || '?')
@@ -55,25 +60,45 @@ export default function DriverLayout() {
   // Bumped when a new assignment notice arrives so the deliveries list refetches.
   const [assignmentsVersion, setAssignmentsVersion] = useState(0);
 
+  const loadConfig = useCallback(() => orderService.getDriverConfig()
+    .then(({ data }) => setConfig(data.data))
+    .catch(() => setConfig((prev) => prev || { availabilityEnabled: false })), []);
+
   const handleNewNotifications = useCallback((items) => {
     const fresh = items.find((n) => !n.isRead && (n.type === 'driver_assignment' || n.type === 'driver_unassigned'));
     if (!fresh) return;
     setAssignmentsVersion((v) => v + 1);
+    loadConfig();
     if (fresh.type === 'driver_assignment') {
       navigator.vibrate?.([200, 100, 200]);
       toast.success(isAr ? fresh.titleAr : fresh.titleEn);
     } else {
       toast.info(isAr ? fresh.titleAr : fresh.titleEn);
     }
-  }, [isAr, toast]);
+  }, [isAr, toast, loadConfig]);
 
   useEffect(() => {
-    let mounted = true;
-    orderService.getDriverConfig()
-      .then(({ data }) => { if (mounted) setConfig(data.data); })
-      .catch(() => { if (mounted) setConfig({ availabilityEnabled: false }); });
-    return () => { mounted = false; };
-  }, []);
+    loadConfig();
+    const iv = setInterval(loadConfig, CONFIG_REFRESH_MS);
+    const onChanged = () => loadConfig();
+    window.addEventListener(DRIVER_DELIVERIES_CHANGED, onChanged);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener(DRIVER_DELIVERIES_CHANGED, onChanged);
+    };
+  }, [loadConfig]);
+
+  // GPS runs for the whole shift while the driver has orders on the road.
+  const gpsActive = config?.gpsDeliveryEnabled !== false && (config?.activeDeliveries || 0) > 0;
+  const geo = useDriverShiftLocation({ enabled: gpsActive });
+  const wakeLockSupported = useWakeLock(gpsActive);
+
+  useEffect(() => {
+    if (!gpsActive) return undefined;
+    const warn = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [gpsActive]);
 
   const setAvailability = useCallback(async (next) => {
     setAvailabilityBusy(true);
@@ -131,6 +156,29 @@ export default function DriverLayout() {
           </div>
         </div>
 
+        {gpsActive && (
+          <div
+            className={`flex items-center justify-center gap-1.5 px-4 py-1.5 text-center text-[11px] font-semibold ${
+              geo.error ? 'bg-red-500/95 text-white' : 'bg-emerald-900/40 text-emerald-50'
+            }`}
+            role="status"
+          >
+            {geo.error ? <NavigationOff className="h-3.5 w-3.5" aria-hidden /> : <Navigation className="h-3.5 w-3.5" aria-hidden />}
+            {geo.error
+              ? (geo.error === 'denied'
+                ? (isAr ? 'الموقع مرفوض — فعّل إذن الموقع للمتصفح' : 'Location blocked — allow location for this app')
+                : (isAr ? 'تعذّر إرسال الموقع — جاري المحاولة' : 'Location not sending — retrying'))
+              : (isAr
+                ? `موقعك يُشارك مع ${config.activeDeliveries} ${config.activeDeliveries === 1 ? 'طلب' : 'طلبات'}`
+                : `Sharing location for ${config.activeDeliveries} ${config.activeDeliveries === 1 ? 'delivery' : 'deliveries'}`)}
+            {geo.error && (
+              <button type="button" onClick={geo.restart} className="ms-1 underline">
+                {isAr ? 'إعادة المحاولة' : 'Retry'}
+              </button>
+            )}
+          </div>
+        )}
+
         {isOffline && (
           <div className="bg-amber-400/95 px-4 py-2 text-center text-xs font-semibold text-amber-950">
             {isAr
@@ -143,6 +191,8 @@ export default function DriverLayout() {
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5 pb-28">
         <Outlet context={{
           config, setAvailability, availabilityBusy, isOffline, assignmentsVersion,
+          geo: { ...geo, active: gpsActive, wakeLockSupported },
+          refreshConfig: loadConfig,
         }}
         />
       </main>

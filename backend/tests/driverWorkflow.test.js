@@ -393,3 +393,50 @@ describe('failed deliveries', () => {
     assert.equal(res.status, 400);
   });
 });
+
+describe('shift-wide location', () => {
+  test('one ping updates every order the driver has on the road, and nothing else', async () => {
+    const customer = await makeUser('user');
+    const driver = await makeUser('driver');
+    const other = await makeUser('driver');
+    const a = await makeOrder({ customer, driver });
+    const b = await makeOrder({ customer, driver });
+    const upcoming = await makeOrder({ customer, driver, status: 'preparing' });
+    const notMine = await makeOrder({ customer, driver: other });
+
+    const res = await api('PUT', '/orders/driver/location', driver, { lat: 30.051, lng: 31.241, speed: 5 });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.data.orders, 2);
+
+    for (const order of [a, b]) {
+      const tracking = await DeliveryTracking.findOne({ orderId: order._id }).lean();
+      assert.equal(tracking.lat, 30.051);
+      assert.equal(String(tracking.driverId), String(driver._id));
+      assert.equal((await Order.findById(order._id).lean()).delivery.stage, 'en_route');
+    }
+    assert.equal(await DeliveryTracking.findOne({ orderId: upcoming._id }), null);
+    assert.equal(await DeliveryTracking.findOne({ orderId: notMine._id }), null);
+
+    const saved = await User.findById(driver._id).lean();
+    assert.equal(saved.driverLastLocation.lat, 30.051);
+
+    const config = await api('GET', '/orders/driver/config', driver);
+    assert.equal(config.body.data.activeDeliveries, 2);
+  });
+
+  test('rejects bad coordinates', async () => {
+    const driver = await makeUser('driver');
+    const res = await api('PUT', '/orders/driver/location', driver, { lat: 200, lng: 31 });
+    assert.equal(res.status, 400);
+  });
+
+  test('an arrived run keeps its "arrived" tracking status on later pings', async () => {
+    const customer = await makeUser('user');
+    const driver = await makeUser('driver');
+    const order = await makeOrder({ customer, driver });
+    await api('PUT', '/orders/driver/location', driver, { lat: 30.05, lng: 31.24 });
+    await api('POST', `/orders/driver/deliveries/${order._id}/arrive`, driver);
+    await api('PUT', '/orders/driver/location', driver, { lat: 30.0501, lng: 31.2401 });
+    assert.equal((await DeliveryTracking.findOne({ orderId: order._id }).lean()).status, 'arrived');
+  });
+});

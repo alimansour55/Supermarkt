@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Banknote, Calculator, Check, CheckCircle2, ChevronDown, ChevronUp,
   Clock, Copy, Hand, ListChecks, MapPin, MessageCircle, Navigation, Package, PackageOpen, Phone,
-  Radio, RefreshCw, Ruler, Square, Store, Sun, Timer, User, XCircle,
+  Radio, RefreshCw, Ruler, Store, Sun, Timer, User, XCircle,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { orderService } from '../../services/apiServices';
-import { useDriverGeolocation } from '../../hooks/useDriverGeolocation';
-import { useWakeLock } from '../../hooks/useWakeLock';
+import { notifyDeliveriesChanged } from '../../components/driver/driverEvents';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { formatPrice } from '../../utils/formatters';
 import { formatLocationAge } from '../../utils/orderTracking';
@@ -91,7 +90,6 @@ export default function DriverDeliveryPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [trackingActive, setTrackingActive] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(true);
   const [cashOpen, setCashOpen] = useState(false);
   const [cashReceived, setCashReceived] = useState('');
@@ -124,39 +122,17 @@ export default function DriverDeliveryPage() {
     loadOrder();
   }, [loadOrder]);
 
-  const handleStopped = useCallback(() => {
-    setTrackingActive(false);
-  }, []);
-
-  const { sharing, error: geoError, lastSent, lastPosition, stop } = useDriverGeolocation(id, {
-    enabled: trackingActive,
-    orderStatus: order?.orderStatus,
-    onStopped: handleStopped,
-  });
+  // GPS runs shift-wide in DriverLayout and covers every order on the road.
+  const { geo = {} } = useOutletContext() || {};
+  const {
+    sharing = false, error: geoError = '', lastSent = null, lastPosition = null, wakeLockSupported = false,
+  } = geo;
 
   const isTerminal = TERMINAL_STATUSES.includes(order?.orderStatus);
   const isTerminalRef = useRef(isTerminal);
   const actionLoadingRef = useRef(actionLoading);
   useEffect(() => { isTerminalRef.current = isTerminal; }, [isTerminal]);
   useEffect(() => { actionLoadingRef.current = actionLoading; }, [actionLoading]);
-
-  useEffect(() => {
-    if (order && TERMINAL_STATUSES.includes(order.orderStatus)) {
-      setTrackingActive(false);
-      stop();
-    }
-  }, [order?.orderStatus, stop]);
-
-  // Keep the screen on while actively sharing location.
-  const wakeLockSupported = useWakeLock(trackingActive);
-
-  // Warn before the tab is closed mid-delivery.
-  useEffect(() => {
-    if (!trackingActive) return undefined;
-    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [trackingActive]);
 
   // Periodic re-render (relative times) + silent status refresh.
   useEffect(() => {
@@ -260,9 +236,8 @@ export default function DriverDeliveryPage() {
     () => orderService.completeDriverDelivery(id, photoFile, fields),
     {
       after: () => {
-        stop();
-        setTrackingActive(false);
         setCompleteOpen(false);
+        notifyDeliveriesChanged();
       },
     },
   );
@@ -272,8 +247,7 @@ export default function DriverDeliveryPage() {
     {
       after: () => {
         setFailOpen(false);
-        stop();
-        setTrackingActive(false);
+        notifyDeliveriesChanged();
       },
     },
   );
@@ -294,8 +268,8 @@ export default function DriverDeliveryPage() {
     return runAction(
       () => orderService.pickupDriverDelivery(id, showPicking ? pickedItems : undefined),
       {
-        // On the road now — start sharing location straight away.
-        after: (next) => { if (next?.canShareLocation) setTrackingActive(true); },
+        // On the road now — the layout starts shift-wide GPS for it.
+        after: () => notifyDeliveriesChanged(),
       },
     );
   };
@@ -527,7 +501,7 @@ export default function DriverDeliveryPage() {
           </div>
           <OsmDeliveryTrackingMap
             destination={addr}
-            driver={trackingActive ? driverPin : null}
+            driver={sharing ? driverPin : null}
             className="h-52"
             embedded
           />
@@ -751,77 +725,55 @@ export default function DriverDeliveryPage() {
         </div>
       </section>
 
-      {/* Live GPS */}
+      {/* Live GPS — shift-wide, managed by DriverLayout */}
       {canStart && (
         <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80">
           <h2 className="flex items-center gap-2 font-semibold text-slate-900">
             <Radio className="h-4 w-4 text-violet-600" aria-hidden />
             {isAr ? 'مشاركة الموقع المباشر' : 'Live GPS sharing'}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {isAr
-              ? 'يُرى موقعك على خريطة العميل والإدارة كل ~20 ثانية.'
-              : 'Your location appears on the customer and admin maps (~every 20s).'}
-          </p>
-
-          {!trackingActive ? (
-            <Button
-              type="button"
-              className="mt-4 w-full bg-violet-600 hover:bg-violet-700"
-              onClick={() => setTrackingActive(true)}
+          <div className="mt-3 space-y-2">
+            <div
+              className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm ring-1 ${
+                geoError ? 'bg-red-50 text-red-800 ring-red-200' : 'bg-emerald-50 text-emerald-900 ring-emerald-200'
+              }`}
             >
-              <Radio className="h-4 w-4" aria-hidden />
-              {isAr ? 'بدء التوصيل' : 'Start delivery'}
-            </Button>
-          ) : (
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm text-emerald-900 ring-1 ring-emerald-200">
+              {!geoError && (
                 <span className="relative flex h-2.5 w-2.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-600" />
                 </span>
-                {sharing
-                  ? (isAr ? 'جاري مشاركة الموقع…' : 'Sharing location…')
-                  : (isAr ? 'جاري التفعيل…' : 'Starting…')}
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-                {lastSent && (
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" aria-hidden />
-                    {isAr ? 'آخر تحديث ' : 'Updated '}
-                    {formatLocationAge(lastSent, isAr)}
-                  </span>
-                )}
-                {distanceKm != null && (
-                  <span className="inline-flex items-center gap-1">
-                    <Ruler className="h-3.5 w-3.5" aria-hidden />
-                    {formatDistanceKm(distanceKm, isAr)} {isAr ? 'للعميل' : 'to customer'}
-                  </span>
-                )}
-                {wakeLockSupported && (
-                  <span className="inline-flex items-center gap-1 text-emerald-700">
-                    <Sun className="h-3.5 w-3.5" aria-hidden />
-                    {isAr ? 'الشاشة تبقى مضاءة' : 'Screen stays on'}
-                  </span>
-                )}
-              </div>
-              {geoError && (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{geoError}</p>
               )}
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={() => {
-                  stop();
-                  setTrackingActive(false);
-                }}
-              >
-                <Square className="h-4 w-4" aria-hidden />
-                {isAr ? 'إيقاف المشاركة' : 'Stop sharing'}
-              </Button>
+              {geoError
+                ? (geoError === 'denied'
+                  ? (isAr ? 'إذن الموقع مرفوض — فعّله من إعدادات المتصفح.' : 'Location permission is blocked — allow it in browser settings.')
+                  : (isAr ? 'تعذّر إرسال الموقع — يُعاد المحاولة تلقائياً.' : 'Location is not sending — retrying automatically.'))
+                : sharing
+                  ? (isAr ? 'موقعك يُشارك تلقائياً طوال التوصيل، حتى لو فتحت شاشة أخرى.' : 'Your location is shared automatically for the whole trip, even on other screens.')
+                  : (isAr ? 'جاري التفعيل…' : 'Starting…')}
             </div>
-          )}
+            <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+              {lastSent && (
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" aria-hidden />
+                  {isAr ? 'آخر تحديث ' : 'Updated '}
+                  {formatLocationAge(lastSent, isAr)}
+                </span>
+              )}
+              {distanceKm != null && (
+                <span className="inline-flex items-center gap-1">
+                  <Ruler className="h-3.5 w-3.5" aria-hidden />
+                  {formatDistanceKm(distanceKm, isAr)} {isAr ? 'للعميل' : 'to customer'}
+                </span>
+              )}
+              {wakeLockSupported && sharing && (
+                <span className="inline-flex items-center gap-1 text-emerald-700">
+                  <Sun className="h-3.5 w-3.5" aria-hidden />
+                  {isAr ? 'الشاشة تبقى مضاءة' : 'Screen stays on'}
+                </span>
+              )}
+            </div>
+          </div>
         </section>
       )}
 

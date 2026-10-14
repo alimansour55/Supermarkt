@@ -376,6 +376,8 @@ export const getDriverConfig = asyncHandler(async (req, res) => {
       acceptTimeoutMin: Number(driverSettings.acceptTimeoutMin) || 0,
       driverAvailable: req.user.driverAvailable !== false,
       cashBalance: roundMoney(req.user.driverCashBalance),
+      gpsDeliveryEnabled: await getGpsDeliveryEnabled(),
+      activeDeliveries: await Order.countDocuments({ assignedDriver: req.user._id, orderStatus: 'out_for_delivery' }),
     },
   });
 });
@@ -650,6 +652,59 @@ export const updateDriverOrderLocation = asyncHandler(async (req, res) => {
   // after the response so a slow route lookup or SMS gateway never delays the driver.
   notifyCustomerAfterPing(order._id, tracking)
     .catch((err) => console.error('Driver location notify failed:', err.message));
+});
+
+/**
+ * One location stream per driver: the app sends its position for the whole shift and the
+ * server applies it to every order the driver has out for delivery. Keeps tracking alive
+ * when the driver is on another screen or carrying several orders.
+ */
+export const updateDriverShiftLocation = asyncHandler(async (req, res) => {
+  if (!(await getGpsDeliveryEnabled())) {
+    throw new AppError('Live GPS delivery is disabled in store settings', 403);
+  }
+  const lat = Number(req.body.lat);
+  const lng = Number(req.body.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    throw new AppError('Valid latitude and longitude are required', 400);
+  }
+  const heading = req.body.heading != null && Number.isFinite(Number(req.body.heading)) ? Number(req.body.heading) : null;
+  const speed = req.body.speed != null && Number.isFinite(Number(req.body.speed)) ? Number(req.body.speed) : null;
+  const now = new Date();
+
+  await User.updateOne({ _id: req.user._id }, { $set: { driverLastLocation: { lat, lng, at: now } } });
+
+  const orders = await Order.find({ assignedDriver: req.user._id, orderStatus: 'out_for_delivery' });
+  const updated = [];
+  for (const order of orders) {
+    const point = {
+      lat, lng, heading, speed,
+      status: order.delivery?.stage === 'arrived' ? 'arrived' : 'en_route',
+    };
+    let tracking = await updateDriverTrackingLocation(order._id, point);
+    if (!tracking) {
+      if (!order.trackingEnabled) {
+        await Order.updateOne({ _id: order._id }, { $set: { trackingEnabled: true } });
+        order.trackingEnabled = true;
+      }
+      await ensureOrderTracking(order);
+      tracking = await updateDriverTrackingLocation(order._id, point);
+    }
+    if (!tracking) continue;
+    if (!order.delivery?.stage) await ensureDeliveryRun(order);
+    await Order.updateOne(
+      { _id: order._id, 'delivery.stage': { $in: ['assigned', 'accepted', 'picked_up'] } },
+      { $set: { 'delivery.stage': 'en_route', 'delivery.enRouteAt': now } },
+    );
+    updated.push({ orderId: order._id, tracking });
+  }
+
+  res.json({ success: true, data: { updatedAt: now, orders: updated.length } });
+
+  for (const { orderId, tracking } of updated) {
+    notifyCustomerAfterPing(orderId, tracking)
+      .catch((err) => console.error('Driver location notify failed:', err.message));
+  }
 });
 
 async function notifyCustomerAfterPing(orderId, tracking) {

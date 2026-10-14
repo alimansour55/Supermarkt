@@ -141,12 +141,17 @@ assigned → accepted → picked_up → en_route → arrived → delivered
 ## Phase 3: Reliable GPS and real-time (mobile)
 
 ### 3.1 One location stream per driver
-- [ ] New `PUT /driver/location` (driver-level). The server fans the location out to **all** of the driver's
-      active orders and keeps `User.lastLocation` for the admin map and auto-assign.
-- [ ] Move `useDriverGeolocation` into `DriverLayout` (a shift-wide hook), so it keeps running across pages.
-      It starts on "Online" or when the driver has active orders, and stops when offline with no active orders.
-- [ ] Adaptive sending: about 5 s when moving fast, 30 s when stationary, skip if moved less than 15 m.
-      Make the rate limiter key per driver, not per order.
+- [x] New `PUT /orders/driver/location` (driver-level). The server applies the position to **all** of the
+      driver's out-for-delivery orders, moves their runs to `en_route`, and stores `User.driverLastLocation`.
+      The rate limit is per driver (20/min).
+- [x] `useDriverShiftLocation` runs in `DriverLayout`: it starts automatically when the driver has orders on the
+      road and keeps running on every screen (verified in a browser on the account page with 2 orders). The header
+      bar shows "sharing for N deliveries", or the error with a Retry button. Wake lock and a leave-page warning
+      apply while it runs.
+- [x] Adaptive sending: every 5 s above ~29 km/h, otherwise after 25 m of movement, and at least every 30 s
+      (with a heartbeat for devices that only report on movement).
+- [x] The old per-order hook (`useDriverGeolocation`) is removed. The per-order endpoint stays for compatibility
+      and for the dev simulator.
 
 ### 3.2 Native Android (Capacitor)
 - [ ] Add a background geolocation plugin with an Android foreground service and a persistent

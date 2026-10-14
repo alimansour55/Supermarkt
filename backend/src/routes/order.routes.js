@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { protect, optionalProtect, adminOnly, driverOnly, requirePermission } from '../middleware/auth.js';
-import { driverLocationLimiter, adminTrackingUpdateLimiter } from '../middleware/rateLimiter.js';
+import { driverLocationLimiter, driverShiftLocationLimiter, adminTrackingUpdateLimiter } from '../middleware/rateLimiter.js';
 import {
   createOrder,
   getMyOrders,
@@ -82,6 +82,7 @@ import {
   logDriverContactAttempt,
   getDriverCash,
   returnDriverDelivery,
+  updateDriverShiftLocation,
 } from '../controllers/driver.controller.js';
 import {
   adjustDriverCash,
@@ -172,6 +173,7 @@ router.post('/:id/messages', addCustomerMessage);
 
 router.get('/driver/config', ...driverOnly, getDriverConfig);
 router.put('/driver/availability', ...driverOnly, updateDriverAvailability);
+router.put('/driver/location', ...driverOnly, driverShiftLocationLimiter, updateDriverShiftLocation);
 router.get('/driver/deliveries', ...driverOnly, getDriverDeliveries);
 router.get('/driver/deliveries/history', ...driverOnly, getDriverHistory);
 router.get('/driver/cash', ...driverOnly, getDriverCash);
