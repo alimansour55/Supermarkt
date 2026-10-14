@@ -25,9 +25,10 @@ import Counter from './Counter.js';
 import CallbackRequest from './CallbackRequest.js';
 import SupportConversation from './SupportConversation.js';
 import DriverCashLedger from './DriverCashLedger.js';
+import PushSubscription from './PushSubscription.js';
 
 export {
-  User, Product, Category, Cart, Order, Coupon, Banner, StoreSettings, HomepageSection, DeliveryZone, SearchEvent, ContentPage, NotificationTemplate, RecurringDeliverySubscription, Brand, Promotion, FulfillmentLocation, DeliveryTracking, UserNotification, PartnerPayout, PartnerLedgerEntry, WalletTransaction, WalletTopUpRequest, Counter, CallbackRequest, SupportConversation, DriverCashLedger,
+  User, Product, Category, Cart, Order, Coupon, Banner, StoreSettings, HomepageSection, DeliveryZone, SearchEvent, ContentPage, NotificationTemplate, RecurringDeliverySubscription, Brand, Promotion, FulfillmentLocation, DeliveryTracking, UserNotification, PartnerPayout, PartnerLedgerEntry, WalletTransaction, WalletTopUpRequest, Counter, CallbackRequest, SupportConversation, DriverCashLedger, PushSubscription,
 };
 
 export default {

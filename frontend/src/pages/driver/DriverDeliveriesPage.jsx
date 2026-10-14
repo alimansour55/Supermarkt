@@ -11,6 +11,7 @@ import Loader from '../../components/ui/Loader';
 import DriverDeliveryCard from './components/DriverDeliveryCard';
 import DriverStatCard from './components/DriverStatCard';
 import DriverHistoryList from './components/DriverHistoryList';
+import DriverPushToggle from '../../components/driver/DriverPushToggle';
 import {
   formatDriverAddress, haversineKm, multiStopDirectionsUrl, orderStopsByNearest,
 } from './driverUtils';
@@ -243,6 +244,7 @@ export default function DriverDeliveriesPage() {
 
       {tab === 'active' && (
         <>
+          <DriverPushToggle isAr={isAr} variant="banner" />
           {!loading && (activeDeliveries.length > 0 || cashBalance > 0) && (
             <div className="grid grid-cols-3 gap-2.5">
               <DriverStatCard icon={Truck} label={isAr ? 'نشطة' : 'Active'} value={activeDeliveries.length} accent="teal" />

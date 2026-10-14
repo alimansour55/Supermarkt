@@ -5,6 +5,7 @@ import { haversineMeters } from './googleMaps.service.js';
 import { logAudit } from './auditLog.service.js';
 import { createNotification } from './notification.service.js';
 import { createUserNotification } from './userNotification.service.js';
+import { sendPushToUser } from './push.service.js';
 import { getDriverSettings } from './storeSettings.service.js';
 import { clearOrderTracking, ensureOrderTracking } from './deliveryTracking.service.js';
 import { newDeliveryRun, PRE_PICKUP_STAGES } from './deliveryRun.service.js';
@@ -155,6 +156,16 @@ export async function notifyDriver(driverId, order, kind, { returnId = null } = 
   const copy = DRIVER_NOTICE_COPY[kind];
   if (!driverId || !copy || !order) return;
   const isActive = kind !== 'unassigned';
+  const link = kind === 'pickup' && returnId
+    ? `/driver/pickups/${order._id}/${returnId}`
+    : isActive ? `/driver/deliveries/${order._id}` : '/driver';
+  // Phone push (when the driver enabled it) so new work reaches them with the app closed.
+  sendPushToUser(driverId, {
+    title: copy.titleAr,
+    body: copy.messageAr(order.orderNumber),
+    url: link,
+    tag: `order-${order._id}`,
+  }).catch((err) => console.error('Driver push failed:', err.message));
   await createUserNotification({
     userId: driverId,
     type: isActive ? 'driver_assignment' : 'driver_unassigned',
@@ -162,9 +173,7 @@ export async function notifyDriver(driverId, order, kind, { returnId = null } = 
     titleEn: copy.titleEn,
     messageAr: copy.messageAr(order.orderNumber),
     messageEn: copy.messageEn(order.orderNumber),
-    link: kind === 'pickup' && returnId
-      ? `/driver/pickups/${order._id}/${returnId}`
-      : isActive ? `/driver/deliveries/${order._id}` : '/driver',
+    link,
     data: { orderId: order._id, orderNumber: order.orderNumber, kind, ...(returnId ? { returnId } : {}) },
   }).catch((err) => console.error('Driver notice failed:', err.message));
 }

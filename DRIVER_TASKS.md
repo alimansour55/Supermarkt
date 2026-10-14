@@ -162,15 +162,24 @@ assigned → accepted → picked_up → en_route → arrived → delivered
       and for the dev simulator.
 
 ### 3.2 Native Android (Capacitor)
-- [ ] Add a background geolocation plugin with an Android foreground service and a persistent
-      "Delivering — sharing location" notification, so GPS survives screen lock and switching to Waze.
-- [ ] Battery-optimisation prompt (`capacitor-native-settings` is already installed).
-- [ ] Offline queue: buffer location points and complete/fail/arrive actions in IndexedDB, then replay
-      in order when the connection returns (each with an idempotency key, from Phase 1.1).
+- [ ] Not started: the repo has no `android/` project yet (only `capacitor.config.json`). Once one is added:
+      a background-geolocation plugin with a foreground-service notification, so GPS survives screen lock
+      and Waze, plus a battery-optimisation prompt (`capacitor-native-settings` is already installed).
+      `useDriverShiftLocation` is the single place to swap in the native plugin.
+- [ ] Offline queue: buffer location points and contact attempts in IndexedDB and replay them on reconnect.
+      Complete and fail stay online-only on purpose, because the code, cash and geofence checks need the server.
+      Retries are already safe (Phase 1).
 
 ### 3.3 Push and real-time
-- [ ] Push notifications (FCM through Capacitor; Web Push for the PWA) for new assignment, reassignment,
-      order changes and admin messages, with sound and vibration for new orders.
+- [x] **Web Push** for drivers: `PushSubscription` model, `/api/push/config | subscribe`, and the
+      `public/driver-sw.js` service worker (scope `/driver`). Assign, dispatch, pickup-task and unassign notices
+      are pushed to the phone. Tapping a notification opens or focuses the right screen. Dead subscriptions
+      (404/410) are pruned.
+      The driver turns it on from a banner on the list or a toggle on the account page.
+      **Setup:** `npx web-push generate-vapid-keys`, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+      `VAPID_SUBJECT` (see `backend/.env.example`). Without keys the feature stays hidden.
+      Verified: subscription storage and send (stubbed push service), service-worker registration, and the
+      notification display through a DevTools push.
 - [ ] Optional: server-sent events for the driver list and the admin live map, replacing the 30 s and 9 s polling.
 
 ---
@@ -207,7 +216,8 @@ assigned → accepted → picked_up → en_route → arrived → delivered
 - [x] Add a backend test setup (`node:test` or Vitest with `mongodb-memory-server`).
 - [x] Tests: complete is idempotent (double call gives one loyalty award), driver cannot touch another driver's
       order, PIN and geofence rules, cash ledger balances, auto-assign ranking, and location fan-out.
-- [ ] `scripts/acceptance-driver-flow.js`: seed → assign → accept → pickup → location → arrive → complete with PIN.
+- [x] End-to-end flow (assign → accept → pickup → location → arrive → complete with code and cash) is covered by
+      `tests/driverWorkflow.test.js` against a real MongoDB (`npm test`, 49 tests), and was exercised in a browser.
 - [ ] Manual QA on a real Android phone: screen locked, switching to Waze, offline then back online, 3 parallel orders.
 
 ---

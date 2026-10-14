@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import pushRoutes from './push.routes.js';
 import authRoutes from './auth.routes.js';
 import healthRoutes from './health.routes.js';
 import cartRoutes from './cart.routes.js';
@@ -55,6 +56,7 @@ router.use('/brands', brandRoutes);
 router.use('/promotions', promotionRoutes);
 router.use('/fulfillment-locations', fulfillmentLocationRoutes);
 router.use('/my-notifications', userNotificationRoutes);
+router.use('/push', pushRoutes);
 router.use('/assistant', assistantRoutes);
 router.use('/support', supportRoutes);
 router.use('/support-chat', supportChatRoutes);

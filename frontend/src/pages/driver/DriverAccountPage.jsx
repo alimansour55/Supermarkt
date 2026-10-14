@@ -11,6 +11,7 @@ import Button from '../../components/ui/Button';
 import DriverAvailabilityToggle from '../../components/driver/DriverAvailabilityToggle';
 import DriverStatCard from './components/DriverStatCard';
 import DriverCashCard from './components/DriverCashCard';
+import DriverPushToggle from '../../components/driver/DriverPushToggle';
 import { formatPrice } from '../../utils/formatters';
 
 const RANGES = [
@@ -99,6 +100,8 @@ export default function DriverAccountPage() {
           </p>
         )}
       </div>
+
+      <DriverPushToggle isAr={isAr} />
 
       {config?.cashTrackingEnabled !== false && <DriverCashCard summary={cash} isAr={isAr} />}
 
