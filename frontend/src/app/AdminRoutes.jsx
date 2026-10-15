@@ -6,6 +6,8 @@ export default function AdminRoutes() {
   return (
     <Routes>
       <Route path="login" element={withSuspense(<P.AdminLoginPage />)} />
+      {/* Inside the homepage builder's preview iframe — no admin chrome; renders only what the builder posts. */}
+      <Route path="homepage-preview-frame" element={withSuspense(<P.HomepagePreviewFramePage />)} />
       <Route
         element={withSuspense(
           <P.AdminRoute>

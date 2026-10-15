@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import Order from '../models/Order.js';
 import { AppError } from '../utils/AppError.js';
 import { generateToken } from '../utils/generateToken.js';
 import { normalizePhone, formatPhoneDisplay } from '../utils/phone.js';
@@ -354,9 +355,11 @@ export const logout = asyncHandler(async (_req, res) => {
 });
 
 export const getMe = asyncHandler(async (req, res) => {
+  // Lets the storefront tell first-time buyers from returning ones (homepage audiences).
+  const hasOrdered = Boolean(await Order.exists({ user: req.user._id, orderStatus: { $ne: 'cancelled' } }));
   res.status(200).json({
     success: true,
-    user: formatUserWithDetails(req.user),
+    user: { ...formatUserWithDetails(req.user), hasOrdered },
   });
 });
 

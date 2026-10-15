@@ -30,6 +30,7 @@ export const CouponsPage = lazy(() => import('../admin/pages/CouponsPage'), 'Cou
 export const PromotionsPage = lazy(() => import('../admin/pages/PromotionsPage'), 'PromotionsPage');
 export const BannersPage = lazy(() => import('../admin/pages/BannersPage'), 'BannersPage');
 export const HomepageBuilderPage = lazy(() => import('../admin/pages/HomepageBuilderPage'), 'HomepageBuilderPage');
+export const HomepagePreviewFramePage = lazy(() => import('../admin/pages/HomepagePreviewFramePage'), 'HomepagePreviewFramePage');
 export const StoreSettingsPage = lazy(() => import('../admin/pages/StoreSettingsPage'), 'StoreSettingsPage');
 export const StoreIdentitySettingsPage = lazy(() => import('../admin/pages/settings/StoreIdentitySettingsPage'), 'StoreIdentitySettingsPage');
 export const StoreContactSettingsPage = lazy(() => import('../admin/pages/settings/StoreContactSettingsPage'), 'StoreContactSettingsPage');

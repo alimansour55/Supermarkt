@@ -10,7 +10,9 @@ import HomepageSectionRenderer from '../components/home/HomepageSectionRenderer'
 import { fetchBestSellers, fetchNewArrivals } from '../services/productApi';
 import { useHomepageSections } from '../hooks/useHomepageSections';
 import { useAsyncData } from '../hooks/useAsyncData';
-import useIsMobile from '../hooks/useIsMobile';
+import useHomepageViewer from '../hooks/useHomepageViewer';
+import HomepageSectionShell from '../components/home/HomepageSectionShell';
+import { sectionVisibleTo } from '../utils/homepageVisibility';
 import { HomePageSkeleton } from '../components/ui/Skeleton';
 import { useStoreSettings } from '../context/StoreSettingsContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -61,13 +63,16 @@ function FallbackHome() {
 }
 
 function CmsHomeContent({ sections }) {
-  const isMobile = useIsMobile();
-  const visibleSections = sections.filter((s) => !isMobile || s.showOnMobile !== false);
+  const viewer = useHomepageViewer();
+  // Device rules are CSS (inside the shell), so phones get the right HTML from the server.
+  const visibleSections = sections.filter((section) => sectionVisibleTo(section, viewer));
 
   return (
     <>
       {visibleSections.map((section) => (
-        <HomepageSectionRenderer key={section._id} section={section} />
+        <HomepageSectionShell key={section._id} section={section}>
+          <HomepageSectionRenderer section={section} />
+        </HomepageSectionShell>
       ))}
     </>
   );

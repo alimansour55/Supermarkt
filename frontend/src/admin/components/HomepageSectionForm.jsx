@@ -36,6 +36,13 @@ import { DEFAULT_CATEGORY_NAV_CONFIG, normalizeCategoryNavConfig } from '../util
 import { DEFAULT_BRAND_ROW_CONFIG, normalizeBrandRowConfig } from '../utils/brandRowUtils';
 import { normalizeProductShowcaseConfig, isProductShowcaseType } from '../utils/productShowcaseUtils';
 import { normalizeDealConfig, isDealSectionType } from '../utils/dealShowcaseUtils';
+import {
+  EMPTY_APPEARANCE_FORM,
+  EMPTY_VISIBILITY_FORM,
+  appearanceToForm,
+  visibilityFromForm,
+  visibilityToForm,
+} from '../utils/homepageBuilderRules';
 
 function FormSection({ title, description, children, className = '' }) {
   return (
@@ -57,6 +64,11 @@ export default function HomepageSectionForm({
   editId = null,
   onSubmit,
   onCancel,
+  formId,
+  /** Rendered after the type-specific fields (shared visibility/look options). */
+  optionsSlot = null,
+  /** false = the parent draws the title bar and the save buttons. */
+  chrome = true,
 }) {
   const { language } = useLanguage();
   const isAr = language === 'ar';
@@ -126,7 +138,7 @@ export default function HomepageSectionForm({
   const showCategoryLinkWarning = categoryHealth.status === 'missing' || categoryHealth.status === 'inactive';
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5 rounded-2xl border border-border bg-white p-6 shadow-sm">
+    <form id={formId} onSubmit={onSubmit} className={chrome ? 'space-y-5 rounded-2xl border border-border bg-white p-6 shadow-sm' : 'space-y-5'}>
       {form.category && showCategoryLinkWarning && (
         <SectionCategoryWarning
           categoryId={form.category}
@@ -135,6 +147,7 @@ export default function HomepageSectionForm({
           isAr={isAr}
         />
       )}
+      {chrome && (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary-200 bg-primary-50/40 px-4 py-3">
         <p className="text-sm font-semibold text-primary-900">
           {editId ? (isAr ? 'تعديل القسم' : 'Editing section') : (isAr ? 'قسم جديد' : 'New section')}
@@ -149,6 +162,7 @@ export default function HomepageSectionForm({
           {isAr ? '← العودة للصفحة الرئيسية' : '← Back to the home page'}
         </button>
       </div>
+      )}
 
       {form.type === 'split_promo' && (
         <FormSection
@@ -440,28 +454,20 @@ export default function HomepageSectionForm({
             </select>
           </div>
 
-          <Input
-            label={isAr ? 'الترتيب' : 'Sort order'}
-            type="number"
-            min="0"
-            value={form.sortOrder}
-            onChange={(e) => update('sortOrder', e.target.value)}
-          />
-
-          <div className="flex flex-col justify-end gap-3 rounded-xl border border-border bg-white px-4 py-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={form.isActive} onChange={(e) => update('isActive', e.target.checked)} />
-              {isAr ? 'نشط على الموقع' : 'Active on site'}
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.showOnMobile !== false}
-                onChange={(e) => update('showOnMobile', e.target.checked)}
-              />
-              {isAr ? 'يظهر في تطبيق/موبايل' : 'Show on mobile app'}
-            </label>
-          </div>
+          <label className="flex items-center gap-3 rounded-xl border border-border bg-white px-4 py-3 text-sm md:col-span-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary-600"
+              checked={form.isActive}
+              onChange={(e) => update('isActive', e.target.checked)}
+            />
+            <span>
+              <span className="block font-semibold">{isAr ? 'ظاهر في المتجر' : 'Show on the store'}</span>
+              <span className="block text-xs text-text-muted">
+                {isAr ? 'أوقفه لإخفاء القسم دون حذفه. الجدولة والجمهور في «متى يظهر» و«من يراه».' : 'Turn off to hide it without deleting. Dates and audience are under “When it shows” and “Who sees it”.'}
+              </span>
+            </span>
+          </label>
 
           {!hideTitles && !fields.announcement && !fields.splitPromo && !fields.browseHub && !fields.categoryNav && !fields.brandRow && (
             <>
@@ -763,6 +769,9 @@ export default function HomepageSectionForm({
         </FormSection>
       )}
 
+      {optionsSlot}
+
+      {chrome && (
       <div className="flex flex-wrap gap-3 border-t border-border pt-4">
         <Button type="submit" disabled={saving}>
           {saving ? (isAr ? 'جار الحفظ...' : 'Saving...') : (isAr ? 'حفظ القسم' : 'Save section')}
@@ -771,6 +780,7 @@ export default function HomepageSectionForm({
           {isAr ? 'إلغاء' : 'Cancel'}
         </Button>
       </div>
+      )}
     </form>
   );
 }
@@ -820,6 +830,10 @@ export const emptyHomepageForm = {
     bodyAr: '',
     bodyEn: '',
   },
+  visibility: { ...EMPTY_VISIBILITY_FORM },
+  appearance: { ...EMPTY_APPEARANCE_FORM },
+  adminLabel: '',
+  adminNotes: '',
 };
 
 export function formFromSection(section) {
@@ -907,6 +921,10 @@ export function formFromSection(section) {
     layout: section.layout || '',
     ctaLabelAr: section.ctaLabelAr || '',
     ctaLabelEn: section.ctaLabelEn || '',
+    visibility: visibilityToForm(section),
+    appearance: appearanceToForm(section),
+    adminLabel: section.adminLabel || '',
+    adminNotes: section.adminNotes || '',
   };
 }
 
@@ -919,7 +937,7 @@ export function payloadFromForm(form) {
     subtitleEn: form.subtitleEn,
     sortOrder: Number(form.sortOrder) || 0,
     isActive: form.isActive,
-    showOnMobile: form.showOnMobile !== false,
+    showOnMobile: (form.visibility?.devices || 'all') !== 'desktop',
     layout: form.layout || '',
     ctaLabelAr: form.ctaLabelAr || '',
     ctaLabelEn: form.ctaLabelEn || '',
@@ -969,5 +987,9 @@ export function payloadFromForm(form) {
     productShowcaseConfig: normalizeProductShowcaseConfig(form.productShowcaseConfig || {}, form),
     dealConfig: normalizeDealConfig(form.dealConfig || {}, form),
     seoContent: form.seoContent,
+    visibility: visibilityFromForm(form.visibility),
+    appearance: { ...EMPTY_APPEARANCE_FORM, ...(form.appearance || {}) },
+    adminLabel: String(form.adminLabel || '').trim(),
+    adminNotes: String(form.adminNotes || '').trim(),
   };
 }

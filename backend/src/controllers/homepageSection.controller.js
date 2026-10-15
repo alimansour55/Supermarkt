@@ -24,8 +24,16 @@ import {
 } from '../utils/cloudinaryUpload.js';
 import { formatPromotion, countPromotionProducts, syncTimedPromotionLifecycles } from '../services/promotion.service.js';
 import {
+  normalizeAppearance,
+  normalizeVisibility,
+  reconcileDevices,
+  sectionIsLiveNow,
+  stripAdminFields,
+} from '../utils/homepageVisibility.js';
+import {
   clearHomepagePromotionLink,
   findActiveLimitedPromotions,
+  isHomepageDealSectionType,
   computeDealCountdownEnd,
   listHomepageCampaignCandidates as fetchHomepageCampaignCandidates,
   resolveDealSectionProducts,
@@ -176,6 +184,10 @@ const SECTION_FIELDS = [
   'productShowcaseConfig',
   'dealConfig',
   'seoContent',
+  'visibility',
+  'appearance',
+  'adminLabel',
+  'adminNotes',
 ];
 
 const MS_HOUR = 60 * 60 * 1000;
@@ -480,7 +492,11 @@ const normalizeDealConfig = (config, section = {}) => {
   };
 };
 
-const normalizePayload = (body) => {
+/**
+ * `incoming` is what the request actually sent (an update merges it over the stored
+ * section) — used to tell which of showOnMobile / visibility.devices the admin changed.
+ */
+const normalizePayload = (body, incoming = body) => {
   const payload = {};
   SECTION_FIELDS.forEach((field) => {
     if (body[field] !== undefined) payload[field] = body[field];
@@ -547,6 +563,11 @@ const normalizePayload = (body) => {
     offers: parseOptionalBoolean(payload.productQuery?.offers, false),
   };
   payload.seoContent = payload.seoContent || {};
+  payload.visibility = normalizeVisibility(payload.visibility);
+  payload.appearance = normalizeAppearance(payload.appearance);
+  payload.adminLabel = String(payload.adminLabel || '').trim().slice(0, 80);
+  payload.adminNotes = String(payload.adminNotes || '').trim().slice(0, 1000);
+  reconcileDevices(payload, incoming);
 
   return payload;
 };
@@ -938,20 +959,79 @@ export const getPublicHomepageSections = asyncHandler(async (_req, res) => {
     .populate('category', 'slug nameAr nameEn isActive')
     .sort({ sortOrder: 1, createdAt: 1 });
 
-  const data = await Promise.all(sections.map(enrichSection));
+  // Date/day/hour rules are applied here; audience, device and zone in the browser.
+  const live = sections.filter((section) => sectionIsLiveNow(section, new Date(now)));
+  const data = (await Promise.all(live.map(enrichSection))).map(stripAdminFields);
   publicHomepageCache = { data, at: now };
   res.set('Cache-Control', 'public, max-age=30');
   res.json({ success: true, data });
 });
 
-export const getAdminHomepageSections = asyncHandler(async (_req, res) => {
-  await ensureDefaultSections();
+async function adminSectionList() {
   const sections = await HomepageSection.find()
     .populate('category', 'slug nameAr nameEn isActive')
     .populate('products', 'slug nameAr nameEn price images')
     .sort({ sortOrder: 1, createdAt: 1 });
+  return Promise.all(sections.map(enrichSection));
+}
 
-  res.json({ success: true, data: await Promise.all(sections.map(enrichSection)) });
+export const getAdminHomepageSections = asyncHandler(async (_req, res) => {
+  await ensureDefaultSections();
+  res.json({ success: true, data: await adminSectionList() });
+});
+
+/**
+ * Render data for an unsaved section, so the editor can show a live preview.
+ * Nothing is written — deal campaigns are not synced and nothing is cached.
+ */
+export const previewHomepageSection = asyncHandler(async (req, res) => {
+  const section = new HomepageSection(normalizePayload(req.body || {}));
+  await section.populate('category', 'slug nameAr nameEn isActive');
+  const data = await enrichSection(section);
+  res.json({ success: true, data });
+});
+
+/**
+ * Copy a section right below the original. The copy starts hidden so the store
+ * never shows the same block twice by accident.
+ */
+export const duplicateHomepageSection = asyncHandler(async (req, res) => {
+  const source = await HomepageSection.findById(req.params.id);
+  if (!source) throw new AppError('Homepage section not found', 404);
+  if (isHomepageDealSectionType(source.type)) {
+    // A deal block owns a live discount campaign — copying it would discount products twice.
+    throw new AppError('Deal sections run their own discount campaign and cannot be copied. Add a new deal section instead.', 400);
+  }
+
+  const copy = source.toObject();
+  delete copy._id;
+  delete copy.createdAt;
+  delete copy.updatedAt;
+  delete copy.__v;
+  copy.isActive = false;
+  copy.adminLabel = String(source.adminLabel || '').trim()
+    ? `${source.adminLabel} (copy)`.slice(0, 80)
+    : '';
+  // Anchors must stay unique on the page.
+  copy.appearance = { ...(copy.appearance || {}), anchor: '' };
+  copy.sortOrder = (source.sortOrder ?? 0) + 1;
+  const created = await HomepageSection.create(copy);
+
+  const ordered = await HomepageSection.find({ _id: { $ne: created._id } })
+    .select('_id')
+    .sort({ sortOrder: 1, createdAt: 1 });
+  const ids = ordered.map((s) => String(s._id));
+  ids.splice(ids.indexOf(String(source._id)) + 1, 0, String(created._id));
+  await HomepageSection.bulkWrite(ids.map((id, index) => ({
+    updateOne: { filter: { _id: id }, update: { $set: { sortOrder: (index + 1) * 10 } } },
+  })));
+
+  clearPublicHomepageCache();
+  res.status(201).json({
+    success: true,
+    data: await adminSectionList(),
+    createdId: String(created._id),
+  });
 });
 
 export const createHomepageSection = asyncHandler(async (req, res) => {
@@ -973,7 +1053,7 @@ export const updateHomepageSection = asyncHandler(async (req, res) => {
   const section = await HomepageSection.findById(req.params.id);
   if (!section) throw new AppError('Homepage section not found', 404);
 
-  Object.assign(section, normalizePayload({ ...section.toObject(), ...req.body }));
+  Object.assign(section, normalizePayload({ ...section.toObject(), ...req.body }, req.body));
   await syncHomepageDealSection(section);
   await section.save();
   await section.populate('category', 'slug nameAr nameEn isActive');
@@ -1010,13 +1090,8 @@ export const reorderHomepageSections = asyncHandler(async (req, res) => {
     )),
   );
 
-  const sections = await HomepageSection.find()
-    .populate('category', 'slug nameAr nameEn isActive')
-    .populate('products', 'slug nameAr nameEn price images')
-    .sort({ sortOrder: 1, createdAt: 1 });
-
   clearPublicHomepageCache();
-  res.json({ success: true, data: await Promise.all(sections.map(enrichSection)) });
+  res.json({ success: true, data: await adminSectionList() });
 });
 
 export const uploadHeroSlideImage = asyncHandler(async (req, res) => {

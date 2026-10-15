@@ -194,6 +194,46 @@ const dealConfigSchema = new mongoose.Schema(
   { _id: false },
 );
 
+/** Who sees the section and when — see utils/homepageVisibility.js. */
+const visibilitySchema = new mongoose.Schema(
+  {
+    startsAt: { type: Date, default: null },
+    endsAt: { type: Date, default: null },
+    /** Store weekdays (0 = Sunday). Empty = every day. */
+    days: { type: [Number], default: [] },
+    /** Daily window on the store wall clock, "HH:mm". Empty = all day. */
+    timeFrom: { type: String, trim: true, default: '' },
+    timeTo: { type: String, trim: true, default: '' },
+    audience: {
+      type: String,
+      enum: ['all', 'guests', 'customers', 'new_customers', 'returning_customers'],
+      default: 'all',
+    },
+    devices: { type: String, enum: ['all', 'mobile', 'desktop'], default: 'all' },
+    /** Delivery zone ids. Empty = every zone. */
+    zones: { type: [String], default: [] },
+  },
+  { _id: false },
+);
+
+const appearanceSchema = new mongoose.Schema(
+  {
+    background: {
+      type: String,
+      enum: ['none', 'soft', 'brand', 'warm', 'cool', 'custom', 'image'],
+      default: 'none',
+    },
+    backgroundColor: { type: String, trim: true, default: '' },
+    backgroundImage: { type: String, trim: true, default: '' },
+    overlay: { type: String, enum: ['none', 'light', 'strong'], default: 'light' },
+    width: { type: String, enum: ['full', 'contained'], default: 'full' },
+    spaceAbove: { type: String, enum: ['none', 'sm', 'md', 'lg'], default: 'none' },
+    spaceBelow: { type: String, enum: ['none', 'sm', 'md', 'lg'], default: 'none' },
+    anchor: { type: String, trim: true, default: '' },
+  },
+  { _id: false },
+);
+
 const homepageSectionSchema = new mongoose.Schema(
   {
     type: {
@@ -336,6 +376,17 @@ const homepageSectionSchema = new mongoose.Schema(
       type: seoContentSchema,
       default: () => ({}),
     },
+    visibility: {
+      type: visibilitySchema,
+      default: () => ({}),
+    },
+    appearance: {
+      type: appearanceSchema,
+      default: () => ({}),
+    },
+    /** Admin-only name and notes — never sent to the storefront. */
+    adminLabel: { type: String, trim: true, default: '', maxlength: 80 },
+    adminNotes: { type: String, trim: true, default: '', maxlength: 1000 },
   },
   { timestamps: true },
 );
