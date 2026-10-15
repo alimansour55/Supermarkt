@@ -814,6 +814,8 @@ export const getPublicStoreSettings = asyncHandler(async (_req, res) => {
   data.marketplace = {
     enabled: marketplace.enabled,
     sellerShipmentDeliveryFee: marketplace.sellerShipmentDeliveryFee,
+    // The footer shows "Sell with us" only while applications are open.
+    registrationOpen: marketplace.enabled && marketplace.registrationOpen,
   };
   if (data.liveChat) {
     const available = isLiveChatAvailableNow(data.liveChat);

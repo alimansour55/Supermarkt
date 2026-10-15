@@ -297,6 +297,7 @@ export const adminApi = {
   createSeller: (data) => api.post('/admin/marketplace/sellers', data),
   updateSeller: (id, data) => api.put(`/admin/marketplace/sellers/${id}`, data),
   setSellerStatus: (id, data) => api.post(`/admin/marketplace/sellers/${id}/status`, data),
+  sendSellerAccess: (id, data) => api.post(`/admin/marketplace/sellers/${id}/access`, data || {}),
   reviewSellerDocument: (id, docId, data) => api.put(`/admin/marketplace/sellers/${id}/documents/${docId}`, data),
   listListingQueue: (params) => api.get('/admin/marketplace/listings', { params }),
   approveListing: (id, data) => api.post(`/admin/marketplace/listings/${id}/approve`, data || {}),

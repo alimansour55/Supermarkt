@@ -279,3 +279,49 @@ test('commission resolves seller×category, seller, marketplace×category, then 
     settings,
   }), 6, 'deepest matching category wins');
 });
+
+test('staff can invite a seller without a password and resend sign-in links', async (t) => {
+  if (skip) return t.skip('MongoDB not reachable');
+  const { password: _omit, acceptTerms: _a, ...invite } = application(7);
+
+  const weak = await call('POST', '/admin/marketplace/sellers', { ...invite, password: 'short' }, adminToken);
+  assert.equal(weak.status, 400, 'a typed password must still be strong');
+
+  const created = await call('POST', '/admin/marketplace/sellers', { ...invite, activate: true }, adminToken);
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  assert.equal(created.body.data.status, 'active');
+  assert.equal(created.body.access.invited, true);
+  assert.equal(created.body.access.loginUrl, 'http://client.test/seller-center/login');
+  assert.match(created.body.access.setupUrl, /^http:\/\/client\.test\/seller-center\/reset-password\/[a-f0-9]{64}$/);
+  const sellerId = created.body.data._id;
+
+  // Staff resend a link — the earlier one stops working, the new one sets the password.
+  const firstToken = created.body.access.setupUrl.split('/').pop();
+  const resent = await call('POST', `/admin/marketplace/sellers/${sellerId}/access`, {}, adminToken);
+  assert.equal(resent.status, 200, JSON.stringify(resent.body));
+  assert.equal(resent.body.data.sentTo, 'owner7@sellers.test');
+  const token = resent.body.data.setupUrl.split('/').pop();
+  assert.notEqual(token, firstToken);
+  assert.equal((await call('POST', '/auth/seller/reset-password', { token: firstToken, password: 'newpass1234' })).status, 400);
+
+  const reset = await call('POST', '/auth/seller/reset-password', { token, password: 'newpass1234' });
+  assert.equal(reset.status, 200, JSON.stringify(reset.body));
+  const login = await call('POST', '/auth/seller-login', { email: 'owner7@sellers.test', password: 'newpass1234' });
+  assert.equal(login.status, 200);
+
+  // Sellers cannot mint links for themselves (or anyone) through the admin API.
+  assert.equal((await call('POST', `/admin/marketplace/sellers/${sellerId}/access`, {}, login.body.token)).status, 403);
+  // A user id from another seller is refused.
+  const other = await call('POST', `/admin/marketplace/sellers/${sellerId}/access`, { userId: String(new mongoose.Types.ObjectId()) }, adminToken);
+  assert.equal(other.status, 404);
+});
+
+test('the seller list carries health, sort and the listings-to-review summary', async (t) => {
+  if (skip) return t.skip('MongoDB not reachable');
+  const res = await call('GET', '/admin/marketplace/sellers?sort=name&order=asc&status=active', null, adminToken);
+  assert.equal(res.status, 200);
+  assert.equal(typeof res.body.summary.pendingListings, 'number');
+  const names = res.body.data.map((s) => s.nameEn);
+  assert.deepEqual(names, [...names].sort());
+  assert.ok(res.body.data.every((s) => ['good', 'fair', 'at_risk'].includes(s.health)));
+});

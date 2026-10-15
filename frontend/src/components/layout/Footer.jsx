@@ -50,6 +50,8 @@ export default function Footer({ className = '' }) {
   const year = new Date().getFullYear();
   const isAr = language === 'ar';
   const showAdminLink = isStaffRole(user?.role);
+  const marketplaceOn = settings?.marketplace?.enabled === true;
+  const sellerSignupOpen = marketplaceOn && settings?.marketplace?.registrationOpen === true;
 
   const storeName = isAr ? (settings?.storeNameAr || APP_NAME) : (settings?.storeNameEn || APP_NAME_EN);
   const storeSubtitle = isAr ? (settings?.storeNameEn || APP_NAME_EN) : (settings?.storeNameAr || APP_NAME);
@@ -250,6 +252,22 @@ export default function Footer({ className = '' }) {
 
             <p className="text-sm text-white/60">
               © {year} {storeName} — {t.footer.rights}
+              {sellerSignupOpen && (
+                <>
+                  {' · '}
+                  <Link to="/sell-with-us" className="font-semibold text-white/80 transition hover:text-white">
+                    {isAr ? 'بِع معنا' : 'Sell with us'}
+                  </Link>
+                </>
+              )}
+              {marketplaceOn && (
+                <>
+                  {' · '}
+                  <a href="/seller-center/login" className="text-white/50 transition hover:text-white">
+                    {isAr ? 'دخول البائعين' : 'Seller login'}
+                  </a>
+                </>
+              )}
               {showAdminLink && (
                 <>
                   {' · '}

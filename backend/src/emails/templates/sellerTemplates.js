@@ -27,6 +27,43 @@ export const sellerPasswordResetTemplate = (user, token) => {
   };
 };
 
+/**
+ * Staff-sent access email: a "set your password" link (invite or reset by staff) plus the
+ * Seller Center sign-in address so the seller can bookmark it. Without a token it is a plain
+ * welcome pointing at the sign-in page (staff already gave them a password).
+ */
+export const sellerAccessTemplate = (user, { seller, token, expiresHours } = {}) => {
+  const loginUrl = `${clientUrl()}/seller-center/login`;
+  const setupUrl = token ? `${clientUrl()}/seller-center/reset-password/${token}` : '';
+  const store = esc(seller?.nameAr || seller?.nameEn || '');
+  return {
+    subject: token ? 'فعّل حسابك في مركز البائعين' : 'حسابك في مركز البائعين جاهز',
+    html: renderEmailLayout({
+      preheader: token ? 'اختر كلمة مرور للدخول إلى مركز البائعين' : 'ادخل إلى مركز البائعين',
+      title: 'مركز البائعين',
+      heading: token ? 'مرحباً بك في مركز البائعين' : 'حسابك جاهز',
+      subtitle: store || 'مركز البائعين — Seller Center',
+      bodyHtml: `
+        <p style="margin: 0 0 16px;">مرحباً <strong>${esc(user.name)}</strong>،</p>
+        ${token
+          ? `<p style="margin: 0 0 16px;">أنشأنا لك حساباً لإدارة متجرك${store ? ` <strong>${store}</strong>` : ''}. اضغط الزر لاختيار كلمة المرور — الرابط صالح لمدة ${Number(expiresHours) || 72} ساعة.</p>
+             ${renderButton(setupUrl, 'اختيار كلمة المرور')}`
+          : `<p style="margin: 0 0 16px;">حسابك لإدارة متجرك${store ? ` <strong>${store}</strong>` : ''} جاهز. استخدم كلمة المرور التي أرسلها لك فريقنا.</p>
+             ${renderButton(loginUrl, 'الدخول إلى مركز البائعين')}`}
+        ${renderKeyValueTable([
+          ['رابط الدخول', `<a href="${loginUrl}" dir="ltr">${loginUrl}</a>`],
+          ['البريد', `<span dir="ltr">${esc(user.email)}</span>`],
+        ])}
+        <p style="margin: 16px 0 0; font-size: 13px; color: #94a3b8;">Seller Center sign-in: ${loginUrl}${token ? ` — set your password: ${setupUrl}` : ''}</p>
+      `,
+      footerNote: 'احفظ رابط الدخول في المفضلة. لا تشارك رابط كلمة المرور مع أحد.',
+    }),
+    text: token
+      ? `Set your Seller Center password (valid ${Number(expiresHours) || 72} hours): ${setupUrl}\nSign in later at: ${loginUrl}`
+      : `Your Seller Center account is ready. Sign in at: ${loginUrl}`,
+  };
+};
+
 export const sellerLoginCodeTemplate = (user, code) => ({
   subject: `رمز الدخول لمركز البائعين: ${code}`,
   html: renderEmailLayout({

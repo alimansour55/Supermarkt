@@ -1,376 +1,81 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link } from '../../app/router';
-import { Ban, CheckCircle2, ExternalLink, Plus, RotateCcw, Search, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AlertTriangle, ClipboardList, Download, FileCheck2, Hourglass, PackageSearch, Plus, Store, Wallet,
+} from 'lucide-react';
+import { Link, useNavigate } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../adminApi';
-import { categoryService } from '../../services/apiServices';
-import Button from '../../components/ui/Button';
-import Loader from '../../components/ui/Loader';
+import { useAdminListPage } from '../hooks/useAdminListPage';
+import { AdminListPage, ListFilterSelect } from '../components/list';
+import { useConfirm, useToast } from '../components';
 import AdminSlidePanel from '../components/AdminSlidePanel';
-import { PageHeader, Pagination, useToast } from '../components';
+import Button from '../../components/ui/Button';
 import { useAdminStats } from '../context/AdminStatsContext';
 import { hasPermission } from '../adminPermissions';
-import { DOCUMENT_STATUS, DOCUMENT_TYPES, FULFILLMENT, LISTING_STATUS, SELLER_STATUS, apiError, label } from '../../seller/sellerLabels';
+import { ACCOUNT_HEALTH, SELLER_STATUS, apiError, label } from '../../seller/sellerLabels';
 import StatusBadge from '../../seller/StatusBadge';
+import { formatDate, formatMoneyLatin } from '../../utils/formatters';
+import { downloadBlob } from '../utils/downloadBlob';
+import { sellerLoginUrl, sellersToCsv } from '../utils/sellerAdmin';
+import SellerPortalCard from '../components/sellers/SellerPortalCard';
+import SellerDetailPanel from '../components/sellers/SellerDetailPanel';
+import CreateSellerPanel from '../components/sellers/CreateSellerPanel';
 
-const TABS = ['', 'applied', 'under_review', 'active', 'suspended', 'rejected'];
-const inputCls = 'w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100';
+const count = (n) => formatMoneyLatin(n || 0, { maximumFractionDigits: 0 });
+const money = (n, isAr) => `${formatMoneyLatin(n || 0, { maximumFractionDigits: 0 })} ${isAr ? 'ج.م' : 'EGP'}`;
 
-function fmtDate(value, isAr) {
-  if (!value) return '—';
-  return new Date(value).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function Row({ k, v }) {
-  return (
-    <div className="flex justify-between gap-4 py-1.5 text-sm">
-      <span className="text-text-muted">{k}</span>
-      <span className="text-end font-medium" dir="auto">{v || '—'}</span>
-    </div>
-  );
-}
-
-function StatusActions({ seller, isAr, onChanged, canWrite }) {
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  if (!canWrite) return null;
-
-  const change = async (status, needsReason) => {
-    let reason = '';
-    if (needsReason) {
-      reason = window.prompt(isAr ? 'اكتب السبب (يظهر للبائع):' : 'Reason (shown to the seller):') || '';
-      if (!reason.trim()) return;
-    }
-    setBusy(true);
-    try {
-      await adminApi.setSellerStatus(seller._id, { status, reason });
-      toast.success(isAr ? 'تم تحديث الحالة' : 'Status updated');
-      onChanged();
-    } catch (err) {
-      toast.error(apiError(err, isAr ? 'تعذّر التحديث' : 'Update failed'));
-    } finally {
-      setBusy(false);
-    }
+function SummaryCard({ label: text, value, hint, icon: Icon, tone = 'slate', active, onClick, to }) {
+  const tones = {
+    slate: 'bg-slate-100 text-slate-600',
+    amber: 'bg-amber-100 text-amber-700',
+    emerald: 'bg-emerald-100 text-emerald-700',
+    red: 'bg-red-100 text-red-700',
+    primary: 'bg-primary-100 text-primary-700',
   };
-
-  const s = seller.status;
-  return (
-    <div className="flex flex-wrap gap-2">
-      {['applied', 'under_review', 'rejected'].includes(s) && (
-        <Button size="sm" disabled={busy} onClick={() => change('active')}><CheckCircle2 className="h-4 w-4" />{isAr ? 'اعتماد وتفعيل' : 'Approve & activate'}</Button>
-      )}
-      {['applied', 'under_review'].includes(s) && (
-        <Button size="sm" variant="danger" disabled={busy} onClick={() => change('rejected', true)}><XCircle className="h-4 w-4" />{isAr ? 'رفض' : 'Reject'}</Button>
-      )}
-      {s === 'applied' && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => change('under_review')}>{isAr ? 'بدء المراجعة' : 'Start review'}</Button>
-      )}
-      {s === 'active' && (
-        <Button size="sm" variant="danger" disabled={busy} onClick={() => change('suspended', true)}><Ban className="h-4 w-4" />{isAr ? 'إيقاف المتجر' : 'Suspend'}</Button>
-      )}
-      {s === 'suspended' && (
-        <Button size="sm" disabled={busy} onClick={() => change('active')}><RotateCcw className="h-4 w-4" />{isAr ? 'إعادة التفعيل' : 'Reactivate'}</Button>
-      )}
-    </div>
+  const cls = [
+    'group block rounded-2xl border px-4 py-3.5 text-start transition-all',
+    active ? 'border-primary-400 bg-primary-50 shadow-sm ring-1 ring-primary-100' : 'border-border bg-white hover:border-primary-200 hover:bg-primary-50/30',
+  ].join(' ');
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${active ? 'bg-primary-600 text-white' : tones[tone]}`}><Icon className="h-4 w-4" /></span>
+        <p className="text-2xl font-bold tabular-nums text-text">{value}</p>
+      </div>
+      <p className={`mt-2 text-xs font-semibold ${active ? 'text-primary-800' : 'text-text-muted'}`}>{text}</p>
+      {hint && <p className="text-[11px] text-text-muted">{hint}</p>}
+    </>
   );
+  if (to) return <Link to={to} className={cls}>{body}</Link>;
+  return <button type="button" onClick={onClick} className={cls}>{body}</button>;
 }
 
-function SellerReviewsAdmin({ sellerId, isAr, canWrite }) {
-  const toast = useToast();
-  const [reviews, setReviews] = useState(null);
-  const load = useCallback(() => {
-    adminApi.listSellerReviews({ seller: sellerId, limit: 20 }).then(({ data }) => setReviews(data.data || [])).catch(() => setReviews([]));
-  }, [sellerId]);
-  useEffect(() => { load(); }, [load]);
-  if (!reviews?.length) return null;
-  const toggle = async (r) => {
-    try {
-      await adminApi.setSellerReviewStatus(r._id, r.status === 'visible' ? 'hidden' : 'visible');
-      load();
-    } catch (err) {
-      toast.error(apiError(err, isAr ? 'تعذّر التحديث' : 'Update failed'));
-    }
-  };
+/** First-run guide: what the marketplace is and the steps to get the first seller selling. */
+function HowItWorks({ isAr, canWrite, onAdd }) {
+  const steps = isAr
+    ? ['يقدّم التاجر طلباً من صفحة «بِع معنا» أو تضيفه أنت', 'تراجع بياناته ومستنداته ثم تعتمده', 'يدخل إلى مركز البائعين ويضيف منتجاته', 'توافق على منتجاته فتظهر للعملاء', 'تحوّل له مستحقاته بعد خصم العمولة']
+    : ['A merchant applies on “Sell with us”, or you add them', 'You check their details and documents, then approve', 'They sign in to Seller Center and add products', 'You approve their products and customers see them', 'You pay them their earnings minus commission'];
   return (
-    <section className="rounded-2xl border border-border bg-white p-4">
-      <h3 className="mb-2 font-bold">{isAr ? 'تقييمات العملاء' : 'Customer reviews'}</h3>
-      <ul className="space-y-2">
-        {reviews.map((r) => (
-          <li key={r._id} className={`flex items-start justify-between gap-3 rounded-xl border border-border p-2 text-sm ${r.status === 'hidden' ? 'opacity-60' : ''}`}>
-            <div>
-              <span className="font-semibold text-amber-600">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
-              <span className="ms-2 text-xs text-text-muted">{r.userName}</span>
-              {r.comment && <p className="mt-1">{r.comment}</p>}
-            </div>
-            {canWrite && (
-              <button type="button" onClick={() => toggle(r)} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold ring-1 ring-border">
-                {r.status === 'visible' ? (isAr ? 'إخفاء' : 'Hide') : (isAr ? 'إظهار' : 'Show')}
-              </button>
-            )}
+    <div className="rounded-2xl border border-dashed border-border bg-white p-6">
+      <div className="mx-auto max-w-xl text-center">
+        <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-700"><Store className="h-6 w-6" /></span>
+        <p className="font-bold text-text">{isAr ? 'لا يوجد بائعون بعد' : 'No sellers yet'}</p>
+        <p className="mt-1 text-sm text-text-muted">{isAr ? 'هكذا يعمل البيع عن طريق بائعين:' : 'This is how outside sellers work:'}</p>
+      </div>
+      <ol className="mx-auto mt-4 grid max-w-3xl gap-2 sm:grid-cols-5">
+        {steps.map((s, i) => (
+          <li key={s} className="rounded-xl bg-slate-50 p-3 text-xs text-text">
+            <span className="mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary-600 text-[11px] font-bold text-white">{i + 1}</span>
+            {s}
           </li>
         ))}
-      </ul>
-    </section>
-  );
-}
-
-function SellerDetail({ sellerId, isAr, onChanged, canWrite }) {
-  const toast = useToast();
-  const [seller, setSeller] = useState(null);
-  const [categories, setCategories] = useState([]);
-  const [form, setForm] = useState(null);
-  const [saving, setSaving] = useState(false);
-
-  const load = useCallback(() => {
-    adminApi.getSeller(sellerId)
-      .then(({ data }) => {
-        const s = data.data;
-        setSeller(s);
-        setForm({
-          commissionRate: s.commissionRate ?? '',
-          categoryCommissions: (s.categoryCommissions || []).map((r) => ({ category: String(r.category?._id || r.category), rate: String(r.rate) })),
-          allowedFulfillment: s.allowedFulfillment || ['seller'],
-          autoApproveListings: s.autoApproveListings,
-          handlingDays: String(s.handlingDays ?? 2),
-          internalNote: s.internalNote || '',
-        });
-      })
-      .catch(() => toast.error(isAr ? 'تعذّر تحميل البائع' : 'Could not load seller'));
-  }, [sellerId, isAr, toast]);
-
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    categoryService.getAll().then(({ data }) => setCategories(data.data || [])).catch(() => {});
-  }, []);
-
-  const refresh = () => { load(); onChanged(); };
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await adminApi.updateSeller(sellerId, {
-        commissionRate: form.commissionRate === '' ? null : Number(form.commissionRate),
-        categoryCommissions: form.categoryCommissions.filter((r) => r.category && r.rate !== '').map((r) => ({ category: r.category, rate: Number(r.rate) })),
-        allowedFulfillment: form.allowedFulfillment,
-        autoApproveListings: form.autoApproveListings,
-        handlingDays: Number(form.handlingDays),
-        internalNote: form.internalNote,
-      });
-      toast.success(isAr ? 'تم الحفظ' : 'Saved');
-      refresh();
-    } catch (err) {
-      toast.error(apiError(err, isAr ? 'تعذّر الحفظ' : 'Save failed'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const reviewDoc = async (docId, status) => {
-    let note = '';
-    if (status === 'rejected') {
-      note = window.prompt(isAr ? 'سبب رفض المستند:' : 'Why is this document rejected?') || '';
-      if (!note.trim()) return;
-    }
-    try {
-      await adminApi.reviewSellerDocument(sellerId, docId, { status, note });
-      load();
-    } catch (err) {
-      toast.error(apiError(err, isAr ? 'تعذّر التحديث' : 'Update failed'));
-    }
-  };
-
-  if (!seller || !form) return <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div>;
-
-  const toggleMode = (mode) => setForm((f) => ({
-    ...f,
-    allowedFulfillment: f.allowedFulfillment.includes(mode)
-      ? f.allowedFulfillment.filter((m) => m !== mode)
-      : [...f.allowedFulfillment, mode],
-  }));
-  const setRule = (i, key, value) => setForm((f) => ({ ...f, categoryCommissions: f.categoryCommissions.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)) }));
-  const roots = categories.filter((c) => !c.parentCategory);
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <StatusBadge map={SELLER_STATUS} value={seller.status} isAr={isAr} />
-        {seller.status === 'active' && (
-          <a href={`/${isAr ? 'ar' : 'en'}/sellers/${seller.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary-700 hover:underline">
-            <ExternalLink className="h-3.5 w-3.5" />{isAr ? 'صفحة المتجر' : 'Store page'}
-          </a>
-        )}
-        <Link to={`/admin/listing-review?seller=${seller._id}`} className="text-xs font-semibold text-primary-700 hover:underline">
-          {isAr ? 'منتجات البائع' : 'Seller listings'}
-        </Link>
-        <Link to={`/admin/seller-shipments?filter=&seller=${seller._id}`} className="text-xs font-semibold text-primary-700 hover:underline">
-          {isAr ? 'شحنات البائع' : 'Seller shipments'}
-        </Link>
-      </div>
-      {seller.statusReason && <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{isAr ? 'السبب: ' : 'Reason: '}{seller.statusReason}</p>}
-      <StatusActions seller={seller} isAr={isAr} onChanged={refresh} canWrite={canWrite} />
-
-      <section className="rounded-2xl border border-border bg-white p-4">
-        <h3 className="mb-2 font-bold">{isAr ? 'البيانات' : 'Details'}</h3>
-        <Row k={isAr ? 'المسؤول' : 'Contact'} v={seller.contactName} />
-        <Row k={isAr ? 'البريد' : 'Email'} v={seller.email} />
-        <Row k={isAr ? 'الهاتف' : 'Phone'} v={seller.phone} />
-        <Row k={isAr ? 'العنوان' : 'Address'} v={[seller.address?.street, seller.address?.city, seller.address?.governorate].filter(Boolean).join('، ')} />
-        <Row k={isAr ? 'الاسم القانوني' : 'Legal name'} v={seller.legalName} />
-        <Row k={isAr ? 'السجل التجاري' : 'Commercial register'} v={seller.commercialRegisterNo} />
-        <Row k={isAr ? 'الرقم الضريبي' : 'Tax ID'} v={seller.taxId} />
-        <Row k={isAr ? 'تاريخ الطلب' : 'Applied'} v={fmtDate(seller.createdAt, isAr)} />
-        <Row k={isAr ? 'تاريخ الاعتماد' : 'Approved'} v={fmtDate(seller.approvedAt, isAr)} />
-        {seller.applicationNote && <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm">{seller.applicationNote}</p>}
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          {Object.entries(seller.listings || {}).map(([k, n]) => (
-            <span key={k} className="rounded-full bg-slate-100 px-2.5 py-1">{label(LISTING_STATUS, k, isAr)}: {n}</span>
-          ))}
+      </ol>
+      {canWrite && (
+        <div className="mt-5 text-center">
+          <Button onClick={onAdd} className="gap-1.5"><Plus className="h-4 w-4" />{isAr ? 'إضافة أول بائع' : 'Add your first seller'}</Button>
         </div>
-      </section>
-
-      {seller.performance && (
-        <section className="rounded-2xl border border-border bg-white p-4">
-          <h3 className="mb-2 font-bold">{isAr ? `الأداء (آخر ${seller.performance.days} يوماً)` : `Performance (last ${seller.performance.days} days)`}</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-            <p><span className="block text-text-muted">{isAr ? 'الحالة' : 'Health'}</span>
-              <span className={`font-bold ${seller.performance.health === 'at_risk' ? 'text-red-700' : seller.performance.health === 'fair' ? 'text-amber-700' : 'text-emerald-700'}`}>
-                {{ good: isAr ? 'جيد' : 'Good', fair: isAr ? 'متوسط' : 'Fair', at_risk: isAr ? 'معرّض للخطر' : 'At risk' }[seller.performance.health]}
-              </span>
-            </p>
-            <p><span className="block text-text-muted">{isAr ? 'التقييم' : 'Rating'}</span><span className="font-bold">{seller.performance.ratingCount ? `${seller.performance.rating} (${seller.performance.ratingCount})` : '—'}</span></p>
-            <p><span className="block text-text-muted">{isAr ? 'إلغاء من البائع' : 'Seller cancels'}</span><span className="font-bold">{seller.performance.cancelRate}%</span></p>
-            <p><span className="block text-text-muted">{isAr ? 'شحن متأخر' : 'Late shipping'}</span><span className="font-bold">{seller.performance.lateShipRate}%</span></p>
-          </div>
-        </section>
       )}
-
-      <SellerReviewsAdmin sellerId={seller._id} isAr={isAr} canWrite={canWrite} />
-
-      <section className="rounded-2xl border border-border bg-white p-4">
-        <h3 className="mb-2 font-bold">{isAr ? 'المستندات' : 'Documents'}</h3>
-        {!(seller.documents || []).length ? (
-          <p className="text-sm text-text-muted">{isAr ? 'لم يرفع البائع مستندات بعد.' : 'No documents uploaded yet.'}</p>
-        ) : (
-          <ul className="space-y-2">
-            {seller.documents.map((d) => (
-              <li key={d._id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border p-2 text-sm">
-                <a href={d.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-primary-700">
-                  <img src={d.url} alt="" className="h-10 w-10 rounded-lg object-cover" />
-                  {label(DOCUMENT_TYPES, d.type, isAr)}
-                </a>
-                <div className="flex items-center gap-1.5">
-                  <StatusBadge map={DOCUMENT_STATUS} value={d.status} isAr={isAr} />
-                  {canWrite && d.status !== 'accepted' && <button type="button" onClick={() => reviewDoc(d._id, 'accepted')} className="rounded-lg px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">{isAr ? 'قبول' : 'Accept'}</button>}
-                  {canWrite && d.status !== 'rejected' && <button type="button" onClick={() => reviewDoc(d._id, 'rejected')} className="rounded-lg px-2 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200">{isAr ? 'رفض' : 'Reject'}</button>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white p-4">
-        <h3 className="mb-3 font-bold">{isAr ? 'العمولة والتشغيل' : 'Commission & operations'}</h3>
-        <label className="mb-3 block text-sm">
-          <span className="mb-1 block font-medium">{isAr ? 'نسبة العمولة % (فارغ = الافتراضي العام)' : 'Commission % (empty = marketplace default)'}</span>
-          <input type="number" min="0" max="100" step="0.5" className={inputCls} value={form.commissionRate} onChange={(e) => setForm((f) => ({ ...f, commissionRate: e.target.value }))} disabled={!canWrite} />
-        </label>
-        <p className="mb-2 text-sm font-medium">{isAr ? 'عمولة خاصة لأقسام معينة' : 'Category-specific commission'}</p>
-        {form.categoryCommissions.map((r, i) => (
-          <div key={i} className="mb-2 flex gap-2">
-            <select className={inputCls} value={r.category} onChange={(e) => setRule(i, 'category', e.target.value)} disabled={!canWrite}>
-              <option value="">{isAr ? 'اختر قسماً' : 'Choose a category'}</option>
-              {roots.map((c) => <option key={c._id} value={c._id}>{isAr ? c.nameAr : c.nameEn}</option>)}
-            </select>
-            <input type="number" min="0" max="100" className={`${inputCls} w-24`} value={r.rate} onChange={(e) => setRule(i, 'rate', e.target.value)} disabled={!canWrite} />
-            {canWrite && <button type="button" onClick={() => setForm((f) => ({ ...f, categoryCommissions: f.categoryCommissions.filter((_, idx) => idx !== i) }))} className="px-2 text-red-600">×</button>}
-          </div>
-        ))}
-        {canWrite && (
-          <button type="button" onClick={() => setForm((f) => ({ ...f, categoryCommissions: [...f.categoryCommissions, { category: '', rate: '' }] }))} className="mb-4 text-sm font-semibold text-primary-700">
-            + {isAr ? 'إضافة قسم' : 'Add category'}
-          </button>
-        )}
-
-        <p className="mb-2 text-sm font-medium">{isAr ? 'طرق الشحن المسموحة' : 'Allowed fulfillment'}</p>
-        <div className="mb-4 flex flex-wrap gap-3">
-          {['seller', 'store'].map((mode) => (
-            <label key={mode} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={form.allowedFulfillment.includes(mode)} onChange={() => toggleMode(mode)} disabled={!canWrite} />
-              {label(FULFILLMENT, mode, isAr)}
-            </label>
-          ))}
-        </div>
-        <label className="mb-3 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={form.autoApproveListings} onChange={(e) => setForm((f) => ({ ...f, autoApproveListings: e.target.checked }))} disabled={!canWrite} />
-          {isAr ? 'بائع موثوق — تُنشر منتجاته دون مراجعة' : 'Trusted seller — listings publish without review'}
-        </label>
-        <label className="mb-3 block text-sm">
-          <span className="mb-1 block font-medium">{isAr ? 'ملاحظات داخلية (لا يراها البائع)' : 'Internal notes (not visible to the seller)'}</span>
-          <textarea rows={3} className={inputCls} value={form.internalNote} onChange={(e) => setForm((f) => ({ ...f, internalNote: e.target.value }))} disabled={!canWrite} />
-        </label>
-        {canWrite && <Button size="sm" disabled={saving} onClick={save}>{isAr ? 'حفظ' : 'Save'}</Button>}
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white p-4">
-        <h3 className="mb-2 font-bold">{isAr ? 'بيانات الدفع' : 'Payout details'}</h3>
-        <Row k={isAr ? 'البنك' : 'Bank'} v={seller.bank?.bankName} />
-        <Row k={isAr ? 'صاحب الحساب' : 'Holder'} v={seller.bank?.accountName} />
-        <Row k={isAr ? 'رقم الحساب' : 'Account'} v={seller.bank?.accountNumber} />
-        <Row k="IBAN" v={seller.bank?.iban} />
-        <Row k={isAr ? 'محفظة' : 'Wallet'} v={seller.bank?.walletPhone} />
-      </section>
-
-      <section className="rounded-2xl border border-border bg-white p-4">
-        <h3 className="mb-2 font-bold">{isAr ? 'حسابات الدخول' : 'Logins'}</h3>
-        {(seller.team || []).map((u) => (
-          <Row key={u._id} k={u.name} v={`${u.email} · ${u.role === 'seller_owner' ? (isAr ? 'مالك' : 'owner') : (isAr ? 'موظف' : 'staff')}`} />
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function CreateSellerPanel({ isAr, onCreated }) {
-  const toast = useToast();
-  const [form, setForm] = useState({ nameAr: '', nameEn: '', contactName: '', email: '', phone: '', password: '', city: '', activate: true });
-  const [saving, setSaving] = useState(false);
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
-  const submit = async () => {
-    setSaving(true);
-    try {
-      const { data } = await adminApi.createSeller(form);
-      toast.success(isAr ? 'تم إنشاء البائع' : 'Seller created');
-      onCreated(data.data._id);
-    } catch (err) {
-      toast.error(apiError(err, isAr ? 'تعذّر الإنشاء' : 'Could not create seller'));
-    } finally {
-      setSaving(false);
-    }
-  };
-  const fields = [
-    ['nameAr', isAr ? 'اسم المتجر (عربي)' : 'Store name (Arabic)'],
-    ['nameEn', isAr ? 'اسم المتجر (إنجليزي)' : 'Store name (English)'],
-    ['contactName', isAr ? 'اسم المسؤول' : 'Contact name'],
-    ['email', isAr ? 'البريد (للدخول)' : 'Email (sign-in)'],
-    ['phone', isAr ? 'الهاتف' : 'Phone'],
-    ['password', isAr ? 'كلمة مرور مبدئية (8+)' : 'Initial password (8+)'],
-    ['city', isAr ? 'المدينة' : 'City'],
-  ];
-  return (
-    <div className="space-y-3">
-      {fields.map(([k, text]) => (
-        <label key={k} className="block text-sm">
-          <span className="mb-1 block font-medium">{text}</span>
-          <input className={inputCls} type={k === 'password' ? 'password' : 'text'} value={form[k]} onChange={set(k)} dir={['email', 'phone', 'password', 'nameEn'].includes(k) ? 'ltr' : undefined} />
-        </label>
-      ))}
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={form.activate} onChange={set('activate')} />
-        {isAr ? 'تفعيل المتجر مباشرة' : 'Activate immediately'}
-      </label>
-      <Button disabled={saving} onClick={submit}>{isAr ? 'إنشاء' : 'Create seller'}</Button>
     </div>
   );
 }
@@ -380,124 +85,325 @@ export default function SellersPage() {
   const isAr = language === 'ar';
   const { user } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const { refreshStats } = useAdminStats();
+  const navigate = useNavigate();
   const canWrite = hasPermission(user, 'sellers:write');
+  const canSeeMoney = hasPermission(user, 'reports:read');
+  const canEditSettings = hasPermission(user, 'settings:write');
 
-  const [status, setStatus] = useState('');
-  const [q, setQ] = useState('');
-  const [page, setPage] = useState(1);
-  const [items, setItems] = useState([]);
   const [counts, setCounts] = useState({});
-  const [pagination, setPagination] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState({ pendingListings: 0 });
+  const [owed, setOwed] = useState(null);
+  const [settings, setSettings] = useState(null);
   const [openId, setOpenId] = useState('');
   const [creating, setCreating] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const detailDirty = useRef(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    adminApi.listSellers({ status: status || undefined, q: q || undefined, page, limit: 25 })
-      .then(({ data }) => {
-        setItems(data.data || []);
-        setCounts(data.counts || {});
-        setPagination(data.pagination);
-      })
-      .catch(() => toast.error(isAr ? 'تعذّر تحميل البائعين' : 'Could not load sellers'))
-      .finally(() => setLoading(false));
-  }, [status, q, page, isAr, toast]);
+  const fetchSellers = useCallback((params) => adminApi.listSellers(params).then((res) => {
+    setCounts(res.data.counts || {});
+    setSummary(res.data.summary || { pendingListings: 0 });
+    return res;
+  }), []);
+
+  const list = useAdminListPage({
+    fetchFn: fetchSellers,
+    initialFilters: { status: '' },
+    syncUrl: true,
+  });
 
   useEffect(() => {
-    const t = setTimeout(load, q ? 300 : 0);
-    return () => clearTimeout(t);
-  }, [load, q]);
+    adminApi.getMarketplaceSettings().then(({ data }) => setSettings(data.data)).catch(() => setSettings({}));
+  }, []);
 
-  const onChanged = () => { load(); refreshStats(); };
+  const loadOwed = useCallback(() => {
+    if (!canSeeMoney) return;
+    adminApi.getSellerBalances()
+      .then(({ data }) => setOwed((data.data || []).reduce((sum, r) => sum + Math.max(0, r.available || 0), 0)))
+      .catch(() => setOwed(null));
+  }, [canSeeMoney]);
+  useEffect(() => { loadOwed(); }, [loadOwed]);
+
+  const onChanged = () => { list.reload(); refreshStats(); };
+
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  const openSeller = items.find((s) => s._id === openId);
+  const waiting = (counts.applied || 0) + (counts.under_review || 0);
+  const status = list.filters.status;
+  const setStatus = (value) => list.patchFilters({ status: status === value ? '' : value });
+
+  const closeDetail = useCallback(async () => {
+    if (detailDirty.current) {
+      const ok = await confirm({
+        title: isAr ? 'تغييرات غير محفوظة' : 'Unsaved changes',
+        message: isAr ? 'لم تحفظ تعديلات العمولة والقواعد. إغلاق بدون حفظ؟' : 'Your commission & rules edits are not saved. Close without saving?',
+        confirmLabel: isAr ? 'إغلاق بدون حفظ' : 'Close without saving',
+        cancelLabel: isAr ? 'متابعة التعديل' : 'Keep editing',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
+    detailDirty.current = false;
+    setOpenId('');
+  }, [confirm, isAr]);
+  const onDirtyChange = useCallback((d) => { detailDirty.current = d; }, []);
+
+  const quickStatus = async (s, next) => {
+    const name = isAr ? s.nameAr : s.nameEn;
+    const ok = await confirm({
+      title: next === 'under_review' ? (isAr ? `بدء مراجعة ${name}؟` : `Start reviewing ${name}?`) : (isAr ? `تفعيل ${name}؟` : `Activate ${name}?`),
+      message: next === 'under_review'
+        ? (isAr ? 'سيرى البائع أن طلبه قيد المراجعة.' : 'The seller will see their application is being reviewed.')
+        : (isAr ? 'ستظهر منتجاته المعتمدة في المتجر فوراً.' : 'Their approved products go live right away.'),
+      confirmLabel: isAr ? 'تأكيد' : 'Confirm',
+      cancelLabel: isAr ? 'إلغاء' : 'Cancel',
+      variant: 'primary',
+    });
+    if (!ok) return;
+    try {
+      await adminApi.setSellerStatus(s._id, { status: next });
+      toast.success(isAr ? 'تم تحديث الحالة' : 'Status updated');
+      onChanged();
+    } catch (err) {
+      toast.error(apiError(err, isAr ? 'تعذّر التحديث' : 'Update failed'));
+    }
+  };
+
+  const copy = async (text, done) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(done);
+    } catch {
+      toast.error(isAr ? 'تعذر النسخ' : 'Could not copy');
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const rows = [];
+      const base = { ...list.queryParams, limit: 100 };
+      for (let page = 1; page <= 50; page += 1) {
+        const { data } = await adminApi.listSellers({ ...base, page });
+        rows.push(...(data.data || []));
+        if (page >= (data.pagination?.pages || 1)) break;
+      }
+      downloadBlob(new Blob([sellersToCsv(rows, { isAr })], { type: 'text/csv;charset=utf-8' }), `sellers-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch {
+      toast.error(isAr ? 'فشل التصدير' : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const storeCell = (s) => {
+    const name = isAr ? s.nameAr : s.nameEn;
+    return (
+      <div className="flex items-center gap-3">
+        {s.logoUrl
+          ? <img src={s.logoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg border border-border object-cover" />
+          : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-sm font-bold text-primary-700">{(name || '?').trim().charAt(0)}</span>}
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-text">{name}</p>
+          <p className="truncate text-xs text-text-muted">{[s.address?.city, s.contactName].filter(Boolean).join(' · ')}</p>
+        </div>
+      </div>
+    );
+  };
+
+  const healthCell = (s) => {
+    const h = s.health && ACCOUNT_HEALTH[s.health];
+    if (!h) return <span className="text-xs text-text-muted">—</span>;
+    return (
+      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${h.tone}`}>
+        <h.Icon className="h-3.5 w-3.5" />{isAr ? h.ar : h.en}
+      </span>
+    );
+  };
+
+  const productsCell = (s) => (
+    <div className="text-sm">
+      <span className="font-semibold tabular-nums">{s.products.live}</span>
+      <span className="ms-1 text-xs text-text-muted">{isAr ? 'معروض' : 'live'}</span>
+      {s.products.pending > 0 && (
+        <span className="ms-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">{s.products.pending} {isAr ? 'للمراجعة' : 'to review'}</span>
+      )}
+    </div>
+  );
+
+  const columns = [
+    { key: 'name', header: isAr ? 'المتجر' : 'Store', sortKey: 'name', render: storeCell },
+    {
+      key: 'email',
+      header: isAr ? 'البريد' : 'Email',
+      headerClassName: 'hidden xl:table-cell',
+      cellClassName: 'hidden xl:table-cell',
+      render: (s) => <span dir="ltr" className="text-sm text-text-muted">{s.email}</span>,
+    },
+    { key: 'status', header: isAr ? 'الحالة' : 'Status', render: (s) => <StatusBadge map={SELLER_STATUS} value={s.status} isAr={isAr} /> },
+    { key: 'health', header: isAr ? 'الأداء' : 'Health', headerClassName: 'hidden lg:table-cell', cellClassName: 'hidden lg:table-cell', render: healthCell },
+    { key: 'products', header: isAr ? 'المنتجات' : 'Products', render: productsCell },
+    {
+      key: 'rating',
+      header: isAr ? 'التقييم' : 'Rating',
+      sortKey: 'rating',
+      headerClassName: 'hidden lg:table-cell',
+      cellClassName: 'hidden lg:table-cell',
+      render: (s) => (s.ratingCount ? <span className="text-sm tabular-nums">{s.rating} <span className="text-amber-500">★</span> <span className="text-xs text-text-muted">({s.ratingCount})</span></span> : <span className="text-xs text-text-muted">—</span>),
+    },
+    {
+      key: 'commission',
+      header: isAr ? 'العمولة' : 'Commission',
+      sortKey: 'commission',
+      headerClassName: 'hidden md:table-cell',
+      cellClassName: 'hidden md:table-cell',
+      render: (s) => (s.commissionRate != null ? <span className="tabular-nums">{s.commissionRate}%</span> : <span className="text-xs text-text-muted">{isAr ? 'النسبة العامة' : 'Default'}</span>),
+    },
+    {
+      key: 'createdAt',
+      header: isAr ? 'تاريخ الطلب' : 'Applied',
+      sortKey: 'createdAt',
+      headerClassName: 'hidden md:table-cell',
+      cellClassName: 'hidden md:table-cell',
+      render: (s) => <span className="whitespace-nowrap text-sm text-text-muted">{s.createdAt ? formatDate(s.createdAt, isAr ? 'ar-EG' : 'en-GB') : '—'}</span>,
+    },
+  ];
+
+  const renderMobileCard = (s) => (
+    <div className="space-y-2">
+      {storeCell(s)}
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge map={SELLER_STATUS} value={s.status} isAr={isAr} />
+        {s.health && healthCell(s)}
+      </div>
+      {productsCell(s)}
+    </div>
+  );
+
+  const rowActions = (s) => {
+    const actions = [{ label: isAr ? 'فتح الملف' : 'Open', onClick: () => setOpenId(s._id) }];
+    if (s.status === 'active') {
+      actions.push({ label: isAr ? 'عرض صفحة المتجر' : 'View store page', onClick: () => window.open(`/${isAr ? 'ar' : 'en'}/sellers/${s.slug}`, '_blank', 'noopener') });
+    }
+    actions.push({
+      label: isAr ? 'نسخ رابط دخول البائع' : 'Copy seller sign-in link',
+      onClick: () => copy(sellerLoginUrl(window.location.origin), isAr ? 'تم نسخ رابط الدخول' : 'Sign-in link copied'),
+    });
+    if (s.products.pending > 0) {
+      actions.push({ label: isAr ? 'مراجعة منتجاته' : 'Review their products', onClick: () => navigate(`/admin/listing-review?seller=${s._id}`) });
+    }
+    if (canWrite && s.status === 'applied') actions.push({ label: isAr ? 'بدء المراجعة' : 'Start review', onClick: () => quickStatus(s, 'under_review') });
+    return actions;
+  };
+
+  const filtering = Boolean(list.q.trim() || status);
+  const firstRun = !list.loading && total === 0 && !filtering;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        description={isAr ? 'تجار آخرون يبيعون منتجاتهم في متجرك.' : 'Other merchants selling in your store.'}
-        action={canWrite && <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />{isAr ? 'إضافة بائع' : 'Add seller'}</Button>}
-      />
+    <div className="space-y-5">
+      <p className="max-w-2xl text-sm text-text-muted">
+        {isAr
+          ? 'تجار آخرون يبيعون منتجاتهم في متجرك. راجع طلبات الانضمام، وأرسل لهم رابط الدخول، وتابع أداءهم ومستحقاتهم.'
+          : 'Other merchants selling in your store. Review applications, send them their sign-in link, and track performance and payouts.'}
+      </p>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          {TABS.map((tab) => (
-            <button
-              key={tab || 'all'}
-              type="button"
-              onClick={() => { setPage(1); setStatus(tab); }}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${status === tab ? 'bg-primary-600 text-white' : 'bg-white text-text ring-1 ring-border'}`}
-            >
-              {tab ? label(SELLER_STATUS, tab, isAr) : (isAr ? 'الكل' : 'All')} ({tab ? counts[tab] || 0 : total})
-            </button>
-          ))}
+      {settings && settings.enabled === false && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 shrink-0" />{isAr ? 'البيع عن طريق بائعين متوقف — لن تظهر منتجات البائعين ولا يمكنهم الدخول للبيع.' : 'Outside sellers are switched off — seller products are hidden and sellers cannot sell.'}</p>
+          {canEditSettings && <Link to="/admin/marketplace-settings" className="font-semibold underline">{isAr ? 'تشغيل' : 'Turn on'}</Link>}
         </div>
-        <label className="relative ms-auto w-full sm:w-72">
-          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-          <input value={q} onChange={(e) => { setPage(1); setQ(e.target.value); }} placeholder={isAr ? 'اسم، بريد، هاتف، سجل تجاري' : 'Name, email, phone, register no.'} className={`${inputCls} ps-9`} />
-        </label>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <SummaryCard icon={Hourglass} tone="amber" label={isAr ? 'طلبات تنتظر قرارك' : 'Applications waiting'} value={count(waiting)} active={status === 'waiting'} onClick={() => setStatus('waiting')} hint={counts.under_review ? (isAr ? `${counts.under_review} قيد المراجعة` : `${counts.under_review} under review`) : null} />
+        <SummaryCard icon={Store} tone="emerald" label={isAr ? 'بائعون نشطون' : 'Active sellers'} value={count(counts.active)} active={status === 'active'} onClick={() => setStatus('active')} />
+        <SummaryCard icon={PackageSearch} tone="primary" label={isAr ? 'منتجات تنتظر الموافقة' : 'Products to approve'} value={count(summary.pendingListings)} to="/admin/listing-review" />
+        <SummaryCard icon={AlertTriangle} tone="red" label={isAr ? 'موقوفون' : 'Suspended'} value={count(counts.suspended)} active={status === 'suspended'} onClick={() => setStatus('suspended')} />
+        {canSeeMoney
+          ? <SummaryCard icon={Wallet} tone="slate" label={isAr ? 'مستحق للبائعين الآن' : 'Owed to sellers now'} value={owed == null ? '—' : money(owed, isAr)} to="/admin/seller-payouts" />
+          : <SummaryCard icon={ClipboardList} tone="slate" label={isAr ? 'كل البائعين' : 'All sellers'} value={count(total)} active={!status} onClick={() => list.patchFilters({ status: '' })} />}
       </div>
 
-      <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
-        {loading ? (
-          <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div>
-        ) : items.length === 0 ? (
-          <p className="p-8 text-center text-sm text-text-muted">{isAr ? 'لا يوجد بائعون هنا.' : 'No sellers here.'}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-slate-50 text-xs text-text-muted">
-                <tr>
-                  <th className="px-4 py-3 text-start">{isAr ? 'المتجر' : 'Store'}</th>
-                  <th className="px-4 py-3 text-start">{isAr ? 'التواصل' : 'Contact'}</th>
-                  <th className="px-4 py-3 text-start">{isAr ? 'المنتجات' : 'Products'}</th>
-                  <th className="px-4 py-3 text-start">{isAr ? 'العمولة' : 'Commission'}</th>
-                  <th className="px-4 py-3 text-start">{isAr ? 'الحالة' : 'Status'}</th>
-                  <th className="px-4 py-3 text-start">{isAr ? 'التاريخ' : 'Date'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {items.map((s) => (
-                  <tr key={s._id} onClick={() => setOpenId(s._id)} className="cursor-pointer hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <p className="font-semibold">{isAr ? s.nameAr : s.nameEn}</p>
-                      <p className="text-xs text-text-muted">{s.address?.city}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p>{s.contactName}</p>
-                      <p className="text-xs text-text-muted" dir="ltr">{s.email}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      {s.products.live} {isAr ? 'معروض' : 'live'}
-                      {s.products.pending > 0 && <span className="ms-1 rounded-full bg-amber-100 px-2 text-xs text-amber-900">{s.products.pending} {isAr ? 'للمراجعة' : 'to review'}</span>}
-                    </td>
-                    <td className="px-4 py-3">{s.commissionRate != null ? `${s.commissionRate}%` : (isAr ? 'افتراضي' : 'Default')}</td>
-                    <td className="px-4 py-3"><StatusBadge map={SELLER_STATUS} value={s.status} isAr={isAr} /></td>
-                    <td className="px-4 py-3 text-xs text-text-muted">{fmtDate(s.createdAt, isAr)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-      {pagination?.pages > 1 && <Pagination page={page} pages={pagination.pages} total={pagination.total} limit={pagination.limit} onPageChange={setPage} isAr={isAr} />}
+      <SellerPortalCard isAr={isAr} settings={settings} canEditSettings={canEditSettings} />
+
+      {firstRun ? (
+        <HowItWorks isAr={isAr} canWrite={canWrite} onAdd={() => setCreating(true)} />
+      ) : (
+        <AdminListPage
+          isAr={isAr}
+          actions={(
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="secondary" onClick={handleExport} disabled={exporting} className="gap-1.5">
+                <Download className="h-4 w-4" />
+                {exporting ? (isAr ? 'جاري التصدير…' : 'Exporting…') : (isAr ? 'تصدير CSV' : 'Export CSV')}
+              </Button>
+              {canWrite && (
+                <Button size="sm" onClick={() => setCreating(true)} className="gap-1.5 shadow-sm">
+                  <Plus className="h-4 w-4" />{isAr ? 'إضافة بائع' : 'Add seller'}
+                </Button>
+              )}
+            </div>
+          )}
+          filters={(
+            <ListFilterSelect
+              label={isAr ? 'الحالة' : 'Status'}
+              value={status}
+              onChange={(v) => list.patchFilters({ status: v })}
+              options={[
+                { value: '', label: `${isAr ? 'الكل' : 'All'} (${total})` },
+                { value: 'waiting', label: `${isAr ? 'تنتظر قرارك' : 'Waiting for you'} (${waiting})` },
+                ...Object.keys(SELLER_STATUS).map((k) => ({ value: k, label: `${label(SELLER_STATUS, k, isAr)} (${counts[k] || 0})` })),
+              ]}
+            />
+          )}
+          searchPlaceholder={isAr ? 'اسم المتجر، البريد، الهاتف، السجل التجاري' : 'Store name, email, phone, register no.'}
+          q={list.q}
+          onSearchChange={list.setQ}
+          columns={columns}
+          data={list.data}
+          loading={list.loading}
+          sort={list.sort}
+          onSort={list.toggleSort}
+          rowActions={rowActions}
+          onRowClick={(s) => setOpenId(s._id)}
+          emptyIcon={FileCheck2}
+          emptyTitle={isAr ? 'لا توجد نتائج' : 'No results'}
+          emptyDescription={isAr ? 'جرّب كلمة بحث أو حالة مختلفة' : 'Try a different search or status'}
+          pagination={list.pagination}
+          onPageChange={list.setPage}
+          renderMobileCard={renderMobileCard}
+        />
+      )}
 
       <AdminSlidePanel
         open={Boolean(openId)}
-        onClose={() => setOpenId('')}
-        title={openSeller ? (isAr ? openSeller.nameAr : openSeller.nameEn) : (isAr ? 'البائع' : 'Seller')}
-        subtitle={openSeller?.email}
+        onClose={closeDetail}
+        title={(() => { const s = list.data.find((x) => x._id === openId); return s ? (isAr ? s.nameAr : s.nameEn) : (isAr ? 'البائع' : 'Seller'); })()}
+        subtitle={list.data.find((x) => x._id === openId)?.email}
         width="max-w-2xl"
         isAr={isAr}
       >
-        {openId && <SellerDetail key={openId} sellerId={openId} isAr={isAr} onChanged={onChanged} canWrite={canWrite} />}
+        {openId && (
+          <SellerDetailPanel
+            key={openId}
+            sellerId={openId}
+            isAr={isAr}
+            canWrite={canWrite}
+            canSeeMoney={canSeeMoney}
+            onChanged={() => { onChanged(); loadOwed(); }}
+            onDirtyChange={onDirtyChange}
+          />
+        )}
       </AdminSlidePanel>
 
-      <AdminSlidePanel open={creating} onClose={() => setCreating(false)} title={isAr ? 'إضافة بائع' : 'Add seller'} isAr={isAr}>
-        {creating && <CreateSellerPanel isAr={isAr} onCreated={(id) => { setCreating(false); onChanged(); setOpenId(id); }} />}
+      <AdminSlidePanel open={creating} onClose={() => setCreating(false)} title={isAr ? 'إضافة بائع' : 'Add seller'} width="max-w-xl" isAr={isAr}>
+        {creating && (
+          <CreateSellerPanel
+            isAr={isAr}
+            onCreated={onChanged}
+            onOpenSeller={(id) => { setCreating(false); setOpenId(id); }}
+          />
+        )}
       </AdminSlidePanel>
     </div>
   );

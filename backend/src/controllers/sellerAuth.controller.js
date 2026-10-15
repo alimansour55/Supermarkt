@@ -12,12 +12,14 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 import { generateToken } from '../utils/generateToken.js';
 import { parsePagination, paginationMeta } from '../utils/listQuery.js';
 import { sendEmail } from '../utils/sendEmail.js';
+import { clientUrl } from '../emails/helpers.js';
 import { SELLER_ROLES, sellerUserPermissions } from '../constants/marketplace.js';
 import { logSellerActivity, clientIp } from '../services/sellerActivity.service.js';
 import {
   sellerPasswordResetTemplate,
   sellerLoginCodeTemplate,
   sellerNewSignInTemplate,
+  sellerAccessTemplate,
 } from '../emails/templates/sellerTemplates.js';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -128,15 +130,45 @@ export const resendSellerSignInCode = asyncHandler(async (req, res) => {
 
 // ── Forgot / reset password ──
 
+/** Store a fresh one-time password link for a seller user; returns the raw token. */
+async function issuePasswordToken(user, ttlMs) {
+  const token = crypto.randomBytes(32).toString('hex');
+  await User.updateOne(
+    { _id: user._id },
+    { $set: { resetPasswordToken: sha256(token), resetPasswordExpires: new Date(Date.now() + ttlMs) } },
+  );
+  return token;
+}
+
+export const SELLER_INVITE_TTL_HOURS = 72;
+
+/**
+ * Staff onboarding / support: email a seller user a "set your password" link (valid 72 hours)
+ * together with the Seller Center sign-in address. Returns the links so staff can also share
+ * them over WhatsApp when email is unreliable.
+ */
+export async function sendSellerAccessEmail(user, { seller, withPasswordLink = true } = {}) {
+  const loginUrl = `${clientUrl()}/seller-center/login`;
+  let setupUrl = '';
+  let token = '';
+  if (withPasswordLink) {
+    token = await issuePasswordToken(user, SELLER_INVITE_TTL_HOURS * 60 * 60 * 1000);
+    setupUrl = `${clientUrl()}/seller-center/reset-password/${token}`;
+  }
+  sendQuietly(sellerAccessTemplate(user, { seller, token, expiresHours: SELLER_INVITE_TTL_HOURS }), user.email);
+  return {
+    sentTo: user.email,
+    loginUrl,
+    setupUrl,
+    expiresAt: withPasswordLink ? new Date(Date.now() + SELLER_INVITE_TTL_HOURS * 60 * 60 * 1000) : null,
+  };
+}
+
 export const forgotSellerPassword = asyncHandler(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const user = email ? await User.findOne({ email, role: { $in: SELLER_ROLES }, isActive: { $ne: false } }) : null;
   if (user) {
-    const token = crypto.randomBytes(32).toString('hex');
-    await User.updateOne(
-      { _id: user._id },
-      { $set: { resetPasswordToken: sha256(token), resetPasswordExpires: new Date(Date.now() + RESET_TTL_MS) } },
-    );
+    const token = await issuePasswordToken(user, RESET_TTL_MS);
     sendQuietly(sellerPasswordResetTemplate(user, token), user.email);
   }
   // Same answer either way — never reveal which emails have accounts.

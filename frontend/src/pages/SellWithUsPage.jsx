@@ -79,6 +79,12 @@ export default function SellWithUsPage() {
             </li>
           ))}
         </ul>
+        <p className="mt-6 text-sm text-indigo-100">
+          {isAr ? 'لديك حساب بائع بالفعل؟ ' : 'Already selling with us? '}
+          <a href="/seller-center/login" className="font-semibold text-white underline underline-offset-2 hover:no-underline">
+            {isAr ? 'ادخل إلى مركز البائعين' : 'Sign in to Seller Center'}
+          </a>
+        </p>
       </section>
 
       {!config ? (

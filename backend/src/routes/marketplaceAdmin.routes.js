@@ -19,6 +19,7 @@ import {
   listSellers,
   getSellerAdmin,
   createSellerAdmin,
+  sendSellerAccessAdmin,
   updateSellerAdmin,
   changeSellerStatusAdmin,
   reviewSellerDocument,
@@ -44,6 +45,7 @@ router.get('/sellers/:id', ...read, getSellerAdmin);
 router.put('/sellers/:id', ...write, updateSellerAdmin);
 router.post('/sellers/:id/status', ...write, changeSellerStatusAdmin);
 router.put('/sellers/:id/documents/:docId', ...write, reviewSellerDocument);
+router.post('/sellers/:id/access', ...write, sendSellerAccessAdmin);
 
 router.get('/listings', ...read, listListingQueue);
 router.post('/listings/:id/approve', ...write, approveListing);

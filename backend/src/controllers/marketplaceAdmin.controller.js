@@ -1,6 +1,8 @@
+import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import Seller from '../models/Seller.js';
 import Product from '../models/Product.js';
+import User from '../models/User.js';
 import Shipment, { SHIPMENT_STATUSES } from '../models/Shipment.js';
 import { formatShipmentForOrder, updateShipmentStatus } from '../services/marketplaceOrder.service.js';
 import { AppError } from '../utils/AppError.js';
@@ -23,6 +25,7 @@ import { FULFILLMENT_MODES, SELLER_STATUSES } from '../constants/marketplace.js'
 import { formatSellerProduct } from './sellerPortal.controller.js';
 import { getSellerPerformance } from '../services/sellerReputation.service.js';
 import { validateSellerApplication, createSellerWithOwner } from './sellerPublic.controller.js';
+import { sendSellerAccessEmail, assertStrongPassword } from './sellerAuth.controller.js';
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const isId = (v) => mongoose.Types.ObjectId.isValid(v);
@@ -75,19 +78,37 @@ export const updateMarketplaceAdminSettings = asyncHandler(async (req, res) => {
 
 // ── Sellers ──
 
+/** Columns the seller list can sort by (`sort` + `order`, as the admin list pages send them). */
+const LIST_SORT_FIELDS = {
+  createdAt: ['createdAt'],
+  name: ['nameEn'],
+  rating: ['rating', 'ratingCount'],
+  commission: ['commissionRate'],
+};
+
+function listSort(query) {
+  const fields = LIST_SORT_FIELDS[query.sort] || LIST_SORT_FIELDS.createdAt;
+  const dir = query.order === 'asc' ? 1 : -1;
+  return { ...Object.fromEntries(fields.map((f) => [f, dir])), _id: dir };
+}
+
 export const listSellers = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query, 100);
   const filter = {};
   if (SELLER_STATUSES.includes(req.query.status)) filter.status = req.query.status;
+  // "Waiting for you": new applications plus ones already being reviewed.
+  if (req.query.status === 'waiting') filter.status = { $in: ['applied', 'under_review'] };
   if (req.query.q) {
     const q = escapeRegex(String(req.query.q).slice(0, 100));
     filter.$or = ['nameAr', 'nameEn', 'email', 'phone', 'slug', 'legalName', 'commercialRegisterNo']
       .map((f) => ({ [f]: { $regex: q, $options: 'i' } }));
   }
-  const [sellers, total, statusCounts] = await Promise.all([
-    Seller.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+  const sort = listSort(req.query);
+  const [sellers, total, statusCounts, pendingListings] = await Promise.all([
+    Seller.find(filter).sort(sort).skip(skip).limit(limit).lean(),
     Seller.countDocuments(filter),
     Seller.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+    Product.countDocuments({ seller: { $ne: null }, listingStatus: 'pending_review' }),
   ]);
 
   const ids = sellers.map((s) => s._id);
@@ -103,11 +124,16 @@ export const listSellers = asyncHandler(async (req, res) => {
     },
   ]) : [];
   const stats = new Map(productRows.map((r) => [String(r._id), r]));
+  // Health only means something for selling stores; one small query per active row on this page.
+  const healthRows = await Promise.all(sellers.map((s) => (s.status === 'active'
+    ? getSellerPerformance(s._id).then((p) => p.health).catch(() => null)
+    : null)));
 
   res.json({
     success: true,
-    data: sellers.map((s) => ({
+    data: sellers.map((s, i) => ({
       ...formatSellerPrivate(s),
+      health: healthRows[i],
       products: {
         total: stats.get(String(s._id))?.total || 0,
         live: stats.get(String(s._id))?.live || 0,
@@ -115,6 +141,7 @@ export const listSellers = asyncHandler(async (req, res) => {
       },
     })),
     counts: Object.fromEntries(SELLER_STATUSES.map((st) => [st, statusCounts.find((r) => r._id === st)?.count || 0])),
+    summary: { pendingListings },
     pagination: paginationMeta(page, limit, total),
   });
 });
@@ -131,6 +158,7 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
   await seller.populate([
     { path: 'intendedCategories', select: 'nameAr nameEn slug' },
     { path: 'categoryCommissions.category', select: 'nameAr nameEn slug' },
+    { path: 'statusHistory.changedBy', select: 'name role' },
   ]);
   const [team, listingRows, performance] = await Promise.all([
     sellerUsers(seller._id),
@@ -152,13 +180,46 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
   });
 });
 
-/** Staff onboarding — create a seller directly (optionally already active). */
+/**
+ * Staff onboarding — create a seller directly (optionally already active).
+ * Without a password the owner gets an emailed invite to choose one (the recommended path:
+ * staff never know the seller's password). With one, they get a welcome email with the
+ * sign-in address. Either way the response carries the links so staff can share them.
+ */
 export const createSellerAdmin = asyncHandler(async (req, res) => {
-  const data = await validateSellerApplication(req.body);
+  const invite = !String(req.body.password ?? '').trim();
+  const data = await validateSellerApplication(req.body, { requirePassword: !invite });
+  if (invite) {
+    // Unusable placeholder until the owner sets their own password from the invite link.
+    data.password = `${crypto.randomBytes(24).toString('base64url')}A1`;
+  } else {
+    assertStrongPassword(data.password);
+  }
   const status = req.body.activate === true || req.body.activate === 'true' ? 'active' : 'under_review';
-  const { seller } = await createSellerWithOwner(data, { status, actor: req.user });
+  const { seller, owner } = await createSellerWithOwner(data, { status, actor: req.user });
+  const access = await sendSellerAccessEmail(owner, { seller, withPasswordLink: invite });
   await logAudit({ req, action: 'create', entityType: 'seller', entityId: seller._id, entityLabel: seller.nameEn });
-  res.status(201).json({ success: true, data: formatSellerPrivate(seller) });
+  res.status(201).json({ success: true, data: formatSellerPrivate(seller), access: { ...access, invited: invite } });
+});
+
+/** Email a seller user (owner by default) a fresh sign-in + set-password link. */
+export const sendSellerAccessAdmin = asyncHandler(async (req, res) => {
+  const seller = await findSeller(req.params.id);
+  const userId = req.body?.userId || seller.owner;
+  if (!isId(userId)) throw new AppError('This seller has no login yet', 400);
+  const user = await User.findOne({ _id: userId, seller: seller._id });
+  if (!user) throw new AppError('Login not found for this seller', 404);
+  if (user.isActive === false) throw new AppError('This login is turned off — turn it on from the seller team page first', 400);
+  const access = await sendSellerAccessEmail(user, { seller });
+  await logAudit({
+    req,
+    action: 'update',
+    entityType: 'seller',
+    entityId: seller._id,
+    entityLabel: seller.nameEn,
+    changes: { accessLinkSent: { from: null, to: user.email } },
+  });
+  res.json({ success: true, data: access });
 });
 
 export const updateSellerAdmin = asyncHandler(async (req, res) => {
