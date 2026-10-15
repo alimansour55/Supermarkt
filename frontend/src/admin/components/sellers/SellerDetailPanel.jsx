@@ -32,6 +32,7 @@ function Card({ title, action, children }) {
 }
 
 function Row({ k, v, ltr }) {
+  if (!v || v === '—') return null;
   return (
     <div className="flex justify-between gap-4 border-b border-slate-100 py-2 text-sm last:border-0">
       <span className="text-text-muted">{k}</span>
@@ -57,7 +58,6 @@ const TABS = [
   { id: 'rules', ar: 'العمولة والقواعد', en: 'Commission & rules' },
   { id: 'payouts', ar: 'المدفوعات', en: 'Payouts' },
   { id: 'logins', ar: 'الدخول', en: 'Logins' },
-  { id: 'history', ar: 'السجل', en: 'History' },
 ];
 
 /** Approval checklist — advisory, shown while the seller is not yet active. */
@@ -275,6 +275,22 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
 
       {tab === 'overview' && (
         <div className="space-y-4">
+          <Card>
+            <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+              <p><span className="block text-xs text-text-muted">{isAr ? 'منتجات معروضة' : 'Live products'}</span><span className="text-lg font-bold">{seller.listings?.approved || 0}</span></p>
+              <p><span className="block text-xs text-text-muted">{isAr ? 'التقييم' : 'Rating'}</span><span className="text-lg font-bold">{seller.performance?.ratingCount ? `${seller.performance.rating} ★` : '—'}</span></p>
+              <p><span className="block text-xs text-text-muted">{isAr ? 'إلغاء من البائع' : 'Seller cancels'}</span><span className="text-lg font-bold">{seller.performance ? `${seller.performance.cancelRate}%` : '—'}</span></p>
+              <p><span className="block text-xs text-text-muted">{isAr ? 'شحن متأخر' : 'Late shipping'}</span><span className="text-lg font-bold">{seller.performance ? `${seller.performance.lateShipRate}%` : '—'}</span></p>
+            </div>
+            {Object.entries(seller.listings || {}).some(([k, n]) => k !== 'approved' && n > 0) && (
+              <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3 text-xs">
+                {Object.entries(seller.listings).filter(([k, n]) => k !== 'approved' && n > 0).map(([k, n]) => (
+                  <span key={k} className="rounded-full bg-slate-100 px-2.5 py-1">{label(LISTING_STATUS, k, isAr)}: <strong>{n}</strong></span>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <Card title={isAr ? 'البيانات' : 'Details'}>
             <Row k={isAr ? 'المسؤول' : 'Contact'} v={seller.contactName} />
             <Row k={isAr ? 'البريد' : 'Email'} v={seller.email} ltr />
@@ -283,36 +299,38 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
             <Row k={isAr ? 'الاسم القانوني' : 'Legal name'} v={seller.legalName} />
             <Row k={isAr ? 'السجل التجاري' : 'Commercial register'} v={seller.commercialRegisterNo} ltr />
             <Row k={isAr ? 'الرقم الضريبي' : 'Tax ID'} v={seller.taxId} ltr />
-            <Row k={isAr ? 'تاريخ الطلب' : 'Applied'} v={fmtDate(seller.createdAt, isAr)} />
-            <Row k={isAr ? 'تاريخ الاعتماد' : 'Approved'} v={fmtDate(seller.approvedAt, isAr)} />
+            <Row k={isAr ? 'العمولة' : 'Commission'} v={seller.commissionRate != null ? `${seller.commissionRate}%` : (isAr ? 'النسبة العامة' : 'Marketplace default')} />
+            <Row k={isAr ? 'تاريخ الطلب' : 'Applied'} v={seller.createdAt && fmtDate(seller.createdAt, isAr)} />
+            <Row k={isAr ? 'تاريخ الاعتماد' : 'Approved'} v={seller.approvedAt && fmtDate(seller.approvedAt, isAr)} />
             {(seller.intendedCategories || []).length > 0 && (
               <Row k={isAr ? 'الأقسام المطلوبة' : 'Wants to sell'} v={seller.intendedCategories.map((c) => (isAr ? c.nameAr : c.nameEn)).join('، ')} />
             )}
             {seller.applicationNote && <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm">{seller.applicationNote}</p>}
           </Card>
 
-          <Card title={isAr ? 'المنتجات' : 'Products'}>
-            {Object.keys(seller.listings || {}).length ? (
-              <div className="flex flex-wrap gap-2 text-xs">
-                {Object.entries(seller.listings).map(([k, n]) => (
-                  <span key={k} className="rounded-full bg-slate-100 px-2.5 py-1">{label(LISTING_STATUS, k, isAr)}: <strong>{n}</strong></span>
-                ))}
-              </div>
-            ) : <p className="text-sm text-text-muted">{isAr ? 'لم يضف البائع منتجات بعد.' : 'No products yet.'}</p>}
-          </Card>
-
-          {seller.performance && (
-            <Card title={isAr ? `الأداء (آخر ${seller.performance.days} يوماً)` : `Performance (last ${seller.performance.days} days)`}>
-              <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                <p><span className="block text-xs text-text-muted">{isAr ? 'الشحنات' : 'Parcels'}</span><span className="font-bold">{seller.performance.shipments}</span></p>
-                <p><span className="block text-xs text-text-muted">{isAr ? 'التقييم' : 'Rating'}</span><span className="font-bold">{seller.performance.ratingCount ? `${seller.performance.rating} ★ (${seller.performance.ratingCount})` : '—'}</span></p>
-                <p><span className="block text-xs text-text-muted">{isAr ? 'إلغاء من البائع' : 'Seller cancels'}</span><span className="font-bold">{seller.performance.cancelRate}%</span></p>
-                <p><span className="block text-xs text-text-muted">{isAr ? 'شحن متأخر' : 'Late shipping'}</span><span className="font-bold">{seller.performance.lateShipRate}%</span></p>
-              </div>
-            </Card>
-          )}
-
           <SellerReviewsCard sellerId={seller._id} isAr={isAr} canWrite={canWrite} />
+
+          {(seller.statusHistory || []).length > 0 && (
+            <details className="group rounded-2xl border border-border bg-white p-4">
+              <summary className="cursor-pointer list-none font-bold marker:hidden">
+                {isAr ? 'سجل الحالة' : 'Status history'}
+                <span className="ms-2 text-xs font-normal text-text-muted">({seller.statusHistory.length})</span>
+              </summary>
+              <ol className="relative mt-3 space-y-4 border-s border-border ps-4">
+                {[...seller.statusHistory].reverse().map((h, i) => (
+                  <li key={i} className="relative">
+                    <span className="absolute -start-[1.4rem] top-1 h-2.5 w-2.5 rounded-full bg-primary-500 ring-4 ring-white" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge map={SELLER_STATUS} value={h.status} isAr={isAr} />
+                      <span className="text-xs text-text-muted">{fmtDate(h.changedAt, isAr)}</span>
+                      <span className="text-xs text-text-muted">· {h.changedBy?.name || (isAr ? 'البائع / النظام' : 'Seller / system')}</span>
+                    </div>
+                    {h.reason && <p className="mt-1 text-sm">{h.reason}</p>}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
         </div>
       )}
 
@@ -451,26 +469,6 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
       )}
 
       {tab === 'logins' && <SellerAccessSection seller={seller} isAr={isAr} canWrite={canWrite} />}
-
-      {tab === 'history' && (
-        <Card title={isAr ? 'سجل الحالة' : 'Status history'}>
-          {!(seller.statusHistory || []).length ? <p className="text-sm text-text-muted">—</p> : (
-            <ol className="relative space-y-4 border-s border-border ps-4">
-              {[...seller.statusHistory].reverse().map((h, i) => (
-                <li key={i} className="relative">
-                  <span className="absolute -start-[1.4rem] top-1 h-2.5 w-2.5 rounded-full bg-primary-500 ring-4 ring-white" />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge map={SELLER_STATUS} value={h.status} isAr={isAr} />
-                    <span className="text-xs text-text-muted">{fmtDate(h.changedAt, isAr)}</span>
-                    <span className="text-xs text-text-muted">· {h.changedBy?.name || (isAr ? 'البائع / النظام' : 'Seller / system')}</span>
-                  </div>
-                  {h.reason && <p className="mt-1 text-sm">{h.reason}</p>}
-                </li>
-              ))}
-            </ol>
-          )}
-        </Card>
-      )}
 
       {reasonFor && (
       <SellerReasonDialog

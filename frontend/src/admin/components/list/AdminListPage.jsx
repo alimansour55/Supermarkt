@@ -34,9 +34,11 @@ export default function AdminListPage({
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        {actions}
-      </div>
+      {actions && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {actions}
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:flex-wrap sm:items-center">

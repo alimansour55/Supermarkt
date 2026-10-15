@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, ClipboardList, Download, FileCheck2, Hourglass, PackageSearch, Plus, Store, Wallet,
+  AlertTriangle, ChevronLeft, ChevronRight, Download, FileCheck2, PackageSearch, Plus, Store, Wallet,
 } from 'lucide-react';
 import { Link, useNavigate } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../adminApi';
 import { useAdminListPage } from '../hooks/useAdminListPage';
-import { AdminListPage, ListFilterSelect } from '../components/list';
+import { AdminListPage } from '../components/list';
 import { useConfirm, useToast } from '../components';
 import AdminSlidePanel from '../components/AdminSlidePanel';
 import Button from '../../components/ui/Button';
@@ -25,30 +25,40 @@ import CreateSellerPanel from '../components/sellers/CreateSellerPanel';
 const count = (n) => formatMoneyLatin(n || 0, { maximumFractionDigits: 0 });
 const money = (n, isAr) => `${formatMoneyLatin(n || 0, { maximumFractionDigits: 0 })} ${isAr ? 'ج.م' : 'EGP'}`;
 
-function SummaryCard({ label: text, value, hint, icon: Icon, tone = 'slate', active, onClick, to }) {
-  const tones = {
-    slate: 'bg-slate-100 text-slate-600',
-    amber: 'bg-amber-100 text-amber-700',
-    emerald: 'bg-emerald-100 text-emerald-700',
-    red: 'bg-red-100 text-red-700',
-    primary: 'bg-primary-100 text-primary-700',
-  };
-  const cls = [
-    'group block rounded-2xl border px-4 py-3.5 text-start transition-all',
-    active ? 'border-primary-400 bg-primary-50 shadow-sm ring-1 ring-primary-100' : 'border-border bg-white hover:border-primary-200 hover:bg-primary-50/30',
-  ].join(' ');
-  const body = (
-    <>
-      <div className="flex items-center justify-between gap-2">
-        <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${active ? 'bg-primary-600 text-white' : tones[tone]}`}><Icon className="h-4 w-4" /></span>
-        <p className="text-2xl font-bold tabular-nums text-text">{value}</p>
-      </div>
-      <p className={`mt-2 text-xs font-semibold ${active ? 'text-primary-800' : 'text-text-muted'}`}>{text}</p>
-      {hint && <p className="text-[11px] text-text-muted">{hint}</p>}
-    </>
+/** Status filter as tabs with counts — the one control for "which sellers am I looking at". */
+function StatusTabs({ tabs, value, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-1" role="tablist">
+      {tabs.map((t) => {
+        const active = value === t.value;
+        return (
+          <button
+            key={t.value || 'all'}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.value)}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${active ? 'bg-primary-600 font-semibold text-white' : 'text-text-muted hover:bg-slate-100 hover:text-text'}`}
+          >
+            {t.label}
+            <span className={`rounded-full px-1.5 text-[11px] font-semibold leading-5 tabular-nums ${active ? 'bg-white/20 text-white' : t.attention ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-text-muted'}`}>
+              {t.count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
-  if (to) return <Link to={to} className={cls}>{body}</Link>;
-  return <button type="button" onClick={onClick} className={cls}>{body}</button>;
+}
+
+/** A small "needs you" link — rendered only when there is something to do. */
+function NoticeChip({ to, icon: Icon, children, isAr }) {
+  const Arrow = isAr ? ChevronLeft : ChevronRight;
+  return (
+    <Link to={to} className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100">
+      <Icon className="h-3.5 w-3.5" />{children}<Arrow className="h-3.5 w-3.5" />
+    </Link>
+  );
 }
 
 /** First-run guide: what the marketplace is and the steps to get the first seller selling. */
@@ -130,7 +140,6 @@ export default function SellersPage() {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const waiting = (counts.applied || 0) + (counts.under_review || 0);
   const status = list.filters.status;
-  const setStatus = (value) => list.patchFilters({ status: status === value ? '' : value });
 
   const closeDetail = useCallback(async () => {
     if (detailDirty.current) {
@@ -231,37 +240,21 @@ export default function SellersPage() {
     </div>
   );
 
+  const statusCell = (s) => (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <StatusBadge map={SELLER_STATUS} value={s.status} isAr={isAr} />
+      {/* Only flag health when it needs attention — "healthy" is the quiet default. */}
+      {s.health && s.health !== 'good' && healthCell(s)}
+    </div>
+  );
+
   const columns = [
     { key: 'name', header: isAr ? 'المتجر' : 'Store', sortKey: 'name', render: storeCell },
-    {
-      key: 'email',
-      header: isAr ? 'البريد' : 'Email',
-      headerClassName: 'hidden xl:table-cell',
-      cellClassName: 'hidden xl:table-cell',
-      render: (s) => <span dir="ltr" className="text-sm text-text-muted">{s.email}</span>,
-    },
-    { key: 'status', header: isAr ? 'الحالة' : 'Status', render: (s) => <StatusBadge map={SELLER_STATUS} value={s.status} isAr={isAr} /> },
-    { key: 'health', header: isAr ? 'الأداء' : 'Health', headerClassName: 'hidden lg:table-cell', cellClassName: 'hidden lg:table-cell', render: healthCell },
+    { key: 'status', header: isAr ? 'الحالة' : 'Status', render: statusCell },
     { key: 'products', header: isAr ? 'المنتجات' : 'Products', render: productsCell },
     {
-      key: 'rating',
-      header: isAr ? 'التقييم' : 'Rating',
-      sortKey: 'rating',
-      headerClassName: 'hidden lg:table-cell',
-      cellClassName: 'hidden lg:table-cell',
-      render: (s) => (s.ratingCount ? <span className="text-sm tabular-nums">{s.rating} <span className="text-amber-500">★</span> <span className="text-xs text-text-muted">({s.ratingCount})</span></span> : <span className="text-xs text-text-muted">—</span>),
-    },
-    {
-      key: 'commission',
-      header: isAr ? 'العمولة' : 'Commission',
-      sortKey: 'commission',
-      headerClassName: 'hidden md:table-cell',
-      cellClassName: 'hidden md:table-cell',
-      render: (s) => (s.commissionRate != null ? <span className="tabular-nums">{s.commissionRate}%</span> : <span className="text-xs text-text-muted">{isAr ? 'النسبة العامة' : 'Default'}</span>),
-    },
-    {
       key: 'createdAt',
-      header: isAr ? 'تاريخ الطلب' : 'Applied',
+      header: isAr ? 'انضم في' : 'Joined',
       sortKey: 'createdAt',
       headerClassName: 'hidden md:table-cell',
       cellClassName: 'hidden md:table-cell',
@@ -272,10 +265,7 @@ export default function SellersPage() {
   const renderMobileCard = (s) => (
     <div className="space-y-2">
       {storeCell(s)}
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge map={SELLER_STATUS} value={s.status} isAr={isAr} />
-        {s.health && healthCell(s)}
-      </div>
+      {statusCell(s)}
       {productsCell(s)}
     </div>
   );
@@ -299,64 +289,69 @@ export default function SellersPage() {
   const filtering = Boolean(list.q.trim() || status);
   const firstRun = !list.loading && total === 0 && !filtering;
 
-  return (
-    <div className="space-y-5">
-      <p className="max-w-2xl text-sm text-text-muted">
-        {isAr
-          ? 'تجار آخرون يبيعون منتجاتهم في متجرك. راجع طلبات الانضمام، وأرسل لهم رابط الدخول، وتابع أداءهم ومستحقاتهم.'
-          : 'Other merchants selling in your store. Review applications, send them their sign-in link, and track performance and payouts.'}
-      </p>
+  const statusTabs = [
+    { value: '', label: isAr ? 'الكل' : 'All', count: total },
+    { value: 'waiting', label: isAr ? 'تنتظر قرارك' : 'Waiting for you', count: waiting, attention: waiting > 0 },
+    { value: 'active', label: label(SELLER_STATUS, 'active', isAr), count: counts.active || 0 },
+    { value: 'suspended', label: label(SELLER_STATUS, 'suspended', isAr), count: counts.suspended || 0 },
+    { value: 'rejected', label: label(SELLER_STATUS, 'rejected', isAr), count: counts.rejected || 0 },
+  ];
+  const showNotices = summary.pendingListings > 0 || (canSeeMoney && owed > 0);
 
+  return (
+    <div className="space-y-4">
       {settings && settings.enabled === false && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 shrink-0" />{isAr ? 'البيع عن طريق بائعين متوقف — لن تظهر منتجات البائعين ولا يمكنهم الدخول للبيع.' : 'Outside sellers are switched off — seller products are hidden and sellers cannot sell.'}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+          <p className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 shrink-0" />{isAr ? 'البيع عن طريق بائعين متوقف — منتجات البائعين مخفية.' : 'Outside sellers are switched off — seller products are hidden.'}</p>
           {canEditSettings && <Link to="/admin/marketplace-settings" className="font-semibold underline">{isAr ? 'تشغيل' : 'Turn on'}</Link>}
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <SummaryCard icon={Hourglass} tone="amber" label={isAr ? 'طلبات تنتظر قرارك' : 'Applications waiting'} value={count(waiting)} active={status === 'waiting'} onClick={() => setStatus('waiting')} hint={counts.under_review ? (isAr ? `${counts.under_review} قيد المراجعة` : `${counts.under_review} under review`) : null} />
-        <SummaryCard icon={Store} tone="emerald" label={isAr ? 'بائعون نشطون' : 'Active sellers'} value={count(counts.active)} active={status === 'active'} onClick={() => setStatus('active')} />
-        <SummaryCard icon={PackageSearch} tone="primary" label={isAr ? 'منتجات تنتظر الموافقة' : 'Products to approve'} value={count(summary.pendingListings)} to="/admin/listing-review" />
-        <SummaryCard icon={AlertTriangle} tone="red" label={isAr ? 'موقوفون' : 'Suspended'} value={count(counts.suspended)} active={status === 'suspended'} onClick={() => setStatus('suspended')} />
-        {canSeeMoney
-          ? <SummaryCard icon={Wallet} tone="slate" label={isAr ? 'مستحق للبائعين الآن' : 'Owed to sellers now'} value={owed == null ? '—' : money(owed, isAr)} to="/admin/seller-payouts" />
-          : <SummaryCard icon={ClipboardList} tone="slate" label={isAr ? 'كل البائعين' : 'All sellers'} value={count(total)} active={!status} onClick={() => list.patchFilters({ status: '' })} />}
+      {/* One line: the links sellers need + the page actions. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SellerPortalCard isAr={isAr} settings={settings} canEditSettings={canEditSettings} />
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting || !total}
+            className="!px-2.5"
+            title={isAr ? 'تصدير CSV' : 'Export CSV'}
+            aria-label={isAr ? 'تصدير CSV' : 'Export CSV'}
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+          {canWrite && (
+            <Button size="sm" onClick={() => setCreating(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" />{isAr ? 'إضافة بائع' : 'Add seller'}
+            </Button>
+          )}
+        </div>
       </div>
 
-      <SellerPortalCard isAr={isAr} settings={settings} canEditSettings={canEditSettings} />
+      {showNotices && (
+        <div className="flex flex-wrap gap-2">
+          {summary.pendingListings > 0 && (
+            <NoticeChip to="/admin/listing-review" icon={PackageSearch} isAr={isAr}>
+              {isAr ? `${count(summary.pendingListings)} منتج ينتظر موافقتك` : `${count(summary.pendingListings)} products waiting for approval`}
+            </NoticeChip>
+          )}
+          {canSeeMoney && owed > 0 && (
+            <NoticeChip to="/admin/seller-payouts" icon={Wallet} isAr={isAr}>
+              {isAr ? `${money(owed, isAr)} مستحق للبائعين` : `${money(owed, isAr)} owed to sellers`}
+            </NoticeChip>
+          )}
+        </div>
+      )}
 
       {firstRun ? (
         <HowItWorks isAr={isAr} canWrite={canWrite} onAdd={() => setCreating(true)} />
       ) : (
         <AdminListPage
           isAr={isAr}
-          actions={(
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="secondary" onClick={handleExport} disabled={exporting} className="gap-1.5">
-                <Download className="h-4 w-4" />
-                {exporting ? (isAr ? 'جاري التصدير…' : 'Exporting…') : (isAr ? 'تصدير CSV' : 'Export CSV')}
-              </Button>
-              {canWrite && (
-                <Button size="sm" onClick={() => setCreating(true)} className="gap-1.5 shadow-sm">
-                  <Plus className="h-4 w-4" />{isAr ? 'إضافة بائع' : 'Add seller'}
-                </Button>
-              )}
-            </div>
-          )}
-          filters={(
-            <ListFilterSelect
-              label={isAr ? 'الحالة' : 'Status'}
-              value={status}
-              onChange={(v) => list.patchFilters({ status: v })}
-              options={[
-                { value: '', label: `${isAr ? 'الكل' : 'All'} (${total})` },
-                { value: 'waiting', label: `${isAr ? 'تنتظر قرارك' : 'Waiting for you'} (${waiting})` },
-                ...Object.keys(SELLER_STATUS).map((k) => ({ value: k, label: `${label(SELLER_STATUS, k, isAr)} (${counts[k] || 0})` })),
-              ]}
-            />
-          )}
-          searchPlaceholder={isAr ? 'اسم المتجر، البريد، الهاتف، السجل التجاري' : 'Store name, email, phone, register no.'}
+          filters={<StatusTabs tabs={statusTabs} value={status} onChange={(v) => list.patchFilters({ status: v })} />}
+          searchPlaceholder={isAr ? 'ابحث بالاسم أو البريد أو الهاتف' : 'Search name, email or phone'}
           q={list.q}
           onSearchChange={list.setQ}
           columns={columns}
