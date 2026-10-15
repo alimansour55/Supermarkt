@@ -8,6 +8,7 @@ import { generateToken } from '../utils/generateToken.js';
 import { formatProduct } from '../utils/formatters.js';
 import { featuredProductsFor } from './sellerGrowth.controller.js';
 import { normalizePhone } from '../utils/phone.js';
+import { buildOffersProductFilter } from '../utils/offersFilter.js';
 import {
   getMarketplaceSettings,
   uniqueSellerSlug,
@@ -148,9 +149,21 @@ export const applyAsSeller = asyncHandler(async (req, res) => {
 export const getPublicSeller = asyncHandler(async (req, res) => {
   const seller = await Seller.findOne({ slug: String(req.params.slug).toLowerCase(), status: 'active' }).lean();
   if (!seller) throw new AppError('Seller not found', 404);
-  const [productCount, featured] = await Promise.all([
-    Product.countDocuments({ seller: seller._id, isActive: true }),
+  const live = { seller: seller._id, isActive: true };
+  const [productCount, offerCount, sold, featured] = await Promise.all([
+    Product.countDocuments(live),
+    Product.countDocuments(buildOffersProductFilter(live)),
+    Product.aggregate([{ $match: live }, { $group: { _id: null, total: { $sum: { $ifNull: ['$soldCount', 0] } } } }]),
     featuredProductsFor(seller),
   ]);
-  res.json({ success: true, data: { ...formatSellerPublic(seller), productCount, featuredProducts: featured.map((p) => formatProduct(p)) } });
+  res.json({
+    success: true,
+    data: {
+      ...formatSellerPublic(seller),
+      productCount,
+      offerCount,
+      soldCount: sold[0]?.total || 0,
+      featuredProducts: featured.map((p) => formatProduct(p)),
+    },
+  });
 });

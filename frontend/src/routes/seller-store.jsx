@@ -38,6 +38,7 @@ export async function loader({ params, request }) {
         minPrice: pick('minPrice'),
         maxPrice: pick('maxPrice'),
         inStock: pick('inStock'),
+        offers: pick('offers'),
       },
     }),
     apiGetSafe(`/sellers/${encodeURIComponent(slug)}/categories`),
