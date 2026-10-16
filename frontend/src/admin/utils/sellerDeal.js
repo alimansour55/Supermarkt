@@ -9,6 +9,7 @@ import { cairoDayStart } from './sellerFeesAdmin.js';
 export const RATE_SOURCES = {
   seller_free: { ar: 'فترة بدون عمولة', en: 'Commission-free period', tone: 'bg-emerald-50 text-emerald-800' },
   rule: { ar: 'قاعدة / حملة', en: 'Rule / campaign', tone: 'bg-violet-50 text-violet-800' },
+  product: { ar: 'نسبة خاصة بالمنتج', en: 'Product’s own rate', tone: 'bg-amber-50 text-amber-800' },
   seller_category: { ar: 'اتفاق خاص للقسم', en: 'Seller deal for this category', tone: 'bg-primary-50 text-primary-800' },
   seller: { ar: 'نسبة خاصة بالبائع', en: 'Seller’s own rate', tone: 'bg-primary-50 text-primary-800' },
   category: { ar: 'نسبة القسم العامة', en: 'Category standard rate', tone: 'bg-slate-100 text-slate-700' },
@@ -62,6 +63,9 @@ export const HISTORY_FIELDS = {
   reason: ['السبب', 'Reason'],
   scheduledDeal: ['تغيير مجدول', 'Scheduled change'],
   scheduledDealCancelled: ['إلغاء تغيير مجدول', 'Cancelled scheduled change'],
+  productCommission: ['عمولة منتج', 'Product commission'],
+  warning: ['إنذار', 'Warning'],
+  warningWithdrawn: ['سحب إنذار', 'Warning withdrawn'],
 };
 
 const LOGIN_ACTIONS = {
@@ -105,6 +109,9 @@ export function formatHistoryValue(key, value, { isAr = false, lookup = {} } = {
     return `${fmtDay(value.applyAt, isAr)} — ${(value.fields || []).map((f) => historyFieldLabel(f, isAr)).join('، ')}`;
   }
   if (key === 'scheduledDealCancelled' && typeof value === 'object') return fmtDay(value.applyAt, isAr);
+  if (key === 'productCommission' && typeof value === 'object') return `${value.product}: ${value.rate == null ? (isAr ? 'حسب الاتفاق' : 'seller deal') : `${value.rate}%`}`;
+  if (key === 'warning' && typeof value === 'object') return `${value.strike ? (isAr ? 'إنذار' : 'Strike') : (isAr ? 'تنبيه' : 'Notice')}: ${value.text || ''}`;
+  if (key === 'warningWithdrawn' && typeof value === 'object') return fmtDay(value.at, isAr);
   if (key.startsWith('login.') && typeof value === 'object') return value.user || '';
   if (key.endsWith('Url')) return isAr ? 'صورة' : 'image';
   if (Array.isArray(value)) return value.length ? value.join('، ') : '—';
@@ -118,7 +125,7 @@ export function historyLines(row, opts = {}) {
   return Object.entries(row?.changes || {})
     .filter(([k]) => !HIDDEN_KEYS.has(k))
     .map(([key, ch]) => {
-      const single = key.startsWith('login.') || key === 'scheduledDeal' || key === 'scheduledDealCancelled';
+      const single = key.startsWith('login.') || ['scheduledDeal', 'scheduledDealCancelled', 'warning', 'warningWithdrawn'].includes(key);
       return {
         key,
         label: historyFieldLabel(key, isAr),

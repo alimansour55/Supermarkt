@@ -6,6 +6,7 @@ import { sellerApi } from '../../services/sellerApi';
 import { formatPrice } from '../../utils/formatters';
 import { LEDGER_TYPE, PAYOUT_STATUS, label } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
+import MonthlyStatementCard from '../MonthlyStatementCard';
 import { PageSkeleton } from '../ui';
 
 /** The seller's own fee terms, so it knows what it pays before it sells. */
@@ -109,6 +110,14 @@ export default function SellerFinancePage() {
       </p>
 
       {finance.fees && <FeeTerms fees={finance.fees} isAr={isAr} />}
+
+      <MonthlyStatementCard
+        isAr={isAr}
+        load={sellerApi.getMonthlyStatement}
+        exportCsv={sellerApi.exportMonthlyStatement}
+        onError={(msg) => toast.error(msg)}
+        className="shadow-sm"
+      />
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <h2 className="border-b border-slate-100 px-5 py-3 font-bold">{isAr ? 'التحويلات' : 'Payouts'}</h2>

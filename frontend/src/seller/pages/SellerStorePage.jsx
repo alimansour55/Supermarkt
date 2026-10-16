@@ -122,6 +122,7 @@ function ProfileSection({ seller, isAr, reload }) {
 function DocumentsSection({ seller, isAr, reload }) {
   const toast = useToast();
   const [type, setType] = useState('commercial_register');
+  const [expiresOn, setExpiresOn] = useState('');
   const [busy, setBusy] = useState(false);
 
   const upload = async (e) => {
@@ -130,7 +131,8 @@ function DocumentsSection({ seller, isAr, reload }) {
     if (!file) return;
     setBusy(true);
     try {
-      await sellerApi.uploadDocument(type, file);
+      await sellerApi.uploadDocument(type, file, expiresOn || undefined);
+      setExpiresOn('');
       toast.success(isAr ? 'تم رفع المستند' : 'Document uploaded');
       reload();
     } catch (err) {
@@ -165,6 +167,11 @@ function DocumentsSection({ seller, isAr, reload }) {
                 <span>
                   <span className="block font-semibold">{label(DOCUMENT_TYPES, d.type, isAr)}</span>
                   {d.note && <span className="block text-xs text-slate-500">{d.note}</span>}
+                  {d.expiresAt && (
+                    <span className={`block text-xs ${new Date(d.expiresAt) - Date.now() < 30 * 86400000 ? 'font-semibold text-amber-700' : 'text-slate-500'}`}>
+                      {isAr ? 'ينتهي في ' : 'Expires on '}{new Date(d.expiresAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB')}
+                    </span>
+                  )}
                 </span>
               </a>
               <div className="flex items-center gap-2">
@@ -183,6 +190,10 @@ function DocumentsSection({ seller, isAr, reload }) {
         <select className={`${inputCls} w-auto`} value={type} onChange={(e) => setType(e.target.value)}>
           {Object.keys(DOCUMENT_TYPES).map((t) => <option key={t} value={t}>{label(DOCUMENT_TYPES, t, isAr)}</option>)}
         </select>
+        <label className="flex items-center gap-1.5 text-xs text-slate-500">
+          {isAr ? 'ينتهي في (اختياري)' : 'Expires on (optional)'}
+          <input type="date" className={`${inputCls} w-auto`} value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} />
+        </label>
         <label className={`inline-flex cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 ${busy ? 'pointer-events-none opacity-50' : ''}`}>
           <FileUp className="h-4 w-4" />
           {isAr ? 'رفع صورة' : 'Upload image'}

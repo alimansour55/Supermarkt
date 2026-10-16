@@ -35,6 +35,7 @@ import {
 } from '../services/marketplace.service.js';
 import { SELLER_DOCUMENT_TYPES, LISTING_STATUSES, sellerUserPermissions } from '../constants/marketplace.js';
 import { normalizePhone } from '../utils/phone.js';
+import { needsTermsAcceptance } from '../services/sellerLifecycle.service.js';
 import { parseCsv, toCsv, sendCsv } from '../utils/csvExport.js';
 import { logSellerActivity, diffFields } from '../services/sellerActivity.service.js';
 import { assertPriceEditable } from '../services/sellerPromotion.service.js';
@@ -73,9 +74,24 @@ export const getSellerMe = asyncHandler(async (req, res) => {
         minPayoutAmount: settings.minPayoutAmount,
         storeFulfillmentFeePerItem: settings.storeFulfillmentFeePerItem,
         sellerShipmentDeliveryFee: settings.sellerShipmentDeliveryFee,
+        termsVersion: settings.termsVersion || 1,
+        termsUpdatedAt: settings.termsUpdatedAt || null,
+        termsAr: settings.termsAr || '',
+        termsEn: settings.termsEn || '',
+        needsTerms: needsTermsAcceptance(req.seller, settings),
       },
     },
   });
+});
+
+/** The owner accepts the current seller terms (Seller Center blocks the owner until they do). */
+export const acceptSellerTerms = asyncHandler(async (req, res) => {
+  const settings = await getMarketplaceSettings();
+  req.seller.termsAcceptedVersion = settings.termsVersion || 1;
+  req.seller.termsAcceptedAt = new Date();
+  await req.seller.save();
+  await logSellerActivity(req, { action: 'store.terms_accepted', entityType: 'seller', entityId: req.seller._id, label: `v${req.seller.termsAcceptedVersion}` });
+  res.json({ success: true, data: { termsAcceptedVersion: req.seller.termsAcceptedVersion, termsAcceptedAt: req.seller.termsAcceptedAt } });
 });
 
 /** Legal identity is editable until the store is approved; storefront fields any time. */
@@ -167,7 +183,11 @@ export const uploadSellerDocument = asyncHandler(async (req, res) => {
 
   // ID cards and registers are private: no public URL, staff see them through expiring links.
   const up = await uploadPrivateFileToCloudinary(req.file, CLOUDINARY_FOLDERS.sellerDocuments);
-  req.seller.documents.push({ type, publicId: up.publicId, format: up.format, private: true });
+  const expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : null;
+  req.seller.documents.push({
+    type, publicId: up.publicId, format: up.format, private: true,
+    expiresAt: expiresAt && !Number.isNaN(expiresAt.getTime()) ? expiresAt : null,
+  });
   await req.seller.save();
   res.status(201).json({ success: true, data: documentsWithLinks(req.seller.documents) });
 });
@@ -273,6 +293,7 @@ export function formatSellerProduct(product) {
     media: mediaList(product) || [],
     pendingMedia: mediaList(product.pendingChanges),
     listingStatus: product.listingStatus,
+    sellerCommissionRate: product.sellerCommissionRate ?? null,
     reviewNote: product.reviewNote || '',
     submittedAt: product.submittedAt,
     reviewedAt: product.reviewedAt,

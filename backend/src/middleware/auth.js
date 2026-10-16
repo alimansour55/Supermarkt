@@ -107,7 +107,7 @@ export const sellerOnly = [protect, restrictTo(...SELLER_ROLES), loadSeller];
 
 /** Seller writes that change the catalog — blocked once suspended or rejected. */
 export const sellerCanEditCatalog = (req, res, next) => {
-  if (['suspended', 'rejected'].includes(req.seller?.status)) {
+  if (['suspended', 'rejected', 'closed'].includes(req.seller?.status)) {
     return next(new AppError('Your seller account cannot make changes right now', 403));
   }
   next();

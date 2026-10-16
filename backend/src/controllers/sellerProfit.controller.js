@@ -74,7 +74,7 @@ export const previewFeesAdmin = asyncHandler(async (req, res) => {
 
   let product = null;
   if (b.productId && isId(b.productId)) {
-    product = await Product.findById(b.productId).select('category categoryAncestors mainCategory').lean();
+    product = await Product.findById(b.productId).select('category categoryAncestors mainCategory sellerCommissionRate').lean();
   } else if (b.categoryId && isId(b.categoryId)) {
     const cat = await Category.findById(b.categoryId).select('parentCategory ancestors').lean();
     const ancestors = (cat?.ancestors?.length ? cat.ancestors : [cat?.parentCategory]).filter(Boolean);

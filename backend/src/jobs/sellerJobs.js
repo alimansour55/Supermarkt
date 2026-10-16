@@ -12,6 +12,7 @@ import { runCartRecoveryJob } from '../services/cartRecovery.service.js';
 import { runSubscriptionFees, runScheduledPayouts } from '../services/sellerLedger.service.js';
 import { runScheduledDealChanges } from '../services/sellerDeal.service.js';
 import { runSellerEnforcement } from '../services/sellerMessage.service.js';
+import { runDocumentExpiry } from '../services/sellerLifecycle.service.js';
 import { releaseDueAffiliateCommissions } from '../services/affiliate.service.js';
 
 const EVERY_MS = 5 * 60 * 1000;
@@ -25,6 +26,7 @@ const tasks = [
   ['scheduled seller payouts', runScheduledPayouts],
   ['scheduled seller deal changes', runScheduledDealChanges],
   ['account-health notices', runSellerEnforcement],
+  ['seller document expiry', runDocumentExpiry],
   ['share & earn payouts', releaseDueAffiliateCommissions],
 ];
 let timer = null;

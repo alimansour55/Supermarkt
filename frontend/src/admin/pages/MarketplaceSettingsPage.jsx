@@ -29,16 +29,19 @@ export default function MarketplaceSettingsPage() {
   const toast = useToast();
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [publishTerms, setPublishTerms] = useState(false);
+  const [savedTerms, setSavedTerms] = useState({ ar: '', en: '' });
 
   useEffect(() => {
     adminApi.getMarketplaceSettings()
-      .then(({ data }) => setForm(data.data))
+      .then(({ data }) => { setForm(data.data); setSavedTerms({ ar: data.data.termsAr || '', en: data.data.termsEn || '' }); })
       .catch(() => toast.error(isAr ? 'تعذّر التحميل' : 'Could not load settings'));
   }, [isAr, toast]);
 
   if (!form) return <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div>;
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+  const termsChanged = (form.termsAr || '') !== savedTerms.ar || (form.termsEn || '') !== savedTerms.en;
   const enf = { autoWarnAtRisk: true, autoSuspend: false, maxStrikes: 3, strikeWindowDays: 90, ...(form.enforcement || {}) };
   const setEnf = (k) => (v) => setForm((f) => ({ ...f, enforcement: { ...enf, [k]: v } }));
   const Chevron = isAr ? ChevronLeft : ChevronRight;
@@ -52,6 +55,7 @@ export default function MarketplaceSettingsPage() {
         reviewContentEdits: form.reviewContentEdits,
         termsAr: form.termsAr,
         termsEn: form.termsEn,
+        publishTermsVersion: termsChanged && publishTerms,
         enforcement: {
           autoWarnAtRisk: enf.autoWarnAtRisk,
           autoSuspend: enf.autoSuspend,
@@ -60,6 +64,9 @@ export default function MarketplaceSettingsPage() {
         },
       });
       toast.success(isAr ? 'تم حفظ إعدادات السوق' : 'Marketplace settings saved');
+      if (termsChanged && publishTerms) setForm((f) => ({ ...f, termsVersion: (f.termsVersion || 1) + 1 }));
+      setSavedTerms({ ar: form.termsAr || '', en: form.termsEn || '' });
+      setPublishTerms(false);
     } catch (err) {
       toast.error(apiError(err, isAr ? 'تعذّر الحفظ' : 'Save failed'));
     } finally {
@@ -120,11 +127,27 @@ export default function MarketplaceSettingsPage() {
       </section>
 
       <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <h2 className="mb-4 font-bold">{isAr ? 'شروط البيع' : 'Seller terms'}</h2>
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-bold">{isAr ? 'شروط البيع' : 'Seller terms'}</h2>
+          <span className="text-xs text-text-muted">
+            {isAr ? `الإصدار ${form.termsVersion || 1}` : `Version ${form.termsVersion || 1}`}
+            {form.termsUpdatedAt && ` · ${new Date(form.termsUpdatedAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB')}`}
+            {' · '}<Link to="/admin/sellers?flag=terms" className="font-semibold text-primary-700 hover:underline">{isAr ? 'من لم يوافق بعد' : 'Who has not accepted'}</Link>
+          </span>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block text-sm"><span className="mb-1 block font-medium">{isAr ? 'بالعربية' : 'Arabic'}</span><textarea rows={8} className={inputCls} value={form.termsAr || ''} onChange={(e) => set('termsAr')(e.target.value)} dir="rtl" /></label>
           <label className="block text-sm"><span className="mb-1 block font-medium">{isAr ? 'بالإنجليزية' : 'English'}</span><textarea rows={8} className={inputCls} value={form.termsEn || ''} onChange={(e) => set('termsEn')(e.target.value)} dir="ltr" /></label>
         </div>
+        {termsChanged && (
+          <label className="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+            <input type="checkbox" className="mt-0.5" checked={publishTerms} onChange={(e) => setPublishTerms(e.target.checked)} />
+            <span>
+              <span className="block font-medium">{isAr ? 'نشر كإصدار جديد' : 'Publish as a new version'}</span>
+              <span className="block text-xs">{isAr ? 'سيُطلب من كل بائع الموافقة على الشروط الجديدة قبل متابعة العمل. اتركه فارغاً لتصحيح خطأ بسيط فقط.' : 'Every seller owner must accept the new terms before continuing. Leave unticked for a small wording fix.'}</span>
+            </span>
+          </label>
+        )}
       </section>
     </div>
   );

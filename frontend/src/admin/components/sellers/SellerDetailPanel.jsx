@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Ban, CheckCircle2, Circle, ExternalLink, RotateCcw, XCircle } from 'lucide-react';
+import { Archive, Ban, CheckCircle2, Circle, ExternalLink, RotateCcw, XCircle } from 'lucide-react';
 import { Link } from '../../../app/router';
 import Button from '../../../components/ui/Button';
 import Loader from '../../../components/ui/Loader';
@@ -9,7 +9,7 @@ import { categoryService } from '../../../services/apiServices';
 import { ACCOUNT_HEALTH, DOCUMENT_STATUS, DOCUMENT_TYPES, FULFILLMENT, LISTING_STATUS, SELLER_STATUS, apiError, label } from '../../../seller/sellerLabels';
 import StatusBadge from '../../../seller/StatusBadge';
 import { formatDate, formatMoneyLatin } from '../../../utils/formatters';
-import { SELLER_NEXT_ACTIONS, sellerChecklist } from '../../utils/sellerAdmin';
+import { SELLER_NEXT_ACTIONS, docExpiryState, sellerChecklist } from '../../utils/sellerAdmin';
 import SellerAccessSection from './SellerAccessSection';
 import SellerReasonDialog from './SellerReasonDialog';
 import SellerPenaltyForm from './SellerPenaltyForm';
@@ -24,6 +24,7 @@ import SellerMessagesTab from './SellerMessagesTab';
 import SellerActivityTab from './SellerActivityTab';
 import SellerTrendCard from './SellerTrendCard';
 import { hasPermission } from '../../adminPermissions';
+import MonthlyStatementCard from '../../../seller/MonthlyStatementCard';
 import { useAuth } from '../../../context/AuthContext';
 import FeeCalculator from '../sellerFees/FeeCalculator';
 import { cairoDate, cairoDayStart, categoryOptions, rangeFromPreset, toField, toNum } from '../../utils/sellerFeesAdmin';
@@ -160,6 +161,8 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reasonFor, setReasonFor] = useState('');
+  const [closureInfo, setClosureInfo] = useState(null);
+  const [reopenTo, setReopenTo] = useState('active');
   const [docReject, setDocReject] = useState(null); // { id, note } while typing a rejection note
   const [editingProfile, setEditingProfile] = useState(false);
   const [deal, setDeal] = useState(null);
@@ -184,6 +187,8 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
     .catch(() => setDeal({ error: true })), [sellerId]);
 
   useEffect(() => { load(); loadDeal(); }, [load, loadDeal]);
+  const loadStatement = useCallback((m) => adminApi.getSellerStatement(sellerId, m), [sellerId]);
+  const exportStatement = useCallback((m) => adminApi.exportSellerStatement(sellerId, m), [sellerId]);
   useEffect(() => {
     categoryService.getAll().then(({ data }) => setCategories(data.data || [])).catch(() => {});
     adminApi.getMarketplaceSettings().then(({ data }) => setPlans(data.data?.plans || [])).catch(() => {});
@@ -215,11 +220,16 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
 
   const refresh = () => { load(); loadDeal(); setHistoryKey((k) => k + 1); onChanged(); };
 
-  const changeStatus = async (status, reason = '') => {
+  const changeStatus = async (status, reason = '', { acknowledgeBalance = false } = {}) => {
     setBusy(true);
     try {
-      await adminApi.setSellerStatus(seller._id, { status, reason });
-      toast.success(isAr ? 'تم تحديث الحالة' : 'Status updated');
+      const { data } = await adminApi.setSellerStatus(seller._id, { status, reason, acknowledgeBalance });
+      const r = data.result || {};
+      toast.success(status === 'closed'
+        ? (isAr ? `تم إغلاق المتجر وإيقاف ${r.loginsTurnedOff || 0} حساب دخول` : `Store closed; ${r.loginsTurnedOff || 0} login(s) turned off`)
+        : r.loginsTurnedOn !== undefined
+          ? (isAr ? `أُعيد فتح المتجر وتشغيل ${r.loginsTurnedOn} حساب دخول` : `Store reopened; ${r.loginsTurnedOn} login(s) turned back on`)
+          : (isAr ? 'تم تحديث الحالة' : 'Status updated'));
       setReasonFor('');
       refresh();
     } catch (err) {
@@ -231,6 +241,13 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
 
   const requestStatus = async (status) => {
     if (status === 'rejected' || status === 'suspended') { setReasonFor(status); return; }
+    if (status === 'closed') {
+      setClosureInfo(null);
+      setReasonFor('closed');
+      adminApi.getSellerClosureCheck(seller._id).then(({ data }) => setClosureInfo(data.data)).catch(() => setClosureInfo({ openParcels: 0, owed: 0 }));
+      return;
+    }
+    if (seller.status === 'closed') { setReopenTo(status); setReasonFor('reopen'); return; }
     if (status === 'active') {
       const missing = sellerChecklist(seller).filter((i) => !i.done && i.key !== 'login');
       const name = isAr ? seller.nameAr : seller.nameEn;
@@ -273,9 +290,9 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
     }
   };
 
-  const reviewDoc = async (docId, status, note = '') => {
+  const reviewDoc = async (docId, status, note = '', extra = {}) => {
     try {
-      await adminApi.reviewSellerDocument(sellerId, docId, { status, note });
+      await adminApi.reviewSellerDocument(sellerId, docId, { status, note, ...extra });
       setDocReject(null);
       load();
     } catch (err) {
@@ -300,11 +317,17 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
     ...f,
     allowedFulfillment: f.allowedFulfillment.includes(mode) ? f.allowedFulfillment.filter((m) => m !== mode) : [...f.allowedFulfillment, mode],
   }));
-  const pendingDocs = (seller.documents || []).filter((d) => d.status === 'pending').length;
+  const pendingDocs = (seller.documents || []).filter((d) => d.status === 'pending' || docExpiryState(d) === 'expired').length;
 
   const actionButtons = canWrite && (
     <div className="flex flex-wrap gap-2">
-      {next.includes('active') && (
+      {seller.status === 'closed' && (
+        <>
+          <Button size="sm" disabled={busy} onClick={() => requestStatus('active')} className="gap-1.5"><RotateCcw className="h-4 w-4" />{isAr ? 'إعادة فتح المتجر' : 'Reopen store'}</Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => requestStatus('under_review')}>{isAr ? 'إعادة فتح للمراجعة أولاً' : 'Reopen for review first'}</Button>
+        </>
+      )}
+      {seller.status !== 'closed' && next.includes('active') && (
         <Button size="sm" disabled={busy} onClick={() => requestStatus('active')} className="gap-1.5">
           {seller.status === 'suspended' ? <RotateCcw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
           {seller.status === 'suspended' ? (isAr ? 'إعادة التفعيل' : 'Reactivate') : (isAr ? 'اعتماد وتفعيل' : 'Approve & activate')}
@@ -321,6 +344,9 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
       )}
       {next.includes('suspended') && (
         <Button size="sm" variant="outline" disabled={busy} onClick={() => requestStatus('suspended')} className="gap-1.5 text-red-700"><Ban className="h-4 w-4" />{isAr ? 'إيقاف المتجر' : 'Suspend'}</Button>
+      )}
+      {next.includes('closed') && (
+        <Button size="sm" variant="ghost" disabled={busy} onClick={() => requestStatus('closed')} className="gap-1.5 text-text-muted"><Archive className="h-4 w-4" />{isAr ? 'إغلاق المتجر نهائياً' : 'Close store'}</Button>
       )}
     </div>
   );
@@ -355,10 +381,15 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
         </div>
       </div>
 
-      {seller.statusReason && ['rejected', 'suspended'].includes(seller.status) && (
+      {seller.closure && seller.status === 'closed' && (
+        <p className="rounded-xl bg-slate-100 p-3 text-sm">
+          {isAr ? `أُغلق في ${fmtDate(seller.closure.closedAt, isAr)} — أُوقف ${seller.closure.logins} حساب دخول (تعود عند إعادة الفتح).` : `Closed on ${fmtDate(seller.closure.closedAt, isAr)} — ${seller.closure.logins} login(s) turned off (they come back when reopened).`}
+        </p>
+      )}
+      {seller.statusReason && ['rejected', 'suspended', 'closed'].includes(seller.status) && (
         <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{isAr ? 'السبب: ' : 'Reason: '}{seller.statusReason}</p>
       )}
-      {seller.status !== 'active' && <Checklist items={checklist} isAr={isAr} />}
+      {!['active', 'closed'].includes(seller.status) && <Checklist items={checklist} isAr={isAr} />}
       {actionButtons}
 
       {/* Tabs */}
@@ -426,6 +457,14 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
             <Row k={isAr ? 'الرقم الضريبي' : 'Tax ID'} v={seller.taxId} ltr />
             <Row k={isAr ? 'تاريخ الطلب' : 'Applied'} v={seller.createdAt && fmtDate(seller.createdAt, isAr)} />
             <Row k={isAr ? 'تاريخ الاعتماد' : 'Approved'} v={seller.approvedAt && fmtDate(seller.approvedAt, isAr)} />
+            {seller.terms && (
+              <Row
+                k={isAr ? 'شروط البيع' : 'Seller terms'}
+                v={seller.terms.needsAcceptance
+                  ? (isAr ? `لم يوافق على الإصدار ${seller.terms.currentVersion} بعد` : `Has not accepted version ${seller.terms.currentVersion} yet`)
+                  : (isAr ? `وافق على الإصدار ${seller.terms.acceptedVersion}${seller.terms.acceptedAt ? ` في ${fmtDate(seller.terms.acceptedAt, isAr)}` : ''}` : `Accepted version ${seller.terms.acceptedVersion}${seller.terms.acceptedAt ? ` on ${fmtDate(seller.terms.acceptedAt, isAr)}` : ''}`)}
+              />
+            )}
             {(seller.intendedCategories || []).length > 0 && (
               <Row k={isAr ? 'الأقسام المطلوبة' : 'Wants to sell'} v={seller.intendedCategories.map((c) => (isAr ? c.nameAr : c.nameEn)).join('، ')} />
             )}
@@ -474,8 +513,24 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
                     <span>
                       <span className="block font-medium">{label(DOCUMENT_TYPES, d.type, isAr)}</span>
                       {d.note && <span className="block text-xs text-text-muted">{d.note}</span>}
+                      {d.expiresAt && (
+                        <span className={`block text-xs ${docExpiryState(d) === 'expired' ? 'font-semibold text-red-700' : docExpiryState(d) === 'soon' ? 'font-semibold text-amber-700' : 'text-text-muted'}`}>
+                          {isAr ? 'ينتهي في ' : 'Expires on '}{fmtDate(d.expiresAt, isAr)}
+                        </span>
+                      )}
                     </span>
                   </a>
+                  {canWrite && (
+                    <label className="flex items-center gap-1 text-xs text-text-muted">
+                      {isAr ? 'ينتهي في' : 'Expires'}
+                      <input
+                        type="date"
+                        className="rounded-lg border border-border px-1.5 py-0.5"
+                        value={d.expiresAt ? cairoDate(new Date(d.expiresAt)) : ''}
+                        onChange={(e) => reviewDoc(d._id, d.status === 'expired' && e.target.value ? 'accepted' : d.status, d.note || '', { expiresAt: e.target.value ? cairoDayStart(e.target.value) : null })}
+                      />
+                    </label>
+                  )}
                   <div className="flex items-center gap-1.5">
                     <StatusBadge map={DOCUMENT_STATUS} value={d.status} isAr={isAr} />
                     {canWrite && d.status !== 'accepted' && <button type="button" onClick={() => reviewDoc(d._id, 'accepted')} className="rounded-lg px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-50">{isAr ? 'قبول' : 'Accept'}</button>}
@@ -743,6 +798,16 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
           {canWrite && canSeeMoney && (
             <SellerPenaltyForm sellerId={sellerId} isAr={isAr} onCharged={(b) => { setBalance(b); setProfit(null); }} />
           )}
+          {canSeeMoney && (
+            <MonthlyStatementCard
+              isAr={isAr}
+              load={loadStatement}
+              exportCsv={exportStatement}
+              onError={(msg) => toast.error(msg)}
+              fileName={`statement-${seller.slug}`}
+            />
+          )}
+
           <Card title={isAr ? 'بيانات استلام الأموال' : 'Payout details'}>
             <Row k={isAr ? 'البنك' : 'Bank'} v={seller.bank?.bankName} />
             <Row k={isAr ? 'صاحب الحساب' : 'Holder'} v={seller.bank?.accountName} />
@@ -756,7 +821,7 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
         </div>
       )}
 
-      {tab === 'products' && <SellerProductsTab sellerId={seller._id} isAr={isAr} canWrite={canWrite} onChanged={refresh} />}
+      {tab === 'products' && <SellerProductsTab sellerId={seller._id} isAr={isAr} canWrite={canWrite} canEditDeal={hasPermission(me, 'settings:write')} onChanged={refresh} />}
       {tab === 'orders' && <SellerOrdersTab sellerId={seller._id} isAr={isAr} canSeeOrders={hasPermission(me, 'orders:read')} />}
       {tab === 'messages' && <SellerMessagesTab seller={seller} isAr={isAr} canWrite={canWrite} onSuspended={refresh} onRead={markMessagesRead} />}
       {tab === 'activity' && <SellerActivityTab sellerId={seller._id} isAr={isAr} />}
@@ -770,8 +835,9 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
         sellerName={name}
         isAr={isAr}
         busy={busy}
+        closure={reasonFor === 'closed' ? closureInfo : null}
         onCancel={() => setReasonFor('')}
-        onConfirm={(reason) => changeStatus(reasonFor, reason)}
+        onConfirm={(reason, opts) => changeStatus(reasonFor === 'reopen' ? reopenTo : reasonFor, reason, opts)}
       />
       )}
     </div>

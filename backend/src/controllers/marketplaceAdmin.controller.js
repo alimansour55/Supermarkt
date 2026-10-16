@@ -4,6 +4,7 @@ import Seller from '../models/Seller.js';
 import Product from '../models/Product.js';
 import User from '../models/User.js';
 import SellerMessage from '../models/SellerMessage.js';
+import SellerLedgerEntry from '../models/SellerLedgerEntry.js';
 import Shipment, { SHIPMENT_STATUSES } from '../models/Shipment.js';
 import { formatShipmentForOrder, updateShipmentStatus } from '../services/marketplaceOrder.service.js';
 import { AppError } from '../utils/AppError.js';
@@ -27,6 +28,8 @@ import { normalizePhone } from '../utils/phone.js';
 import { sellerChanges, isFeeField, STAFF_ONLY_FIELDS } from '../utils/sellerAudit.js';
 import { sanitizeCommissionRules } from '../services/sellerDeal.service.js';
 import { logSellerActivity } from '../services/sellerActivity.service.js';
+import { lifecycleStatusChange } from './sellerLifecycleAdmin.controller.js';
+import { needsTermsAcceptance, publishTermsVersion } from '../services/sellerLifecycle.service.js';
 import { FULFILLMENT_MODES, SELLER_STATUSES } from '../constants/marketplace.js';
 import {
   sanitizeFees,
@@ -84,6 +87,8 @@ export const updateMarketplaceAdminSettings = asyncHandler(async (req, res) => {
     if (b[f] !== undefined) doc[f] = String(b[f]).slice(0, 20000);
   });
   await doc.save();
+  // "Publish as a new version": every seller must accept the changed terms again.
+  if (b.publishTermsVersion === true) await publishTermsVersion(doc);
   invalidateMarketplaceSettingsCache();
   await logAudit({ req, action: 'update', entityType: 'marketplace_settings', entityId: doc._id, entityLabel: 'Marketplace settings' });
   res.json({ success: true, data: doc });
@@ -116,6 +121,7 @@ export const listSellers = asyncHandler(async (req, res) => {
     filter.$or = ['nameAr', 'nameEn', 'email', 'phone', 'slug', 'legalName', 'commercialRegisterNo']
       .map((f) => ({ [f]: { $regex: q, $options: 'i' } }));
   }
+  Object.assign(filter, await sellerListFilters(req.query));
   const sort = listSort(req.query);
   const [sellers, total, statusCounts, pendingListings] = await Promise.all([
     Seller.find(filter).sort(sort).skip(skip).limit(limit).lean(),
@@ -168,6 +174,41 @@ export const listSellers = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Extra Sellers-list filters: plan, unread replies, terms not accepted, documents expiring,
+ * money owed, account health. Each narrows by `_id` or a field; combined with AND.
+ */
+async function sellerListFilters(query) {
+  const and = [];
+  const idsIn = (ids) => and.push({ _id: { $in: ids } });
+  if (query.plan === '__none__') and.push({ feePlan: '' });
+  else if (query.plan) and.push({ feePlan: String(query.plan).slice(0, 40) });
+  if (query.unread === '1') idsIn(await SellerMessage.distinct('seller', { from: 'seller', staffReadAt: null }));
+  if (query.terms === 'pending') {
+    const settings = await getMarketplaceSettingsDoc();
+    const hasTerms = Boolean(String(settings.termsAr || '').trim() || String(settings.termsEn || '').trim());
+    and.push(hasTerms ? { termsAcceptedVersion: { $lt: settings.termsVersion || 1 } } : { _id: null });
+  }
+  if (query.docs === 'expiring') {
+    const soon = new Date(Date.now() + 30 * 86400000);
+    and.push({ documents: { $elemMatch: { $or: [{ status: 'expired' }, { status: 'accepted', expiresAt: { $ne: null, $lte: soon } }] } } });
+  }
+  if (query.balance === 'owed') {
+    const rows = await SellerLedgerEntry.aggregate([
+      { $match: { payout: null, type: { $ne: 'payout' }, availableAt: { $lte: new Date() } } },
+      { $group: { _id: '$seller', available: { $sum: '$amount' } } },
+      { $match: { available: { $gt: 0.009 } } },
+    ]);
+    idsIn(rows.map((r) => r._id));
+  }
+  if (['at_risk', 'fair', 'good'].includes(query.health)) {
+    const active = await Seller.find({ status: 'active' }).select('_id').limit(500).lean();
+    const perf = await Promise.all(active.map((s) => getSellerPerformance(s._id).then((p) => (p.health === query.health ? s._id : null)).catch(() => null)));
+    idsIn(perf.filter(Boolean));
+  }
+  return and.length ? { $and: and } : {};
+}
+
 async function findSeller(id) {
   if (!isId(id)) throw new AppError('Seller not found', 404);
   const seller = await Seller.findById(id);
@@ -182,7 +223,7 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
     { path: 'categoryCommissions.category', select: 'nameAr nameEn slug' },
     { path: 'statusHistory.changedBy', select: 'name role' },
   ]);
-  const [team, listingRows, performance, unreadMessages] = await Promise.all([
+  const [team, listingRows, performance, unreadMessages, termsSettings] = await Promise.all([
     sellerUsers(seller._id, { forStaff: true }),
     Product.aggregate([
       { $match: { seller: seller._id } },
@@ -190,6 +231,7 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
     ]),
     getSellerPerformance(seller._id),
     SellerMessage.countDocuments({ seller: seller._id, from: 'seller', staffReadAt: null }),
+    getMarketplaceSettingsDoc(),
   ]);
   res.json({
     success: true,
@@ -199,6 +241,13 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
       team,
       performance,
       unreadMessages,
+      terms: {
+        acceptedVersion: seller.termsAcceptedVersion || 0,
+        acceptedAt: seller.termsAcceptedAt,
+        currentVersion: termsSettings.termsVersion || 1,
+        needsAcceptance: needsTermsAcceptance(seller, termsSettings),
+      },
+      closure: seller.closure?.closedAt ? { closedAt: seller.closure.closedAt, reason: seller.closure.reason, logins: (seller.closure.loginIds || []).length } : null,
       listings: Object.fromEntries(listingRows.map((r) => [r._id, r.count])),
     },
   });
@@ -370,7 +419,9 @@ export const changeSellerStatusAdmin = asyncHandler(async (req, res) => {
   const { status, reason } = req.body || {};
   if (!SELLER_STATUSES.includes(status)) throw new AppError('Unknown status', 400);
   const from = seller.status;
-  await changeSellerStatus(seller, status, { reason, actor: req.user });
+  // Closing and reopening do more than flip the status (open-parcel check, logins off / on).
+  const extra = await lifecycleStatusChange(seller, status, { reason, acknowledgeBalance: req.body?.acknowledgeBalance === true, req });
+  if (!extra) await changeSellerStatus(seller, status, { reason, actor: req.user });
   await logAudit({
     req,
     action: status === 'active' ? 'approve' : status === 'rejected' ? 'reject' : 'status_change',
@@ -379,17 +430,23 @@ export const changeSellerStatusAdmin = asyncHandler(async (req, res) => {
     entityLabel: seller.nameEn,
     changes: { status: { from, to: status }, ...(reason ? { reason: { from: null, to: reason } } : {}) },
   });
-  res.json({ success: true, data: formatSellerPrivate(seller) });
+  res.json({ success: true, data: formatSellerPrivate(seller), ...(extra ? { result: extra } : {}) });
 });
 
 export const reviewSellerDocument = asyncHandler(async (req, res) => {
   const seller = await findSeller(req.params.id);
   const doc = seller.documents.id(req.params.docId);
   if (!doc) throw new AppError('Document not found', 404);
-  const { status, note } = req.body || {};
-  if (!['pending', 'accepted', 'rejected'].includes(status)) throw new AppError('Unknown document status', 400);
+  const { status, note, expiresAt } = req.body || {};
+  if (!['pending', 'accepted', 'rejected', 'expired'].includes(status)) throw new AppError('Unknown document status', 400);
   doc.status = status;
   doc.note = String(note ?? '').trim().slice(0, 500);
+  if (expiresAt !== undefined) {
+    const at = expiresAt ? new Date(expiresAt) : null;
+    if (at && Number.isNaN(at.getTime())) throw new AppError('Invalid expiry date', 400);
+    doc.expiresAt = at;
+    doc.remindedDays = [];
+  }
   await seller.save();
   res.json({ success: true, data: documentsWithLinks(seller.documents) });
 });

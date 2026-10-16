@@ -407,6 +407,8 @@ const productSchema = new mongoose.Schema(
     categorySuggestion: { type: String, trim: true, default: '', maxlength: 120 },
     /** Seller promotion currently discounting this product (prices are locked while set). */
     sellerPromotion: { type: mongoose.Schema.Types.ObjectId, ref: 'SellerPromotion', default: null },
+    /** Seller products: commission % for this one product, set by staff (null = the seller's deal). */
+    sellerCommissionRate: { type: Number, min: 0, max: 100, default: null },
     /** Seller products: alert the seller when available stock reaches this (null = 5). */
     lowStockThreshold: { type: Number, min: 0, default: null },
     /** Set when the low-stock alert went out; cleared once stock is back above the threshold. */

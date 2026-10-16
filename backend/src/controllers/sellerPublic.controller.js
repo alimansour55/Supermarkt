@@ -79,6 +79,7 @@ export async function validateSellerApplication(body, { requirePassword = true }
 /** Create the Seller + owner User for a validated application. */
 export async function createSellerWithOwner(data, { status = 'applied', actor = null, termsAccepted = false } = {}) {
   const slug = await uniqueSellerSlug(data.nameEn);
+  const termsVersion = termsAccepted ? ((await getMarketplaceSettings()).termsVersion || 1) : 0;
   const seller = await Seller.create({
     nameAr: data.nameAr,
     nameEn: data.nameEn,
@@ -95,6 +96,7 @@ export async function createSellerWithOwner(data, { status = 'applied', actor = 
     status,
     statusHistory: [{ status, changedBy: actor?._id || null }],
     termsAcceptedAt: termsAccepted ? new Date() : null,
+    termsAcceptedVersion: termsVersion,
     ...(status === 'active' ? { approvedAt: new Date(), approvedBy: actor?._id || null } : {}),
   });
 

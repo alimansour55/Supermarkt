@@ -17,11 +17,13 @@ import { ACCOUNT_HEALTH, SELLER_STATUS, apiError, label } from '../../seller/sel
 import StatusBadge from '../../seller/StatusBadge';
 import { formatDate, formatMoneyLatin } from '../../utils/formatters';
 import { downloadBlob } from '../utils/downloadBlob';
-import { sellerLoginUrl, sellersToCsv } from '../utils/sellerAdmin';
+import { sellerListParams, sellerLoginUrl, sellersToCsv } from '../utils/sellerAdmin';
 import SellerPortalCard from '../components/sellers/SellerPortalCard';
 import SellerDetailPanel from '../components/sellers/SellerDetailPanel';
 import CreateSellerPanel from '../components/sellers/CreateSellerPanel';
 import BulkDealForm from '../components/sellers/BulkDealForm';
+import BulkMessageForm from '../components/sellers/BulkMessageForm';
+import SellerListFilters from '../components/sellers/SellerListFilters';
 
 const count = (n) => formatMoneyLatin(n || 0, { maximumFractionDigits: 0 });
 const money = (n, isAr) => `${formatMoneyLatin(n || 0, { maximumFractionDigits: 0 })} ${isAr ? 'ج.م' : 'EGP'}`;
@@ -116,9 +118,11 @@ export default function SellersPage() {
   const [creating, setCreating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [bulkDeal, setBulkDeal] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const detailDirty = useRef(false);
 
-  const fetchSellers = useCallback((params) => adminApi.listSellers(params).then((res) => {
+  const fetchSellers = useCallback((params) => adminApi.listSellers(sellerListParams(params)).then((res) => {
     setCounts(res.data.counts || {});
     setSummary(res.data.summary || { pendingListings: 0 });
     return res;
@@ -126,7 +130,7 @@ export default function SellersPage() {
 
   const list = useAdminListPage({
     fetchFn: fetchSellers,
-    initialFilters: { status: '' },
+    initialFilters: { status: '', plan: '', health: '', flag: '' },
     syncUrl: true,
   });
 
@@ -299,17 +303,47 @@ export default function SellersPage() {
   };
 
   const selectedSellers = list.data.filter((s) => list.selectedIds.includes(s._id));
+  const bulkStatus = async (status) => {
+    let reason = '';
+    if (status === 'suspended') {
+      reason = window.prompt(isAr ? 'سبب الإيقاف (يظهر للبائعين)' : 'Reason for suspending (sellers see this)') || '';
+      if (!reason.trim()) return;
+    } else {
+      const ok = await confirm({
+        title: isAr ? `تفعيل ${selectedSellers.length} بائع؟` : `Activate ${selectedSellers.length} seller(s)?`,
+        message: isAr ? 'ستظهر منتجاتهم المعتمدة في المتجر فوراً.' : 'Their approved products go live right away.',
+        confirmLabel: isAr ? 'تفعيل' : 'Activate', cancelLabel: isAr ? 'إلغاء' : 'Cancel', variant: 'primary',
+      });
+      if (!ok) return;
+    }
+    setBulkBusy(true);
+    try {
+      const { data } = await adminApi.bulkSellerStatus({ sellerIds: list.selectedIds, status, reason });
+      const r = data.data;
+      toast.success(isAr ? `تم تحديث ${r.updated}${r.skipped.length ? ` · تخطي ${r.skipped.length}` : ''}` : `${r.updated} updated${r.skipped.length ? ` · ${r.skipped.length} skipped` : ''}`);
+      if (r.failed.length) toast.error(r.failed.map((f) => `${f.name}: ${f.message}`).join(' · '));
+      list.clearSelection();
+      onChanged();
+    } catch (err) {
+      toast.error(apiError(err, isAr ? 'تعذّر التحديث' : 'Update failed'));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
   const bulkBar = list.selectedIds.length > 0 ? (
     <div className="flex flex-wrap items-center gap-2 border-b border-border bg-primary-50/50 px-4 py-2.5 text-sm">
       <span className="font-semibold">{isAr ? `تم اختيار ${list.selectedIds.length}` : `${list.selectedIds.length} selected`}</span>
       {canEditSettings && (
         <Button size="sm" variant="secondary" onClick={() => setBulkDeal(true)} className="gap-1.5"><Percent className="h-4 w-4" />{isAr ? 'تغيير العمولة والرسوم' : 'Change commission & fees'}</Button>
       )}
+      <Button size="sm" variant="secondary" onClick={() => setBulkMessage(true)} className="gap-1.5"><MessageSquare className="h-4 w-4" />{isAr ? 'مراسلة' : 'Message'}</Button>
+      <Button size="sm" variant="secondary" disabled={bulkBusy} onClick={() => bulkStatus('active')}>{isAr ? 'تفعيل' : 'Activate'}</Button>
+      <Button size="sm" variant="secondary" disabled={bulkBusy} onClick={() => bulkStatus('suspended')} className="text-red-700">{isAr ? 'إيقاف' : 'Suspend'}</Button>
       <button type="button" onClick={list.clearSelection} className="ms-auto text-xs font-semibold text-text-muted hover:text-text">{isAr ? 'إلغاء الاختيار' : 'Clear selection'}</button>
     </div>
   ) : null;
 
-  const filtering = Boolean(list.q.trim() || status);
+  const filtering = Boolean(list.q.trim() || status || list.filters.plan || list.filters.health || list.filters.flag);
   const firstRun = !list.loading && total === 0 && !filtering;
 
   const statusTabs = [
@@ -318,6 +352,7 @@ export default function SellersPage() {
     { value: 'active', label: label(SELLER_STATUS, 'active', isAr), count: counts.active || 0 },
     { value: 'suspended', label: label(SELLER_STATUS, 'suspended', isAr), count: counts.suspended || 0 },
     { value: 'rejected', label: label(SELLER_STATUS, 'rejected', isAr), count: counts.rejected || 0 },
+    ...(counts.closed ? [{ value: 'closed', label: label(SELLER_STATUS, 'closed', isAr), count: counts.closed }] : []),
   ];
   const showNotices = summary.pendingListings > 0 || summary.unreadMessages > 0 || canSeeMoney;
 
@@ -388,7 +423,12 @@ export default function SellersPage() {
       ) : (
         <AdminListPage
           isAr={isAr}
-          filters={<StatusTabs tabs={statusTabs} value={status} onChange={(v) => list.patchFilters({ status: v })} />}
+          filters={(
+            <div className="flex w-full flex-col gap-2">
+              <StatusTabs tabs={statusTabs} value={status} onChange={(v) => list.patchFilters({ status: v })} />
+              <SellerListFilters isAr={isAr} filters={list.filters} plans={settings?.plans || []} onChange={list.patchFilters} />
+            </div>
+          )}
           searchPlaceholder={isAr ? 'ابحث بالاسم أو البريد أو الهاتف' : 'Search name, email or phone'}
           q={list.q}
           onSearchChange={list.setQ}
@@ -445,6 +485,12 @@ export default function SellersPage() {
             onDone={() => { list.clearSelection(); onChanged(); }}
             onCancel={() => setBulkDeal(false)}
           />
+        )}
+      </AdminSlidePanel>
+
+      <AdminSlidePanel open={bulkMessage} onClose={() => setBulkMessage(false)} title={isAr ? 'مراسلة البائعين' : 'Message sellers'} width="max-w-xl" isAr={isAr}>
+        {bulkMessage && (
+          <BulkMessageForm sellers={selectedSellers} isAr={isAr} onDone={() => { list.clearSelection(); onChanged(); }} onCancel={() => setBulkMessage(false)} />
         )}
       </AdminSlidePanel>
 

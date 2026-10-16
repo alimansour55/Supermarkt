@@ -11,8 +11,11 @@ const sellerDocumentSchema = new mongoose.Schema(
     format: { type: String, trim: true, default: '' },
     /** Stored as an authenticated Cloudinary asset; served via short-lived signed links. */
     private: { type: Boolean, default: false },
-    status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
+    status: { type: String, enum: ['pending', 'accepted', 'rejected', 'expired'], default: 'pending' },
     note: { type: String, trim: true, default: '' },
+    /** Licences and registers run out — reminders go 30 and 7 days before, then it is marked expired. */
+    expiresAt: { type: Date, default: null },
+    remindedDays: { type: [Number], default: [] },
     uploadedAt: { type: Date, default: Date.now },
   },
   { _id: true },
@@ -169,6 +172,15 @@ const sellerSchema = new mongoose.Schema(
     intendedCategories: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
     applicationNote: { type: String, trim: true, default: '', maxlength: 2000 },
     termsAcceptedAt: { type: Date, default: null },
+    /** MarketplaceSettings.termsVersion the owner last accepted (0 = never). */
+    termsAcceptedVersion: { type: Number, default: 0 },
+    /** Set when staff close the store for good; `loginIds` are the logins turned off then (re-enabled on reopen). */
+    closure: {
+      closedAt: { type: Date, default: null },
+      closedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      reason: { type: String, trim: true, default: '' },
+      loginIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    },
     internalNote: { type: String, trim: true, default: '', maxlength: 4000 },
 
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },

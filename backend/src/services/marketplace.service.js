@@ -124,14 +124,17 @@ const STATUS_NOTICE = {
   rejected: { ar: 'لم يتم اعتماد طلبك', en: 'Application not approved', msgAr: 'راجع السبب في صفحة بيانات المتجر ثم أعد الإرسال.', msgEn: 'See the reason on your Store profile page, then resubmit.' },
   suspended: { ar: 'تم إيقاف متجرك', en: 'Your store is suspended', msgAr: 'منتجاتك مخفية عن العملاء. تواصل مع الدعم.', msgEn: 'Your products are hidden from customers. Please contact support.' },
   under_review: { ar: 'طلبك قيد المراجعة', en: 'Application under review', msgAr: 'يراجع فريقنا بيانات متجرك الآن.', msgEn: 'Our team is reviewing your store now.' },
+  closed: { ar: 'تم إغلاق متجرك', en: 'Your store is closed', msgAr: 'منتجاتك مخفية ولم يعد بإمكانك البيع. ستصلك أي مستحقات متبقية.', msgEn: 'Your products are hidden and you can no longer sell. Any money still owed will be paid out.' },
 };
 
 const ALLOWED_TRANSITIONS = {
-  applied: ['under_review', 'active', 'rejected'],
-  under_review: ['active', 'rejected'],
-  active: ['suspended'],
-  suspended: ['active'],
-  rejected: ['under_review', 'active'],
+  applied: ['under_review', 'active', 'rejected', 'closed'],
+  under_review: ['active', 'rejected', 'closed'],
+  active: ['suspended', 'closed'],
+  suspended: ['active', 'closed'],
+  rejected: ['under_review', 'active', 'closed'],
+  // Reopening a closed store goes back through review or straight to active.
+  closed: ['under_review', 'active'],
 };
 
 export async function changeSellerStatus(seller, nextStatus, { reason = '', actor = null } = {}) {
@@ -139,7 +142,7 @@ export async function changeSellerStatus(seller, nextStatus, { reason = '', acto
   if (!ALLOWED_TRANSITIONS[seller.status]?.includes(nextStatus)) {
     throw new AppError(`Cannot change seller from ${seller.status} to ${nextStatus}`, 400);
   }
-  if ((nextStatus === 'rejected' || nextStatus === 'suspended') && !String(reason).trim()) {
+  if (['rejected', 'suspended', 'closed'].includes(nextStatus) && !String(reason).trim()) {
     throw new AppError('A reason is required', 400);
   }
   seller.status = nextStatus;
@@ -256,6 +259,7 @@ export function formatSellerPrivate(seller, { revealBank = false } = {}) {
     intendedCategories: s.intendedCategories || [],
     applicationNote: s.applicationNote || '',
     termsAcceptedAt: s.termsAcceptedAt,
+    termsAcceptedVersion: s.termsAcceptedVersion || 0,
     approvedAt: s.approvedAt,
     owner: s.owner,
     createdAt: s.createdAt,

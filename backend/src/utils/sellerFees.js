@@ -102,10 +102,11 @@ export function ruleMatches(rule, { seller, product, unitPrice, fulfilledBy, pla
  * Commission % for one sale and why. Most specific wins:
  *  1. seller commission-free period
  *  2. campaign rules marked "applies even to custom deals" (first match, in list order)
- *  3. seller × category deal → seller's own rate
- *  4. other rules (first match, in list order)
- *  5. marketplace × category rate
- *  6. the seller's plan rate → marketplace default
+ *  3. a rate staff set on this one product
+ *  4. seller × category deal → seller's own rate
+ *  5. other rules (first match, in list order)
+ *  6. marketplace × category rate
+ *  7. the seller's plan rate → marketplace default
  * A matching rule may also replace the fixed fee per item.
  */
 export function resolveCommission({ settings = {}, seller = null, product = null, unitPrice = 0, fulfilledBy = 'seller', now = new Date(), config = null }) {
@@ -131,6 +132,9 @@ export function resolveCommission({ settings = {}, seller = null, product = null
   const rules = settings.commissionRules || [];
   const strong = rules.find((r) => r.overrideSellerDeals && ruleMatches(r, ctx));
   if (strong) return out(strong.rate, 'rule', strong.name || '', strong);
+
+  const productRate = num(product?.sellerCommissionRate);
+  if (productRate !== null && Number.isFinite(productRate)) return out(productRate, 'product');
 
   const sellerCat = inCats(seller?.categoryCommissions);
   if (sellerCat !== null) return out(sellerCat, 'seller_category');

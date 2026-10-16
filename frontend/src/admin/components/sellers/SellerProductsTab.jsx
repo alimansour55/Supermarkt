@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, ExternalLink, Search, X } from 'lucide-react';
+import { Check, ExternalLink, Percent, Search, X } from 'lucide-react';
 import { Link } from '../../../app/router';
 import { useToast } from '../index';
 import { adminApi } from '../../adminApi';
@@ -18,7 +18,7 @@ const STATES = [
 ];
 
 /** One seller's catalog inside its panel: by state, searchable, approve / reject in place. */
-export default function SellerProductsTab({ sellerId, isAr, canWrite, onChanged }) {
+export default function SellerProductsTab({ sellerId, isAr, canWrite, canEditDeal, onChanged }) {
   const toast = useToast();
   const [state, setState] = useState('all');
   const [q, setQ] = useState('');
@@ -52,6 +52,27 @@ export default function SellerProductsTab({ sellerId, isAr, canWrite, onChanged 
       onChanged?.();
     } catch (err) {
       toast.error(apiError(err, isAr ? 'تعذّر التنفيذ' : 'Action failed'));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const setRate = async (p) => {
+    const current = p.sellerCommissionRate ?? '';
+    const input = window.prompt(
+      isAr ? 'عمولة خاصة لهذا المنتج % (اتركه فارغاً للرجوع لاتفاق البائع)' : 'Commission % for this product only (empty = the seller’s deal)',
+      String(current),
+    );
+    if (input === null) return;
+    const rate = input.trim() === '' ? null : Number(input);
+    if (rate !== null && !(rate >= 0 && rate <= 100)) { toast.error(isAr ? 'أدخل نسبة بين 0 و100' : 'Enter 0–100'); return; }
+    setBusy(p._id);
+    try {
+      await adminApi.setProductCommission(p._id, rate);
+      toast.success(isAr ? 'تم حفظ العمولة — تطبق على الطلبات الجديدة' : 'Saved — applies to new orders');
+      load();
+    } catch (err) {
+      toast.error(apiError(err, isAr ? 'تعذّر الحفظ' : 'Save failed'));
     } finally {
       setBusy('');
     }
@@ -102,6 +123,7 @@ export default function SellerProductsTab({ sellerId, isAr, canWrite, onChanged 
                     <span>{formatPrice(p.price)}</span>
                     <span>{isAr ? 'المخزون' : 'Stock'}: {p.stock ?? 0}</span>
                     {p.sku && <span dir="ltr">{p.sku}</span>}
+                    {p.sellerCommissionRate != null && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-800">{isAr ? 'عمولة خاصة' : 'Own rate'} {p.sellerCommissionRate}%</span>}
                   </p>
                   {p.reviewNote && p.listingStatus === 'rejected' && <p className="mt-1 text-xs text-red-700">{p.reviewNote}</p>}
                 </div>
@@ -114,6 +136,9 @@ export default function SellerProductsTab({ sellerId, isAr, canWrite, onChanged 
                   )}
                   {canWrite && waiting && p.hasMarketplaceCategory === false && (
                     <Link to={`/admin/listing-review?seller=${sellerId}`} className="text-xs font-semibold text-primary-700 hover:underline">{isAr ? 'يحتاج قسماً' : 'Needs a category'}</Link>
+                  )}
+                  {canEditDeal && (
+                    <button type="button" disabled={busy === p._id} onClick={() => setRate(p)} className="rounded-lg p-1.5 text-text-muted hover:bg-slate-50" title={isAr ? 'عمولة هذا المنتج' : 'Commission for this product'}><Percent className="h-4 w-4" /></button>
                   )}
                   <Link to={`/admin/products/${p._id}/edit`} className="rounded-lg p-1.5 text-text-muted hover:bg-slate-50" title={isAr ? 'فتح' : 'Open'}><ExternalLink className="h-4 w-4" /></Link>
                 </div>

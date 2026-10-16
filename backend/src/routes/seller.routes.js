@@ -11,7 +11,7 @@ import {
   uploadStorefrontMedia,
   getTrafficReport,
 } from '../controllers/sellerGrowth.controller.js';
-import { getMyFinance, getMyLedger } from '../controllers/sellerFinance.controller.js';
+import { getMyFinance, getMyLedger, getMyMonthlyStatement } from '../controllers/sellerFinance.controller.js';
 import { listMyReviews } from '../controllers/sellerReview.controller.js';
 import {
   listTeam,
@@ -28,6 +28,7 @@ import {
   uploadSellerDocument,
   deleteSellerDocument,
   resubmitApplication,
+  acceptSellerTerms,
   getSellerDashboard,
   listSellerProducts,
   getSellerProduct,
@@ -108,6 +109,7 @@ router.put('/me/two-factor', setMyTwoFactor);
 router.post('/me/sign-out-everywhere', signOutEverywhere);
 router.get('/activity', sellerOwnerOnly, listMyActivity);
 router.post('/me/resubmit', sellerOwnerOnly, resubmitApplication);
+router.post('/me/accept-terms', sellerOwnerOnly, acceptSellerTerms);
 
 router.get('/dashboard', getSellerDashboard);
 router.get('/summary', getSellerSummary);
@@ -123,6 +125,7 @@ router.get('/search', sellerQuickSearch);
 
 router.get('/finance', getMyFinance);
 router.get('/finance/ledger', getMyLedger);
+router.get('/finance/statement', getMyMonthlyStatement);
 router.get('/finance/payouts/:id/statement', getPayoutStatement);
 router.get('/reviews', listMyReviews);
 

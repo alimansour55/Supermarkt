@@ -7,6 +7,8 @@ import { parsePagination, paginationMeta } from '../utils/listQuery.js';
 import { toCsv, sendCsv } from '../utils/csvExport.js';
 import { logAudit } from '../services/auditLog.service.js';
 import { getMarketplaceSettings } from '../services/marketplace.service.js';
+import { monthlyStatement } from '../services/sellerStatement.service.js';
+import { statementCsvRows } from '../utils/sellerStatement.js';
 import {
   getSellerBalance,
   listLedger,
@@ -175,4 +177,20 @@ export const exportPendingPayoutsAdmin = asyncHandler(async (req, res) => {
   ]);
   await logAudit({ req, action: 'bulk', entityType: 'seller_payout', entityLabel: `Exported ${payouts.length} pending payouts` });
   sendCsv(res, 'seller-payouts.csv', csv);
+});
+
+/** GET /seller/finance/statement?month=YYYY-MM[&format=csv] — the seller's monthly statement + fee invoice data. */
+export const getMyMonthlyStatement = asyncHandler(async (req, res) => {
+  const statement = await monthlyStatement(req.seller, req.query.month);
+  if (req.query.format === 'csv') {
+    const csv = toCsv(statementCsvRows(statement), [
+      { header: 'date', value: (r) => r.date },
+      { header: 'type', value: (r) => r.type },
+      { header: 'reference', value: (r) => r.reference },
+      { header: 'note', value: (r) => r.note },
+      { header: 'amount', value: (r) => r.amount },
+    ]);
+    return sendCsv(res, `statement-${statement.month}.csv`, csv);
+  }
+  res.json({ success: true, data: statement });
 });

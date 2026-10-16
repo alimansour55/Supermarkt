@@ -111,6 +111,9 @@ const marketplaceSettingsSchema = new mongoose.Schema(
       strikeWindowDays: { type: Number, min: 7, max: 365, default: 90 },
       autoSuspend: { type: Boolean, default: false },
     },
+    /** Bumped when staff publish changed terms — sellers must accept the new version. */
+    termsVersion: { type: Number, min: 1, default: 1 },
+    termsUpdatedAt: { type: Date, default: null },
     termsAr: { type: String, trim: true, default: '' },
     termsEn: { type: String, trim: true, default: '' },
   },

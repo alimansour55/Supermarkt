@@ -20,7 +20,7 @@ export function sellerUserPermissions(user) {
 }
 
 /** Seller business lifecycle. Only `active` sellers have products on the storefront. */
-export const SELLER_STATUSES = ['applied', 'under_review', 'active', 'suspended', 'rejected'];
+export const SELLER_STATUSES = ['applied', 'under_review', 'active', 'suspended', 'rejected', 'closed'];
 
 export const SELLER_STATUS_META = {
   applied: { labelAr: 'طلب جديد', labelEn: 'Applied' },
@@ -28,6 +28,7 @@ export const SELLER_STATUS_META = {
   active: { labelAr: 'نشط', labelEn: 'Active' },
   suspended: { labelAr: 'موقوف', labelEn: 'Suspended' },
   rejected: { labelAr: 'مرفوض', labelEn: 'Rejected' },
+  closed: { labelAr: 'مغلق', labelEn: 'Closed' },
 };
 
 /**

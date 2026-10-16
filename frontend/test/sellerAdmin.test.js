@@ -91,3 +91,42 @@ test('deviceLabel and tempPasswordMessage', async () => {
   assert.match(msg, /abcdef2345/);
   assert.match(msg, /https:\/\/x\/seller-center\/login/);
 });
+
+test('docExpiryState and the documents checklist item', async () => {
+  const { docExpiryState, sellerChecklist } = await import('../src/admin/utils/sellerAdmin.js');
+  const now = new Date('2026-10-16T10:00:00Z');
+  assert.equal(docExpiryState({ status: 'accepted' }, now), null);
+  assert.equal(docExpiryState({ status: 'accepted', expiresAt: '2026-12-31' }, now), 'ok');
+  assert.equal(docExpiryState({ status: 'accepted', expiresAt: '2026-11-01' }, now), 'soon');
+  assert.equal(docExpiryState({ status: 'accepted', expiresAt: '2026-10-01' }, now), 'expired');
+  assert.equal(docExpiryState({ status: 'expired' }, now), 'expired');
+  const docsItem = (docs) => sellerChecklist({ documents: docs }).find((i) => i.key === 'documents').done;
+  assert.equal(docsItem([{ status: 'accepted' }]), true);
+  assert.equal(docsItem([{ status: 'expired' }]), false);
+});
+
+test('sellerListParams maps the "more filters" flag to its API parameter', async () => {
+  const { sellerListParams } = await import('../src/admin/utils/sellerAdmin.js');
+  assert.deepEqual(sellerListParams({ page: 1, status: 'active', flag: 'docs' }), { page: 1, status: 'active', docs: 'expiring' });
+  assert.deepEqual(sellerListParams({ flag: 'nope', plan: 'pro' }), { plan: 'pro' });
+  assert.deepEqual(sellerListParams({ flag: 'unread' }), { unread: '1' });
+});
+
+test('saved views: upsert by name, drop empty filters, survive broken storage', async () => {
+  const { upsertSavedView, readSavedViews, writeSavedViews } = await import('../src/admin/utils/sellerAdmin.js');
+  let views = upsertSavedView([], ' Pro at risk ', { plan: 'pro', health: 'at_risk', status: '' });
+  assert.deepEqual(views, [{ name: 'Pro at risk', filters: { plan: 'pro', health: 'at_risk' } }]);
+  views = upsertSavedView(views, 'pro AT RISK', { plan: 'pro' });
+  assert.equal(views.length, 1);
+  assert.deepEqual(upsertSavedView(views, '   ', {}), views);
+
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  writeSavedViews(views, storage);
+  assert.deepEqual(readSavedViews(storage), views);
+  mem.set('admin.sellers.savedViews', '{not json');
+  assert.deepEqual(readSavedViews(storage), []);
+  const throwing = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+  assert.deepEqual(readSavedViews(throwing), []);
+  assert.doesNotThrow(() => writeSavedViews(views, throwing));
+});

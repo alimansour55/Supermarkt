@@ -11,6 +11,7 @@ import SellerTopbar from './layout/SellerTopbar';
 import SellerShortcuts from './layout/SellerShortcuts';
 import { PageSkeleton } from './ui';
 import ForcePasswordChange from './settings/ForcePasswordChange';
+import AcceptTermsScreen from './settings/AcceptTermsScreen';
 
 const SELLER_ROLES = ['seller_owner', 'seller_staff'];
 const COLLAPSE_KEY = 'sellerCenter.sidebarCollapsed';
@@ -183,8 +184,15 @@ export default function SellerShell() {
             <PageSkeleton />
           ) : me.user?.mustChangePassword ? (
             <ForcePasswordChange isAr={isAr} onDone={reload} />
+          ) : me.marketplace?.needsTerms && me.user?.role === 'seller_owner' ? (
+            <AcceptTermsScreen marketplace={me.marketplace} isAr={isAr} onDone={reload} />
           ) : (
             <>
+              {me.marketplace?.needsTerms && (
+                <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  {isAr ? 'تم تحديث شروط البيع — يجب أن يوافق مالك المتجر عليها.' : 'The seller terms were updated — the store owner needs to accept them.'}
+                </div>
+              )}
               <StatusBanner seller={seller} isAr={isAr} />
               <VacationBanner seller={seller} isAr={isAr} />
               <Outlet context={{ me, seller, reload, isAr, summary, refreshSummary }} />

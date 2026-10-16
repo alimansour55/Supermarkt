@@ -34,7 +34,7 @@ const idOf = (v) => String(v?._id || v || '');
 export async function planMarketplaceItems(items = [], { deliveryZoneId = null, lang = 'ar' } = {}) {
   const ids = [...new Set(items.map((i) => idOf(i.productId || i.product)).filter((id) => mongoose.Types.ObjectId.isValid(id)))];
   const products = ids.length
-    ? await Product.find({ _id: { $in: ids } }).select('seller fulfilledBy sellerNameAr sellerNameEn category categoryAncestors mainCategory').lean()
+    ? await Product.find({ _id: { $in: ids } }).select('seller fulfilledBy sellerNameAr sellerNameEn category categoryAncestors mainCategory sellerCommissionRate').lean()
     : [];
   const productById = new Map(products.map((p) => [String(p._id), p]));
 

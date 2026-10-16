@@ -71,3 +71,11 @@ test('activityLabel names known actions and falls back to the raw key', async ()
   assert.equal(activityLabel('security.login', true), 'سجّل الدخول');
   assert.equal(activityLabel('weird.thing', false), 'weird.thing');
 });
+
+test('history formats product commission and warnings', async () => {
+  const { formatHistoryValue, historyLines } = await import('../src/admin/utils/sellerDeal.js');
+  assert.equal(formatHistoryValue('productCommission', { product: 'Honey', rate: 4 }), 'Honey: 4%');
+  assert.equal(formatHistoryValue('productCommission', { product: 'Honey', rate: null }), 'Honey: seller deal');
+  const [line] = historyLines({ changes: { warning: { from: null, to: { strike: true, text: 'Late again' } } } });
+  assert.deepEqual([line.single, line.to], [true, 'Strike: Late again']);
+});

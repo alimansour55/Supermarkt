@@ -8,8 +8,9 @@ import { SELLER_REASON_PRESETS } from '../../utils/sellerAdmin';
  * dialog offers common wording to pick from and keeps the text editable. Mount it fresh
  * (keyed by status) for each request so the text starts empty.
  */
-export default function SellerReasonDialog({ open, status, sellerName, isAr, busy, onCancel, onConfirm }) {
+export default function SellerReasonDialog({ open, status, sellerName, isAr, busy, closure = null, onCancel, onConfirm }) {
   const [reason, setReason] = useState('');
+  const [acknowledge, setAcknowledge] = useState(false);
   const fieldRef = useRef(null);
 
   useEffect(() => {
@@ -22,17 +23,26 @@ export default function SellerReasonDialog({ open, status, sellerName, isAr, bus
 
   if (!open) return null;
   const suspend = status === 'suspended';
+  const closing = status === 'closed';
+  const reopening = status === 'reopen';
   const presets = SELLER_REASON_PRESETS[status] || [];
-  const title = suspend
-    ? (isAr ? `إيقاف متجر ${sellerName}` : `Suspend ${sellerName}`)
+  const title = closing ? (isAr ? `إغلاق متجر ${sellerName} نهائياً` : `Close ${sellerName} for good`)
+    : reopening ? (isAr ? `إعادة فتح ${sellerName}` : `Reopen ${sellerName}`)
+    : suspend ? (isAr ? `إيقاف متجر ${sellerName}` : `Suspend ${sellerName}`)
     : (isAr ? `رفض طلب ${sellerName}` : `Reject ${sellerName}`);
-  const effect = suspend
-    ? (isAr ? 'ستختفي منتجات البائع من المتجر فوراً حتى إعادة التفعيل. يمكنه الدخول لكن لا يستطيع البيع.' : 'Their products disappear from the store right away until you reactivate them. They can still sign in but cannot sell.')
-    : (isAr ? 'سيرى البائع السبب في مركز البائعين ويمكنه تعديل بياناته وإعادة التقديم.' : 'The seller sees this reason in Seller Center and can fix their details and apply again.');
+  const effect = closing
+    ? (isAr ? 'تختفي كل منتجاته، وتتوقف كل حسابات الدخول، وتُلغى التغييرات المجدولة. أي مستحقات متبقية تُحوَّل له كالمعتاد. يمكن إعادة الفتح لاحقاً.' : 'All products disappear, every login is turned off and scheduled changes are cancelled. Money still owed is paid out as usual. You can reopen later.')
+    : reopening ? (isAr ? 'تعود حسابات الدخول التي أُوقفت عند الإغلاق، وتظهر منتجاته المعتمدة مجدداً.' : 'The logins turned off at closing come back and approved products go live again.')
+    : suspend
+      ? (isAr ? 'ستختفي منتجات البائع من المتجر فوراً حتى إعادة التفعيل. يمكنه الدخول لكن لا يستطيع البيع.' : 'Their products disappear from the store right away until you reactivate them. They can still sign in but cannot sell.')
+      : (isAr ? 'سيرى البائع السبب في مركز البائعين ويمكنه تعديل بياناته وإعادة التقديم.' : 'The seller sees this reason in Seller Center and can fix their details and apply again.');
+  const blocked = closing && closure?.openParcels > 0;
+  const needsAck = closing && closure && closure.owed !== 0;
 
   const submit = (e) => {
     e.preventDefault();
-    if (reason.trim()) onConfirm(reason.trim());
+    if (!reason.trim() || blocked || (needsAck && !acknowledge)) return;
+    onConfirm(reason.trim(), { acknowledgeBalance: acknowledge });
   };
 
   return (
@@ -50,6 +60,18 @@ export default function SellerReasonDialog({ open, status, sellerName, isAr, bus
         </div>
         <h3 id="seller-reason-title" className="text-lg font-bold text-text">{title}</h3>
         <p className="mt-1 text-sm text-text-muted">{effect}</p>
+        {closing && !closure && <p className="mt-3 text-sm text-text-muted">{isAr ? 'جارٍ التحقق من الطلبات والرصيد…' : 'Checking orders and balance…'}</p>}
+        {blocked && (
+          <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">
+            {isAr ? `لديه ${closure.openParcels} شحنة مفتوحة. أكملها أو ألغها قبل الإغلاق.` : `They have ${closure.openParcels} open parcel(s). Finish or cancel them before closing.`}
+          </p>
+        )}
+        {needsAck && !blocked && (
+          <label className="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+            <input type="checkbox" className="mt-0.5" checked={acknowledge} onChange={(e) => setAcknowledge(e.target.checked)} />
+            {isAr ? `رصيده الحالي ${closure.owed} ج.م — سيتم تسويته (تحويل أو خصم) بعد الإغلاق.` : `Their balance is ${closure.owed} EGP — it will be settled (paid out or recovered) after closing.`}
+          </label>
+        )}
 
         {presets.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -83,8 +105,8 @@ export default function SellerReasonDialog({ open, status, sellerName, isAr, bus
 
         <div className="mt-6 flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>{isAr ? 'إلغاء' : 'Cancel'}</Button>
-          <Button type="submit" variant="danger" disabled={busy || !reason.trim()}>
-            {suspend ? (isAr ? 'إيقاف المتجر' : 'Suspend store') : (isAr ? 'رفض الطلب' : 'Reject application')}
+          <Button type="submit" variant={reopening ? 'primary' : 'danger'} disabled={busy || !reason.trim() || blocked || (closing && !closure) || (needsAck && !acknowledge)}>
+            {closing ? (isAr ? 'إغلاق المتجر' : 'Close store') : reopening ? (isAr ? 'إعادة الفتح' : 'Reopen') : suspend ? (isAr ? 'إيقاف المتجر' : 'Suspend store') : (isAr ? 'رفض الطلب' : 'Reject application')}
           </Button>
         </div>
       </form>

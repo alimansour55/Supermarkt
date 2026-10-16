@@ -15,10 +15,11 @@ export const sellerApi = {
   getMe: () => api.get('/seller/me'),
   updateProfile: (data) => api.put('/seller/me', data),
   updateBank: (data) => api.put('/seller/me/bank', data),
-  uploadDocument: (type, file) => {
+  uploadDocument: (type, file, expiresAt) => {
     const form = new FormData();
     form.append('type', type);
     form.append('file', file);
+    if (expiresAt) form.append('expiresAt', expiresAt);
     return api.post('/seller/me/documents', form);
   },
   deleteDocument: (docId) => api.delete(`/seller/me/documents/${docId}`),
@@ -33,6 +34,9 @@ export const sellerApi = {
   getSummary: () => api.get('/seller/summary'),
   getMessages: () => api.get('/seller/messages'),
   replyMessage: (data) => api.post('/seller/messages', data),
+  acceptTerms: () => api.post('/seller/me/accept-terms'),
+  getMonthlyStatement: (month) => api.get('/seller/finance/statement', { params: { month } }),
+  exportMonthlyStatement: (month) => api.get('/seller/finance/statement', { params: { month, format: 'csv' }, responseType: 'blob' }),
   getHome: (params) => api.get('/seller/home', { params }),
   getSalesReport: (params) => api.get('/seller/reports/sales', { params }),
   downloadSalesReport: (params) => api.get('/seller/reports/sales', { params: { ...params, format: 'csv' }, responseType: 'blob' }),

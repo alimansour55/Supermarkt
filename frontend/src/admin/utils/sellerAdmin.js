@@ -48,7 +48,7 @@ export function sellerChecklist(seller) {
     },
     {
       key: 'documents',
-      done: docs.length > 0 && docs.every((d) => d.status === 'accepted'),
+      done: docs.length > 0 && docs.every((d) => d.status === 'accepted' && docExpiryState(d) !== 'expired'),
       ar: docs.length ? 'كل المستندات مقبولة' : 'رفع المستندات (السجل التجاري، البطاقة الضريبية…)',
       en: docs.length ? 'All documents accepted' : 'Documents uploaded (register, tax card…)',
     },
@@ -69,12 +69,22 @@ export function sellerChecklist(seller) {
 
 /** Seller status → the transitions staff can make from it (mirrors the backend rules). */
 export const SELLER_NEXT_ACTIONS = {
-  applied: ['active', 'under_review', 'rejected'],
-  under_review: ['active', 'rejected'],
-  active: ['suspended'],
-  suspended: ['active'],
-  rejected: ['under_review', 'active'],
+  applied: ['active', 'under_review', 'rejected', 'closed'],
+  under_review: ['active', 'rejected', 'closed'],
+  active: ['suspended', 'closed'],
+  suspended: ['active', 'closed'],
+  rejected: ['under_review', 'active', 'closed'],
+  closed: ['active', 'under_review'],
 };
+
+/** A document's expiry: 'expired', 'soon' (within 30 days), 'ok', or null when it has no date. */
+export function docExpiryState(doc, now = new Date()) {
+  if (doc?.status === 'expired') return 'expired';
+  if (!doc?.expiresAt) return null;
+  const left = new Date(doc.expiresAt) - now;
+  if (left <= 0) return 'expired';
+  return left <= 30 * 86400000 ? 'soon' : 'ok';
+}
 
 /** Common reasons, so staff do not retype them — they can still edit the text. */
 export const SELLER_REASON_PRESETS = {
@@ -82,6 +92,14 @@ export const SELLER_REASON_PRESETS = {
     { ar: 'المستندات غير واضحة أو ناقصة', en: 'Documents are unclear or missing' },
     { ar: 'بيانات النشاط التجاري غير مطابقة', en: 'Business details do not match' },
     { ar: 'الأقسام المطلوبة غير متاحة حالياً', en: 'We are not onboarding these categories right now' },
+  ],
+  closed: [
+    { ar: 'طلب البائع إغلاق المتجر', en: 'The seller asked to close the store' },
+    { ar: 'مخالفات متكررة لسياسة المتجر', en: 'Repeated policy breaches' },
+    { ar: 'لا نشاط منذ فترة طويلة', en: 'No activity for a long time' },
+  ],
+  reopen: [
+    { ar: 'طلب البائع إعادة فتح المتجر', en: 'The seller asked to reopen' },
   ],
   suspended: [
     { ar: 'تأخر متكرر في شحن الطلبات', en: 'Repeated late shipping' },
@@ -178,4 +196,45 @@ export function tempPasswordMessage({ storeName = '', email = '', password, logi
     `Temporary Seller Center password${store}: ${password}`,
     `Sign in: ${loginUrl} — you will choose a new password right after.`,
   ].join('\n');
+}
+
+// ── Sellers list filters & saved views ──
+
+/** "More filters" choices → the API query parameter each one sets. */
+export const SELLER_LIST_FLAGS = {
+  unread: { param: ['unread', '1'], ar: 'ردود لم تُقرأ', en: 'Unread replies' },
+  terms: { param: ['terms', 'pending'], ar: 'لم يوافق على الشروط الجديدة', en: 'New terms not accepted' },
+  docs: { param: ['docs', 'expiring'], ar: 'مستندات منتهية أو قريبة الانتهاء', en: 'Documents expiring / expired' },
+  balance: { param: ['balance', 'owed'], ar: 'له مستحقات الآن', en: 'Money owed now' },
+};
+
+/** List page params → API params (the `flag` filter becomes its own parameter). */
+export function sellerListParams(params = {}) {
+  const { flag, ...rest } = params;
+  const f = SELLER_LIST_FLAGS[flag];
+  return f ? { ...rest, [f.param[0]]: f.param[1] } : rest;
+}
+
+const VIEWS_KEY = 'admin.sellers.savedViews';
+
+/** Saved filter combinations — a per-browser convenience, so storage failures are ignored. */
+export function readSavedViews(storage = globalThis.localStorage) {
+  try {
+    const list = JSON.parse(storage?.getItem(VIEWS_KEY) || '[]');
+    return Array.isArray(list) ? list.filter((v) => v && typeof v.name === 'string' && v.filters && typeof v.filters === 'object') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeSavedViews(views, storage = globalThis.localStorage) {
+  try { storage?.setItem(VIEWS_KEY, JSON.stringify(views.slice(0, 12))); } catch { /* private mode */ }
+}
+
+/** Add or replace a view by name (case-insensitive); newest first. */
+export function upsertSavedView(views, name, filters) {
+  const clean = String(name || '').trim().slice(0, 40);
+  if (!clean) return views;
+  const kept = Object.fromEntries(Object.entries(filters || {}).filter(([, v]) => v !== '' && v != null));
+  return [{ name: clean, filters: kept }, ...views.filter((v) => v.name.toLowerCase() !== clean.toLowerCase())];
 }

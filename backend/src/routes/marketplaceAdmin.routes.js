@@ -24,6 +24,13 @@ import {
   withdrawSellerStrikeAdmin,
   getSellerTrendAdmin,
 } from '../controllers/sellerWorkAdmin.controller.js';
+import {
+  getClosureCheckAdmin,
+  setProductCommissionAdmin,
+  getSellerStatementAdmin,
+  bulkSellerStatusAdmin,
+  bulkSellerMessageAdmin,
+} from '../controllers/sellerLifecycleAdmin.controller.js';
 import { listSellerReviewsAdmin, setSellerReviewStatusAdmin } from '../controllers/sellerReview.controller.js';
 import { listInboundAdmin, receiveInboundAdmin } from '../controllers/sellerOps.controller.js';
 import { listPromotionsAdmin, reviewPromotionAdmin } from '../controllers/sellerGrowth.controller.js';
@@ -73,6 +80,8 @@ router.put('/settings', ...requirePermission('settings:write'), updateMarketplac
 router.get('/sellers', ...read, listSellers);
 router.post('/sellers', ...write, createSellerAdmin);
 router.post('/sellers/bulk-deal', ...requirePermission('settings:write'), bulkSellerDealAdmin);
+router.post('/sellers/bulk-status', ...write, bulkSellerStatusAdmin);
+router.post('/sellers/bulk-message', ...write, bulkSellerMessageAdmin);
 router.get('/sellers/:id', ...read, getSellerAdmin);
 router.put('/sellers/:id', ...write, updateSellerAdmin);
 router.post('/sellers/:id/status', ...write, changeSellerStatusAdmin);
@@ -98,12 +107,15 @@ router.get('/sellers/:id/messages', ...read, listSellerMessagesAdmin);
 router.post('/sellers/:id/messages', ...write, postSellerMessageAdmin);
 router.post('/sellers/:id/messages/:messageId/withdraw', ...write, withdrawSellerStrikeAdmin);
 router.get('/sellers/:id/trend', ...read, getSellerTrendAdmin);
+router.get('/sellers/:id/closure-check', ...read, getClosureCheckAdmin);
+router.get('/sellers/:id/statement', ...requirePermission('reports:read'), getSellerStatementAdmin);
 
 router.get('/listings', ...read, listListingQueue);
 router.post('/listings/:id/approve', ...write, approveListing);
 router.get('/promotions', ...read, listPromotionsAdmin);
 router.post('/promotions/:id/review', ...write, reviewPromotionAdmin);
 router.post('/listings/:id/reject', ...write, rejectListing);
+router.put('/listings/:id/commission', ...requirePermission('settings:write'), setProductCommissionAdmin);
 
 router.get('/shipments', ...requirePermission('orders:read'), listShipmentsAdmin);
 router.post('/shipments/:id/status', ...requirePermission('orders:write'), updateShipmentStatusAdmin);

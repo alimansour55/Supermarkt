@@ -8,6 +8,7 @@ export const SELLER_STATUS = {
   active: { ar: 'نشط', en: 'Active', tone: 'bg-emerald-100 text-emerald-800' },
   suspended: { ar: 'موقوف', en: 'Suspended', tone: 'bg-red-100 text-red-800' },
   rejected: { ar: 'مرفوض', en: 'Rejected', tone: 'bg-slate-200 text-slate-700' },
+  closed: { ar: 'مغلق', en: 'Closed', tone: 'bg-slate-700 text-white' },
 };
 
 export const LISTING_STATUS = {
@@ -74,6 +75,7 @@ export const DOCUMENT_STATUS = {
   pending: { ar: 'قيد المراجعة', en: 'Pending', tone: 'bg-amber-100 text-amber-900' },
   accepted: { ar: 'مقبول', en: 'Accepted', tone: 'bg-emerald-100 text-emerald-800' },
   rejected: { ar: 'مرفوض', en: 'Rejected', tone: 'bg-red-100 text-red-800' },
+  expired: { ar: 'منتهي الصلاحية', en: 'Expired', tone: 'bg-red-100 text-red-800' },
 };
 
 export function label(map, key, isAr) {
