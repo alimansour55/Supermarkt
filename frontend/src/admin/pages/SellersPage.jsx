@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, ChevronLeft, ChevronRight, Download, FileCheck2, LineChart, PackageSearch, Percent, Plus, Store, Wallet,
+  AlertTriangle, ChevronLeft, ChevronRight, Download, FileCheck2, LineChart, MessageSquare, PackageSearch, Percent, Plus, Store, Wallet,
 } from 'lucide-react';
 import { Link, useNavigate } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
@@ -252,6 +252,11 @@ export default function SellersPage() {
       <StatusBadge map={SELLER_STATUS} value={s.status} isAr={isAr} />
       {/* Only flag health when it needs attention — "healthy" is the quiet default. */}
       {s.health && s.health !== 'good' && healthCell(s)}
+      {s.unreadMessages > 0 && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">
+          <MessageSquare className="h-3.5 w-3.5" />{s.unreadMessages}
+        </span>
+      )}
     </div>
   );
 
@@ -314,7 +319,7 @@ export default function SellersPage() {
     { value: 'suspended', label: label(SELLER_STATUS, 'suspended', isAr), count: counts.suspended || 0 },
     { value: 'rejected', label: label(SELLER_STATUS, 'rejected', isAr), count: counts.rejected || 0 },
   ];
-  const showNotices = summary.pendingListings > 0 || canSeeMoney;
+  const showNotices = summary.pendingListings > 0 || summary.unreadMessages > 0 || canSeeMoney;
 
   return (
     <div className="space-y-4">
@@ -353,6 +358,11 @@ export default function SellersPage() {
           {summary.pendingListings > 0 && (
             <NoticeChip to="/admin/listing-review" icon={PackageSearch} isAr={isAr}>
               {isAr ? `${count(summary.pendingListings)} منتج ينتظر موافقتك` : `${count(summary.pendingListings)} products waiting for approval`}
+            </NoticeChip>
+          )}
+          {summary.unreadMessages > 0 && (
+            <NoticeChip to="/admin/sellers" icon={MessageSquare} isAr={isAr}>
+              {isAr ? `${count(summary.unreadMessages)} رد جديد من البائعين` : `${count(summary.unreadMessages)} new seller replies`}
             </NoticeChip>
           )}
           {canSeeMoney && owed > 0 && (

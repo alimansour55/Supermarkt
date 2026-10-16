@@ -39,6 +39,8 @@ export default function MarketplaceSettingsPage() {
   if (!form) return <div className="flex min-h-[200px] items-center justify-center"><Loader size="lg" /></div>;
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+  const enf = { autoWarnAtRisk: true, autoSuspend: false, maxStrikes: 3, strikeWindowDays: 90, ...(form.enforcement || {}) };
+  const setEnf = (k) => (v) => setForm((f) => ({ ...f, enforcement: { ...enf, [k]: v } }));
   const Chevron = isAr ? ChevronLeft : ChevronRight;
 
   const save = async () => {
@@ -50,6 +52,12 @@ export default function MarketplaceSettingsPage() {
         reviewContentEdits: form.reviewContentEdits,
         termsAr: form.termsAr,
         termsEn: form.termsEn,
+        enforcement: {
+          autoWarnAtRisk: enf.autoWarnAtRisk,
+          autoSuspend: enf.autoSuspend,
+          maxStrikes: Number(enf.maxStrikes),
+          strikeWindowDays: Number(enf.strikeWindowDays),
+        },
       });
       toast.success(isAr ? 'تم حفظ إعدادات السوق' : 'Marketplace settings saved');
     } catch (err) {
@@ -79,6 +87,37 @@ export default function MarketplaceSettingsPage() {
         </span>
         <Chevron className="h-5 w-5 shrink-0 text-primary-700" />
       </Link>
+
+      <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+        <h2 className="font-bold">{isAr ? 'الإنذارات وصحة الحساب' : 'Warnings & account health'}</h2>
+        <p className="mb-4 text-sm text-text-muted">
+          {isAr
+            ? 'ترسل الإنذارات من ملف البائع ← الرسائل والإنذارات. هنا تحدد متى يُعتبر البائع مخالفاً.'
+            : 'Warnings are sent from a seller’s panel → Messages & warnings. Here you decide when a seller has had too many.'}
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Toggle
+            label={isAr ? 'تنبيه تلقائي عند «صحة في خطر»' : 'Automatic notice when health is “at risk”'}
+            hint={isAr ? 'رسالة للبائع مرة أسبوعياً على الأكثر — لا تُحتسب إنذاراً' : 'At most once a week per seller — never counts as a strike'}
+            checked={enf.autoWarnAtRisk}
+            onChange={setEnf('autoWarnAtRisk')}
+          />
+          <Toggle
+            label={isAr ? 'إيقاف المتجر تلقائياً عند بلوغ حد الإنذارات' : 'Suspend automatically at the strike limit'}
+            hint={isAr ? 'بدون هذا الخيار يبقى القرار لك' : 'Without this, the decision stays with you'}
+            checked={enf.autoSuspend}
+            onChange={setEnf('autoSuspend')}
+          />
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">{isAr ? 'حد الإنذارات' : 'Strike limit'}</span>
+            <input type="number" min="1" max="20" dir="ltr" className={inputCls} value={enf.maxStrikes} onChange={(e) => setEnf('maxStrikes')(e.target.value)} />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">{isAr ? 'خلال (أيام)' : 'Within (days)'}</span>
+            <input type="number" min="7" max="365" dir="ltr" className={inputCls} value={enf.strikeWindowDays} onChange={(e) => setEnf('strikeWindowDays')(e.target.value)} />
+          </label>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <h2 className="mb-4 font-bold">{isAr ? 'شروط البيع' : 'Seller terms'}</h2>

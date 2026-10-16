@@ -1,6 +1,6 @@
 import {
   BarChart3, Bell, Boxes, History, Lock, RotateCcw, BellRing, MessageCircleQuestion, Palmtree, BadgePercent, Megaphone, LayoutTemplate, ClipboardList, FileText, Gauge, HelpCircle, LayoutDashboard, Landmark, Package, PackagePlus,
-  Settings, Star, Store, Tags, Truck, Upload, Users, Wallet, Warehouse,
+  Mail, Settings, Star, Store, Tags, Truck, Upload, Users, Wallet, Warehouse,
 } from 'lucide-react';
 
 /**
@@ -84,6 +84,7 @@ export const SELLER_NAV = [
       { to: '/seller-center/activity', ar: 'سجل النشاط', en: 'Activity log', Icon: History, ownerOnly: true },
     ],
   },
+  { id: 'messages', to: '/seller-center/messages', ar: 'رسائل المتجر', en: 'Store messages', Icon: Mail, badge: 'unreadStoreMessages', badgeTone: 'red' },
   { id: 'notifications', to: '/seller-center/notifications', ar: 'الإشعارات', en: 'Notifications', Icon: Bell, badge: 'unreadNotifications', badgeTone: 'red' },
   { id: 'help', to: '/seller-center/help', ar: 'مركز المساعدة', en: 'Help center', Icon: HelpCircle },
 ];

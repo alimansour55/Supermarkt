@@ -58,8 +58,8 @@ function formatReturn(order, r, shipment) {
   };
 }
 
-export const listSellerReturns = asyncHandler(async (req, res) => {
-  const sellerId = req.seller._id;
+/** Every return on this seller's items (newest first) plus counts per status. */
+export async function collectSellerReturns(sellerId) {
   const orders = await Order.find({ sellerIds: sellerId, 'returns.0': { $exists: true } })
     .select('orderNumber returns').sort({ updatedAt: -1 }).limit(500).lean();
   const lines = await sellerLines(sellerId, orders.map((o) => o._id));
@@ -74,9 +74,14 @@ export const listSellerReturns = asyncHandler(async (req, res) => {
     }
   }
   const counts = rows.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] || 0) + 1 }), {});
-  if (['pending', 'approved', 'rejected'].includes(req.query.status)) rows = rows.filter((r) => r.status === req.query.status);
   rows.sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
-  res.json({ success: true, data: rows, counts });
+  return { rows, counts };
+}
+
+export const listSellerReturns = asyncHandler(async (req, res) => {
+  const { rows, counts } = await collectSellerReturns(req.seller._id);
+  const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : '';
+  res.json({ success: true, data: status ? rows.filter((r) => r.status === status) : rows, counts });
 });
 
 /** The seller's side of a return ("item was sealed when shipped", "please send photos"…). */

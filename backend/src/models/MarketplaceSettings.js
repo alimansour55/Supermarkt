@@ -100,6 +100,17 @@ const marketplaceSettingsSchema = new mongoose.Schema(
       weekday: { type: Number, min: 0, max: 6, default: 0 },
       monthDay: { type: Number, min: 1, max: 31, default: 1 },
     },
+    /**
+     * Account-health enforcement. Warnings with a strike count toward `maxStrikes` within
+     * `strikeWindowDays`; reaching it suspends the store only when `autoSuspend` is on.
+     * `autoWarnAtRisk` sends a (non-strike) notice when health turns "at risk".
+     */
+    enforcement: {
+      autoWarnAtRisk: { type: Boolean, default: true },
+      maxStrikes: { type: Number, min: 1, max: 20, default: 3 },
+      strikeWindowDays: { type: Number, min: 7, max: 365, default: 90 },
+      autoSuspend: { type: Boolean, default: false },
+    },
     termsAr: { type: String, trim: true, default: '' },
     termsEn: { type: String, trim: true, default: '' },
   },

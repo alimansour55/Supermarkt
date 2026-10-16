@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import Seller from '../models/Seller.js';
 import Product from '../models/Product.js';
 import User from '../models/User.js';
+import SellerMessage from '../models/SellerMessage.js';
 import Shipment, { SHIPMENT_STATUSES } from '../models/Shipment.js';
 import { formatShipmentForOrder, updateShipmentStatus } from '../services/marketplaceOrder.service.js';
 import { AppError } from '../utils/AppError.js';
@@ -72,6 +73,13 @@ export const updateMarketplaceAdminSettings = asyncHandler(async (req, res) => {
     doc.commissionRules = sanitizeFeeRules(b.commissionRules, { planKeys: (doc.plans || []).map((p) => p.key) });
   }
   if (b.payoutSchedule !== undefined) doc.payoutSchedule = sanitizePayoutSchedule(b.payoutSchedule);
+  if (b.enforcement && typeof b.enforcement === 'object') {
+    const e = b.enforcement;
+    if (e.autoWarnAtRisk !== undefined) doc.set('enforcement.autoWarnAtRisk', e.autoWarnAtRisk === true);
+    if (e.autoSuspend !== undefined) doc.set('enforcement.autoSuspend', e.autoSuspend === true);
+    if (e.maxStrikes !== undefined) doc.set('enforcement.maxStrikes', Math.round(num(e.maxStrikes, 1, 20, 'Strikes')));
+    if (e.strikeWindowDays !== undefined) doc.set('enforcement.strikeWindowDays', Math.round(num(e.strikeWindowDays, 7, 365, 'Strike window')));
+  }
   ['termsAr', 'termsEn'].forEach((f) => {
     if (b[f] !== undefined) doc[f] = String(b[f]).slice(0, 20000);
   });
@@ -129,6 +137,14 @@ export const listSellers = asyncHandler(async (req, res) => {
     },
   ]) : [];
   const stats = new Map(productRows.map((r) => [String(r._id), r]));
+  const [unreadRows, unreadTotal] = await Promise.all([
+    ids.length ? SellerMessage.aggregate([
+      { $match: { seller: { $in: ids }, from: 'seller', staffReadAt: null } },
+      { $group: { _id: '$seller', count: { $sum: 1 } } },
+    ]) : [],
+    SellerMessage.countDocuments({ from: 'seller', staffReadAt: null }),
+  ]);
+  const unread = new Map(unreadRows.map((r) => [String(r._id), r.count]));
   // Health only means something for selling stores; one small query per active row on this page.
   const healthRows = await Promise.all(sellers.map((s) => (s.status === 'active'
     ? getSellerPerformance(s._id).then((p) => p.health).catch(() => null)
@@ -139,6 +155,7 @@ export const listSellers = asyncHandler(async (req, res) => {
     data: sellers.map((s, i) => ({
       ...formatSellerPrivate(s),
       health: healthRows[i],
+      unreadMessages: unread.get(String(s._id)) || 0,
       products: {
         total: stats.get(String(s._id))?.total || 0,
         live: stats.get(String(s._id))?.live || 0,
@@ -146,7 +163,7 @@ export const listSellers = asyncHandler(async (req, res) => {
       },
     })),
     counts: Object.fromEntries(SELLER_STATUSES.map((st) => [st, statusCounts.find((r) => r._id === st)?.count || 0])),
-    summary: { pendingListings },
+    summary: { pendingListings, unreadMessages: unreadTotal },
     pagination: paginationMeta(page, limit, total),
   });
 });
@@ -165,13 +182,14 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
     { path: 'categoryCommissions.category', select: 'nameAr nameEn slug' },
     { path: 'statusHistory.changedBy', select: 'name role' },
   ]);
-  const [team, listingRows, performance] = await Promise.all([
+  const [team, listingRows, performance, unreadMessages] = await Promise.all([
     sellerUsers(seller._id, { forStaff: true }),
     Product.aggregate([
       { $match: { seller: seller._id } },
       { $group: { _id: '$listingStatus', count: { $sum: 1 } } },
     ]),
     getSellerPerformance(seller._id),
+    SellerMessage.countDocuments({ seller: seller._id, from: 'seller', staffReadAt: null }),
   ]);
   res.json({
     success: true,
@@ -180,6 +198,7 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
       internalNote: seller.internalNote || '',
       team,
       performance,
+      unreadMessages,
       listings: Object.fromEntries(listingRows.map((r) => [r._id, r.count])),
     },
   });
@@ -381,12 +400,19 @@ export const listListingQueue = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query, 100);
   const state = req.query.state || 'pending';
   const filter = { seller: { $ne: null } };
-  if (state === 'pending') {
-    filter.$or = [{ listingStatus: 'pending_review' }, { pendingChangesAt: { $type: 'date' } }];
-  } else if (['approved', 'rejected', 'draft', 'paused'].includes(state)) {
-    filter.listingStatus = state;
+  const PENDING = { $or: [{ listingStatus: 'pending_review' }, { pendingChangesAt: { $type: 'date' } }] };
+  // Same rule as the seller's "out of stock" badge: live, no variants, nothing left.
+  const OUT_OF_STOCK = { listingStatus: 'approved', variants: { $size: 0 }, stock: { $lte: 0 } };
+  if (state === 'pending') Object.assign(filter, PENDING);
+  else if (state === 'out_of_stock') Object.assign(filter, OUT_OF_STOCK);
+  else if (['approved', 'rejected', 'draft', 'paused'].includes(state)) filter.listingStatus = state;
+  const sellerId = isId(req.query.seller) ? new mongoose.Types.ObjectId(String(req.query.seller)) : null;
+  if (sellerId) filter.seller = sellerId;
+  if (req.query.q) {
+    const q = escapeRegex(String(req.query.q).slice(0, 80));
+    const textMatch = ['nameAr', 'nameEn', 'sku'].map((f) => ({ [f]: { $regex: q, $options: 'i' } }));
+    filter.$and = [...(filter.$and || []), { $or: textMatch }];
   }
-  if (isId(req.query.seller)) filter.seller = new mongoose.Types.ObjectId(String(req.query.seller));
 
   const [items, total] = await Promise.all([
     Product.find(filter)
@@ -400,8 +426,19 @@ export const listListingQueue = asyncHandler(async (req, res) => {
       ]),
     Product.countDocuments(filter),
   ]);
+  // Per-state counts for one seller's tab strip in its panel.
+  let counts;
+  if (sellerId) {
+    const [byStatus, pending, out] = await Promise.all([
+      Product.aggregate([{ $match: { seller: sellerId } }, { $group: { _id: '$listingStatus', count: { $sum: 1 } } }]),
+      Product.countDocuments({ seller: sellerId, ...PENDING }),
+      Product.countDocuments({ seller: sellerId, ...OUT_OF_STOCK }),
+    ]);
+    counts = { ...Object.fromEntries(byStatus.map((r) => [r._id, r.count])), pending, out_of_stock: out, all: byStatus.reduce((n, r) => n + r.count, 0) };
+  }
   res.json({
     success: true,
+    counts,
     data: items.map((p) => ({
       ...formatSellerProduct(p),
       seller: p.seller ? { _id: p.seller._id, nameAr: p.seller.nameAr, nameEn: p.seller.nameEn, slug: p.seller.slug, status: p.seller.status } : null,

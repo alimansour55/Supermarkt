@@ -64,3 +64,10 @@ test('bulkDealChanges sends only what was chosen', async () => {
   assert.equal(free.feeOverrides.commissionFreeUntil, '2026-10-31T22:00:00.000Z');
   assert.deepEqual(bulkDealChanges({ ...base, freeMode: 'clear' }), { feeOverrides: { commissionFreeUntil: null } });
 });
+
+test('activityLabel names known actions and falls back to the raw key', async () => {
+  const { activityLabel } = await import('../src/admin/utils/sellerDeal.js');
+  assert.equal(activityLabel('staff.password_set', false), 'set a temporary password');
+  assert.equal(activityLabel('security.login', true), 'سجّل الدخول');
+  assert.equal(activityLabel('weird.thing', false), 'weird.thing');
+});

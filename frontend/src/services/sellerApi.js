@@ -31,6 +31,8 @@ export const sellerApi = {
 
   getDashboard: () => api.get('/seller/dashboard'),
   getSummary: () => api.get('/seller/summary'),
+  getMessages: () => api.get('/seller/messages'),
+  replyMessage: (data) => api.post('/seller/messages', data),
   getHome: (params) => api.get('/seller/home', { params }),
   getSalesReport: (params) => api.get('/seller/reports/sales', { params }),
   downloadSalesReport: (params) => api.get('/seller/reports/sales', { params: { ...params, format: 'csv' }, responseType: 'blob' }),

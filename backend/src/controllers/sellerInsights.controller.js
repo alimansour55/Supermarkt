@@ -14,6 +14,7 @@ import { getSellerBalance } from '../services/sellerLedger.service.js';
 import { getSellerPerformance } from '../services/sellerReputation.service.js';
 import { getUserUnreadCount } from '../services/userNotification.service.js';
 import { getMarketplaceSettings } from '../services/marketplace.service.js';
+import { unreadStoreMessages } from './sellerMessages.controller.js';
 import { LISTING_STATUSES, sellerUserPermissions } from '../constants/marketplace.js';
 
 const DAY = 86400000;
@@ -129,7 +130,7 @@ function parseRange(query) {
 
 export const getSellerSummary = asyncHandler(async (req, res) => {
   const sellerId = req.seller._id;
-  const [shipments, listings, unread, outOfStock, pendingReturns, unansweredQuestions] = await Promise.all([
+  const [shipments, listings, unread, outOfStock, pendingReturns, unansweredQuestions, storeMessages] = await Promise.all([
     Shipment.aggregate([
       { $match: { seller: sellerId, fulfilledBy: 'seller', status: { $in: ['pending', 'confirmed', 'packed'] } } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
@@ -143,6 +144,7 @@ export const getSellerSummary = asyncHandler(async (req, res) => {
     // Orders with a pending return — exact per-item matching happens on the Returns page.
     Order.countDocuments({ sellerIds: sellerId, returns: { $elemMatch: { status: 'pending' } } }),
     ProductQuestion.countDocuments({ seller: sellerId, answeredAt: null, status: 'visible' }),
+    unreadStoreMessages(sellerId),
   ]);
   const ship = Object.fromEntries(shipments.map((r) => [r._id, r.count]));
   const list = Object.fromEntries(listings.map((r) => [r._id, r.count]));
@@ -157,6 +159,7 @@ export const getSellerSummary = asyncHandler(async (req, res) => {
       unreadNotifications: unread,
       pendingReturns,
       unansweredQuestions,
+      unreadStoreMessages: storeMessages,
       onVacation: req.seller.vacation?.enabled === true,
     },
   });

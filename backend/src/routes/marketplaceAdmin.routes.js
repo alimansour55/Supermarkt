@@ -16,6 +16,14 @@ import {
   cancelSellerDealAdmin,
   bulkSellerDealAdmin,
 } from '../controllers/sellerDeal.controller.js';
+import {
+  listSellerReturnsAdmin,
+  listSellerActivityAdmin,
+  listSellerMessagesAdmin,
+  postSellerMessageAdmin,
+  withdrawSellerStrikeAdmin,
+  getSellerTrendAdmin,
+} from '../controllers/sellerWorkAdmin.controller.js';
 import { listSellerReviewsAdmin, setSellerReviewStatusAdmin } from '../controllers/sellerReview.controller.js';
 import { listInboundAdmin, receiveInboundAdmin } from '../controllers/sellerOps.controller.js';
 import { listPromotionsAdmin, reviewPromotionAdmin } from '../controllers/sellerGrowth.controller.js';
@@ -83,6 +91,13 @@ router.get('/sellers/:id/deal', ...read, getSellerDealAdmin);
 router.get('/sellers/:id/history', ...read, getSellerHistoryAdmin);
 router.post('/sellers/:id/deal-schedule', ...write, scheduleSellerDealAdmin);
 router.delete('/sellers/:id/deal-schedule/:changeId', ...write, cancelSellerDealAdmin);
+// One seller's work: returns, activity, messages & warnings, performance trend
+router.get('/sellers/:id/returns', ...requirePermission('orders:read'), listSellerReturnsAdmin);
+router.get('/sellers/:id/activity', ...read, listSellerActivityAdmin);
+router.get('/sellers/:id/messages', ...read, listSellerMessagesAdmin);
+router.post('/sellers/:id/messages', ...write, postSellerMessageAdmin);
+router.post('/sellers/:id/messages/:messageId/withdraw', ...write, withdrawSellerStrikeAdmin);
+router.get('/sellers/:id/trend', ...read, getSellerTrendAdmin);
 
 router.get('/listings', ...read, listListingQueue);
 router.post('/listings/:id/approve', ...write, approveListing);

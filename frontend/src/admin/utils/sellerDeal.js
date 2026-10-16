@@ -184,3 +184,43 @@ export function bulkDealChanges(form) {
   if (Object.keys(overrides).length) changes.feeOverrides = overrides;
   return changes;
 }
+
+/** Seller activity log action → short past-tense label (admin view). */
+const ACTIVITY = {
+  'product.create': ['أضاف منتجاً', 'added a product'],
+  'product.update': ['عدّل منتجاً', 'edited a product'],
+  'product.price': ['غيّر سعراً', 'changed a price'],
+  'product.stock': ['غيّر المخزون', 'changed stock'],
+  'product.submit': ['أرسل منتجاً للمراجعة', 'submitted a product'],
+  'product.pause': ['أوقف منتجاً', 'paused a product'],
+  'product.unpause': ['أعاد تشغيل منتج', 'resumed a product'],
+  'product.delete': ['حذف منتجاً', 'deleted a product'],
+  'product.duplicate': ['نسخ منتجاً', 'duplicated a product'],
+  'product.import': ['استورد منتجات', 'imported products'],
+  'inventory.update': ['حدّث السعر/المخزون', 'updated price/stock'],
+  'inventory.bulk': ['حدّث المخزون بالجملة', 'bulk-updated stock'],
+  'order.status': ['غيّر حالة طلب', 'updated an order'],
+  'order.return_note': ['كتب ملاحظة على مرتجع', 'noted a return'],
+  'store.profile': ['عدّل بيانات المتجر', 'edited the store profile'],
+  'store.bank': ['غيّر بيانات البنك', 'changed bank details'],
+  'store.vacation_on': ['بدأ إجازة', 'started a vacation'],
+  'store.vacation_off': ['أنهى الإجازة', 'ended the vacation'],
+  'store.message': ['أرسل رسالة للمتجر', 'messaged the store'],
+  'team.add': ['أضاف موظفاً', 'added a team member'],
+  'team.update': ['عدّل موظفاً', 'updated a team member'],
+  'security.login': ['سجّل الدخول', 'signed in'],
+  'security.password_change': ['غيّر كلمة المرور', 'changed their password'],
+  'security.password_reset': ['أعاد تعيين كلمة المرور', 'reset their password'],
+  'security.2fa_on': ['فعّل التحقق بخطوتين', 'turned on 2-step verification'],
+  'security.2fa_off': ['أوقف التحقق بخطوتين', 'turned off 2-step verification'],
+  'security.sign_out_all': ['سجّل الخروج من كل الأجهزة', 'signed out everywhere'],
+  'staff.login_added': ['أضاف حساب دخول', 'added a login'],
+  'staff.login_updated': ['عدّل حساب دخول', 'changed a login'],
+  'staff.password_set': ['وضع كلمة مرور مؤقتة', 'set a temporary password'],
+  'staff.signed_out': ['سجّل خروج حساب', 'signed a login out'],
+  'staff.login_removed': ['حذف حساب دخول', 'removed a login'],
+  'staff.owner_changed': ['غيّر مالك المتجر', 'changed the store owner'],
+  'staff.store_updated': ['عدّل بيانات المتجر', 'updated store details'],
+};
+
+export const activityLabel = (action, isAr) => (ACTIVITY[action] ? ACTIVITY[action][isAr ? 0 : 1] : action);

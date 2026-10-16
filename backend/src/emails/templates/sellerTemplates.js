@@ -172,3 +172,26 @@ export const sellerStaffChangeTemplate = (user, { change, seller } = {}) => {
     text: `${en} If you did not ask for this, contact the store team.`,
   };
 };
+
+/** A message or formal warning from store staff (the full text is also in Seller Center). */
+export const sellerStoreMessageTemplate = (user, { seller, body, kind = 'message', strike = false } = {}) => {
+  const warning = kind === 'warning';
+  const title = warning ? (strike ? 'إنذار رسمي على متجرك' : 'تنبيه بخصوص متجرك') : 'رسالة من فريق المتجر';
+  return {
+    subject: `${title}${seller?.nameAr ? ` — ${seller.nameAr}` : ''}`,
+    html: renderEmailLayout({
+      preheader: String(body || '').slice(0, 90),
+      title,
+      heading: title,
+      subtitle: esc(seller?.nameAr || seller?.nameEn || 'مركز البائعين — Seller Center'),
+      bodyHtml: `
+        <p style="margin: 0 0 16px;">مرحباً <strong>${esc(user.name)}</strong>،</p>
+        <div style="margin: 0 0 16px; padding: 12px 16px; border-radius: 12px; background: ${warning ? '#fef3c7' : '#f1f5f9'}; white-space: pre-wrap;">${esc(body)}</div>
+        ${strike ? '<p style="margin: 0 0 16px;">يُحتسب هذا الإنذار ضمن نقاط صحة حسابك. تكرار الإنذارات قد يؤدي إلى إيقاف المتجر.</p>' : ''}
+        ${renderButton(`${clientUrl()}/seller-center/messages`, 'عرض والرد')}
+      `,
+      footerNote: warning ? 'A formal notice from the store team — see Seller Center → Messages.' : 'A message from the store team — reply in Seller Center → Messages.',
+    }),
+    text: `${warning ? 'Notice' : 'Message'} from the store team:\n\n${body}\n\nReply in Seller Center: ${clientUrl()}/seller-center/messages`,
+  };
+};

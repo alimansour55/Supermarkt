@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { listMyMessages, replyMyMessage } from '../controllers/sellerMessages.controller.js';
 import { sellerOnly, sellerCanEditCatalog, sellerOwnerOnly, sellerCan } from '../middleware/auth.js';
 import { uploadSingle, uploadProductMediaMultiple, optionalUploadFields } from '../middleware/upload.js';
 import {
@@ -110,6 +111,8 @@ router.post('/me/resubmit', sellerOwnerOnly, resubmitApplication);
 
 router.get('/dashboard', getSellerDashboard);
 router.get('/summary', getSellerSummary);
+router.get('/messages', listMyMessages);
+router.post('/messages', replyMyMessage);
 router.get('/home', getSellerHome);
 router.get('/reports/sales', getSalesReport);
 router.get('/reports/traffic', getTrafficReport);

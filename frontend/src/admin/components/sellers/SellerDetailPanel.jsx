@@ -18,6 +18,12 @@ import SellerDealCard from './SellerDealCard';
 import SellerHistoryCard from './SellerHistoryCard';
 import ScheduledDealsCard from './ScheduledDealsCard';
 import { splitDealPayload } from '../../utils/sellerDeal';
+import SellerProductsTab from './SellerProductsTab';
+import SellerOrdersTab from './SellerOrdersTab';
+import SellerMessagesTab from './SellerMessagesTab';
+import SellerActivityTab from './SellerActivityTab';
+import SellerTrendCard from './SellerTrendCard';
+import { hasPermission } from '../../adminPermissions';
 import { useAuth } from '../../../context/AuthContext';
 import FeeCalculator from '../sellerFees/FeeCalculator';
 import { cairoDate, cairoDayStart, categoryOptions, rangeFromPreset, toField, toNum } from '../../utils/sellerFeesAdmin';
@@ -107,10 +113,14 @@ function overridesPayload(o) {
 
 const TABS = [
   { id: 'overview', ar: 'نظرة عامة', en: 'Overview' },
+  { id: 'products', ar: 'المنتجات', en: 'Products' },
+  { id: 'orders', ar: 'الطلبات والمرتجعات', en: 'Orders & returns' },
+  { id: 'messages', ar: 'الرسائل والإنذارات', en: 'Messages & warnings' },
   { id: 'documents', ar: 'المستندات', en: 'Documents' },
   { id: 'rules', ar: 'العمولة والرسوم', en: 'Fees & rules' },
   { id: 'payouts', ar: 'الأرباح والمدفوعات', en: 'Money' },
   { id: 'logins', ar: 'الدخول وكلمات المرور', en: 'Logins & passwords' },
+  { id: 'activity', ar: 'سجل النشاط', en: 'Activity' },
 ];
 
 /** Approval checklist — advisory, shown while the seller is not yet active. */
@@ -195,6 +205,13 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
   const dirty = useMemo(() => Boolean(form && initialForm && JSON.stringify(form) !== JSON.stringify(initialForm)), [form, initialForm]);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
+  // Opening the thread marks the seller's replies read: clear the badge here and in the list.
+  const markMessagesRead = () => {
+    if (!seller?.unreadMessages) return;
+    setSeller((s) => ({ ...s, unreadMessages: 0 }));
+    onChanged();
+  };
 
   const refresh = () => { load(); loadDeal(); setHistoryKey((k) => k + 1); onChanged(); };
 
@@ -330,8 +347,9 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
                 <ExternalLink className="h-3.5 w-3.5" />{isAr ? 'صفحة المتجر' : 'Store page'}
               </a>
             )}
-            <Link to={`/admin/listing-review?seller=${seller._id}`} className="text-primary-700 hover:underline">{isAr ? 'منتجات البائع' : 'Products'}</Link>
-            <Link to={`/admin/seller-shipments?filter=&seller=${seller._id}`} className="text-primary-700 hover:underline">{isAr ? 'الشحنات' : 'Parcels'}</Link>
+            <button type="button" onClick={() => setTab('products')} className="text-primary-700 hover:underline">{isAr ? 'منتجات البائع' : 'Products'}</button>
+            <button type="button" onClick={() => setTab('orders')} className="text-primary-700 hover:underline">{isAr ? 'الطلبات' : 'Orders'}</button>
+            <button type="button" onClick={() => setTab('messages')} className="text-primary-700 hover:underline">{isAr ? 'مراسلة البائع' : 'Message seller'}</button>
             {canSeeMoney && <Link to="/admin/seller-payouts" className="text-primary-700 hover:underline">{isAr ? 'المستحقات' : 'Payouts'}</Link>}
           </div>
         </div>
@@ -355,6 +373,8 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
           >
             {isAr ? t.ar : t.en}
             {t.id === 'documents' && pendingDocs > 0 && <span className="rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">{pendingDocs}</span>}
+            {t.id === 'messages' && seller.unreadMessages > 0 && <span className="rounded-full bg-red-100 px-1.5 text-[11px] font-semibold text-red-700">{seller.unreadMessages}</span>}
+            {t.id === 'products' && seller.listings?.pending_review > 0 && <span className="rounded-full bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-900">{seller.listings.pending_review}</span>}
             {t.id === 'rules' && dirty && <span className="h-2 w-2 rounded-full bg-amber-500" aria-label={isAr ? 'تغييرات غير محفوظة' : 'Unsaved changes'} />}
           </button>
         ))}
@@ -377,6 +397,8 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
               </div>
             )}
           </Card>
+
+          <SellerTrendCard sellerId={seller._id} isAr={isAr} />
 
           {deal && !deal.error && <SellerDealCard deal={deal} isAr={isAr} onEdit={canWrite ? () => setTab('rules') : undefined} />}
 
@@ -734,6 +756,10 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
         </div>
       )}
 
+      {tab === 'products' && <SellerProductsTab sellerId={seller._id} isAr={isAr} canWrite={canWrite} onChanged={refresh} />}
+      {tab === 'orders' && <SellerOrdersTab sellerId={seller._id} isAr={isAr} canSeeOrders={hasPermission(me, 'orders:read')} />}
+      {tab === 'messages' && <SellerMessagesTab seller={seller} isAr={isAr} canWrite={canWrite} onSuspended={refresh} onRead={markMessagesRead} />}
+      {tab === 'activity' && <SellerActivityTab sellerId={seller._id} isAr={isAr} />}
       {tab === 'logins' && <SellerAccessSection seller={seller} isAr={isAr} canWrite={canWrite} onTeamChange={(team) => setSeller((s) => ({ ...s, team }))} />}
 
       {reasonFor && (
