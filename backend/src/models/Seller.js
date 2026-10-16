@@ -26,6 +26,24 @@ const categoryCommissionSchema = new mongoose.Schema(
   { _id: false },
 );
 
+/**
+ * A deal change staff scheduled for later ("15% from 1 November"). `changes` holds only deal
+ * fields (commissionRate, categoryCommissions, feePlan, feeOverrides) — already validated.
+ */
+const scheduledDealSchema = new mongoose.Schema(
+  {
+    applyAt: { type: Date, required: true },
+    changes: { type: mongoose.Schema.Types.Mixed, required: true },
+    note: { type: String, trim: true, default: '', maxlength: 300 },
+    status: { type: String, enum: ['pending', 'applied', 'cancelled'], default: 'pending' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    createdByName: { type: String, trim: true, default: '' },
+    createdAt: { type: Date, default: Date.now },
+    doneAt: { type: Date, default: null },
+  },
+  { _id: true },
+);
+
 const statusHistorySchema = new mongoose.Schema(
   {
     status: { type: String, enum: SELLER_STATUSES, required: true },
@@ -102,6 +120,9 @@ const sellerSchema = new mongoose.Schema(
       payoutFrequency: { type: String, enum: ['', 'manual', 'weekly', 'biweekly', 'monthly'], default: '' },
     },
 
+    /** Deal changes waiting for their date (applied by the seller jobs runner). */
+    scheduledDeals: { type: [scheduledDealSchema], default: [] },
+
     /** Fulfillment modes this seller may use on its products. */
     allowedFulfillment: {
       type: [{ type: String, enum: FULFILLMENT_MODES }],
@@ -159,6 +180,7 @@ const sellerSchema = new mongoose.Schema(
 );
 
 sellerSchema.index({ status: 1, createdAt: -1 });
+sellerSchema.index({ 'scheduledDeals.status': 1, 'scheduledDeals.applyAt': 1 });
 
 const Seller = mongoose.model('Seller', sellerSchema);
 

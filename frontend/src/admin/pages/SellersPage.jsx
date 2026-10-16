@@ -21,6 +21,7 @@ import { sellerLoginUrl, sellersToCsv } from '../utils/sellerAdmin';
 import SellerPortalCard from '../components/sellers/SellerPortalCard';
 import SellerDetailPanel from '../components/sellers/SellerDetailPanel';
 import CreateSellerPanel from '../components/sellers/CreateSellerPanel';
+import BulkDealForm from '../components/sellers/BulkDealForm';
 
 const count = (n) => formatMoneyLatin(n || 0, { maximumFractionDigits: 0 });
 const money = (n, isAr) => `${formatMoneyLatin(n || 0, { maximumFractionDigits: 0 })} ${isAr ? 'ج.م' : 'EGP'}`;
@@ -114,6 +115,7 @@ export default function SellersPage() {
   const [openId, setOpenId] = useState(deepLink.id);
   const [creating, setCreating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [bulkDeal, setBulkDeal] = useState(false);
   const detailDirty = useRef(false);
 
   const fetchSellers = useCallback((params) => adminApi.listSellers(params).then((res) => {
@@ -291,6 +293,17 @@ export default function SellersPage() {
     return actions;
   };
 
+  const selectedSellers = list.data.filter((s) => list.selectedIds.includes(s._id));
+  const bulkBar = list.selectedIds.length > 0 ? (
+    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-primary-50/50 px-4 py-2.5 text-sm">
+      <span className="font-semibold">{isAr ? `تم اختيار ${list.selectedIds.length}` : `${list.selectedIds.length} selected`}</span>
+      {canEditSettings && (
+        <Button size="sm" variant="secondary" onClick={() => setBulkDeal(true)} className="gap-1.5"><Percent className="h-4 w-4" />{isAr ? 'تغيير العمولة والرسوم' : 'Change commission & fees'}</Button>
+      )}
+      <button type="button" onClick={list.clearSelection} className="ms-auto text-xs font-semibold text-text-muted hover:text-text">{isAr ? 'إلغاء الاختيار' : 'Clear selection'}</button>
+    </div>
+  ) : null;
+
   const filtering = Boolean(list.q.trim() || status);
   const firstRun = !list.loading && total === 0 && !filtering;
 
@@ -369,6 +382,12 @@ export default function SellersPage() {
           searchPlaceholder={isAr ? 'ابحث بالاسم أو البريد أو الهاتف' : 'Search name, email or phone'}
           q={list.q}
           onSearchChange={list.setQ}
+          bulkBar={bulkBar}
+          selectable={canWrite}
+          selectedIds={list.selectedIds}
+          onToggleSelect={list.toggleSelect}
+          onToggleSelectAll={list.toggleSelectAll}
+          allSelected={list.allSelected}
           columns={columns}
           data={list.data}
           loading={list.loading}
@@ -403,6 +422,18 @@ export default function SellersPage() {
             onChanged={() => { onChanged(); loadOwed(); }}
             onDirtyChange={onDirtyChange}
             initialTab={openId === deepLink.id ? deepLink.tab : 'overview'}
+          />
+        )}
+      </AdminSlidePanel>
+
+      <AdminSlidePanel open={bulkDeal} onClose={() => setBulkDeal(false)} title={isAr ? 'تغيير العمولة والرسوم' : 'Change commission & fees'} width="max-w-xl" isAr={isAr}>
+        {bulkDeal && (
+          <BulkDealForm
+            sellers={selectedSellers}
+            plans={settings?.plans || []}
+            isAr={isAr}
+            onDone={() => { list.clearSelection(); onChanged(); }}
+            onCancel={() => setBulkDeal(false)}
           />
         )}
       </AdminSlidePanel>

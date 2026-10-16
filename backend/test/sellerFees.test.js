@@ -141,3 +141,37 @@ test('payout run keys follow the schedule in Cairo time', () => {
   assert.ok((a === null) !== (b === null));
   assert.equal(cairoMonthKey(new Date('2026-10-31T23:30:00Z')), '2026-11');
 });
+
+test('sellerDealSummary: per-category rates with their source, live rules, free period', async () => {
+  const { sellerDealSummary } = await import('../src/utils/sellerFees.js');
+  const settings = {
+    defaultCommissionRate: 12,
+    categoryCommissions: [{ category: FOOD, rate: 8 }],
+    commissionRules: [
+      { name: 'Phones week', rate: 4, categories: [PHONES], startsAt: new Date('2026-10-10'), endsAt: new Date('2026-10-20') },
+      { name: 'Old promo', rate: 1, endsAt: new Date('2026-09-01') },
+      { name: 'Big items', rate: 6, minPrice: 1000 },
+    ],
+    fees: { fixedFeePerItem: 2, vatPercent: 14 },
+  };
+  const seller = { ...SELLER, commissionRate: null, categoryCommissions: [{ category: SNACKS, rate: 5 }], feeOverrides: { vatExempt: true } };
+  const cats = [{ _id: FOOD, nameEn: 'Food' }, { _id: SNACKS, nameEn: 'Snacks' }, { _id: PHONES, nameEn: 'Phones' }];
+  const s = sellerDealSummary({ settings, seller, categories: cats, now: NOW });
+  const by = Object.fromEntries(s.categories.map((c) => [c.nameEn, c]));
+  assert.deepEqual([by.Food.rate, by.Food.source], [8, 'category']);
+  assert.deepEqual([by.Snacks.rate, by.Snacks.source], [5, 'seller_category']);
+  assert.deepEqual([by.Phones.rate, by.Phones.source, by.Phones.label], [4, 'rule', 'Phones week']);
+  assert.deepEqual(s.baseRate, { rate: 12, source: 'default', label: '' });
+  assert.deepEqual(s.rules.map((r) => [r.name, r.conditional]), [['Phones week', false], ['Big items', true]], 'expired rules are hidden');
+  assert.equal(s.fees.vatPercent, 0, 'VAT exempt seller');
+  assert.equal(s.fees.fixedFeePerItem, 2);
+  assert.equal(s.commissionFreeUntil, null);
+
+  const free = sellerDealSummary({ settings, seller: { ...seller, feeOverrides: { commissionFreeUntil: new Date('2026-11-01') } }, categories: cats, now: NOW });
+  assert.ok(free.commissionFreeUntil);
+  assert.ok(free.categories.every((c) => c.rate === 0 && c.source === 'seller_free'));
+
+  const own = sellerDealSummary({ settings, seller: { ...seller, commissionRate: 9 }, categories: cats, now: NOW });
+  assert.equal(own.categories.find((c) => c.nameEn === 'Food').rate, 9, 'negotiated rate beats the category default');
+  assert.equal(own.baseRate.source, 'seller');
+});

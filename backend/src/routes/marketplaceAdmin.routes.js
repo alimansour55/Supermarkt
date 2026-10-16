@@ -9,6 +9,13 @@ import {
   removeSellerLoginAdmin,
   transferSellerOwnerAdmin,
 } from '../controllers/sellerAdminAccess.controller.js';
+import {
+  getSellerDealAdmin,
+  getSellerHistoryAdmin,
+  scheduleSellerDealAdmin,
+  cancelSellerDealAdmin,
+  bulkSellerDealAdmin,
+} from '../controllers/sellerDeal.controller.js';
 import { listSellerReviewsAdmin, setSellerReviewStatusAdmin } from '../controllers/sellerReview.controller.js';
 import { listInboundAdmin, receiveInboundAdmin } from '../controllers/sellerOps.controller.js';
 import { listPromotionsAdmin, reviewPromotionAdmin } from '../controllers/sellerGrowth.controller.js';
@@ -57,6 +64,7 @@ router.put('/settings', ...requirePermission('settings:write'), updateMarketplac
 
 router.get('/sellers', ...read, listSellers);
 router.post('/sellers', ...write, createSellerAdmin);
+router.post('/sellers/bulk-deal', ...requirePermission('settings:write'), bulkSellerDealAdmin);
 router.get('/sellers/:id', ...read, getSellerAdmin);
 router.put('/sellers/:id', ...write, updateSellerAdmin);
 router.post('/sellers/:id/status', ...write, changeSellerStatusAdmin);
@@ -70,6 +78,11 @@ router.post('/sellers/:id/users/:userId/password', ...write, setSellerLoginPassw
 router.post('/sellers/:id/users/:userId/sign-out', ...write, signOutSellerLoginAdmin);
 router.delete('/sellers/:id/users/:userId', ...write, removeSellerLoginAdmin);
 router.post('/sellers/:id/owner', ...write, transferSellerOwnerAdmin);
+// Deal (commission & fees): summary, history, scheduled changes
+router.get('/sellers/:id/deal', ...read, getSellerDealAdmin);
+router.get('/sellers/:id/history', ...read, getSellerHistoryAdmin);
+router.post('/sellers/:id/deal-schedule', ...write, scheduleSellerDealAdmin);
+router.delete('/sellers/:id/deal-schedule/:changeId', ...write, cancelSellerDealAdmin);
 
 router.get('/listings', ...read, listListingQueue);
 router.post('/listings/:id/approve', ...write, approveListing);

@@ -23,7 +23,8 @@ import {
   syncSellerProductVisibility,
 } from '../services/marketplace.service.js';
 import { normalizePhone } from '../utils/phone.js';
-import { sellerChanges } from '../utils/sellerAudit.js';
+import { sellerChanges, isFeeField, STAFF_ONLY_FIELDS } from '../utils/sellerAudit.js';
+import { sanitizeCommissionRules } from '../services/sellerDeal.service.js';
 import { logSellerActivity } from '../services/sellerActivity.service.js';
 import { FULFILLMENT_MODES, SELLER_STATUSES } from '../constants/marketplace.js';
 import {
@@ -40,19 +41,6 @@ import { sendSellerAccessEmail, assertStrongPassword } from './sellerAuth.contro
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const isId = (v) => mongoose.Types.ObjectId.isValid(v);
-
-function sanitizeCommissionRules(rules) {
-  if (!Array.isArray(rules)) throw new AppError('categoryCommissions must be a list', 400);
-  const seen = new Set();
-  return rules
-    .filter((r) => isId(r?.category))
-    .map((r) => {
-      const rate = Number(r.rate);
-      if (!Number.isFinite(rate) || rate < 0 || rate > 100) throw new AppError('Commission must be 0–100%', 400);
-      return { category: String(r.category), rate };
-    })
-    .filter((r) => (seen.has(r.category) ? false : seen.add(r.category)));
-}
 
 // ── Settings ──
 
@@ -330,7 +318,20 @@ export const updateSellerAdmin = asyncHandler(async (req, res) => {
   if (Object.keys(changes).length) {
     await logAudit({ req, action: 'update', entityType: 'seller', entityId: seller._id, entityLabel: seller.nameEn, changes });
     // The seller sees in its own activity log what staff changed (internal notes stay private).
-    await logSellerActivity(req, { sellerId: seller._id, action: 'staff.store_updated', entityType: 'seller', entityId: seller._id, label: seller.nameEn, details: { fields: Object.keys(changes) } });
+    const sellerVisible = Object.keys(changes).filter((k) => !STAFF_ONLY_FIELDS.has(k));
+    if (sellerVisible.length) {
+      await logSellerActivity(req, { sellerId: seller._id, action: 'staff.store_updated', entityType: 'seller', entityId: seller._id, label: seller.nameEn, details: { fields: sellerVisible } });
+    }
+    if (Object.keys(changes).some(isFeeField)) {
+      await notifySellerUsers(seller._id, {
+        type: 'seller_account',
+        titleAr: 'تم تحديث رسومك',
+        titleEn: 'Your fees were updated',
+        messageAr: 'تغيّرت شروط العمولة أو الرسوم لمتجرك. تطبق على الطلبات الجديدة فقط.',
+        messageEn: 'Your commission or fee terms changed. They apply to new orders only.',
+        link: '/seller-center/finance',
+      });
+    }
     if (Object.keys(changes).some((k) => k.startsWith('bank.'))) {
       await notifySellerUsers(seller._id, {
         type: 'seller_account',

@@ -14,8 +14,11 @@ export const SELLER_AUDIT_FIELDS = [
   'feeOverrides.fixedFeePerShipment', 'feeOverrides.storeFulfillmentFeePerItem', 'feeOverrides.monthlyFee',
   'feeOverrides.payoutHoldDays', 'feeOverrides.commissionFreeUntil', 'feeOverrides.vatExempt', 'feeOverrides.payoutFrequency',
   'allowedFulfillment', 'defaultFulfillment', 'deliveryZones', 'handlingDays', 'autoApproveListings',
-  'vacation.enabled', 'logoUrl', 'bannerUrl',
+  'vacation.enabled', 'logoUrl', 'bannerUrl', 'internalNote',
 ];
+
+/** Staff-only fields: logged for staff, never listed in the seller's own activity log. */
+export const STAFF_ONLY_FIELDS = new Set(['internalNote']);
 
 const BANK_FIELDS = ['bankName', 'accountName', 'accountNumber', 'iban', 'walletPhone'];
 const MASKED = new Set(['accountNumber', 'iban']);

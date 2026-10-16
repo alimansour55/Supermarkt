@@ -262,3 +262,65 @@ export function payoutRunKey(schedule = {}, date = new Date()) {
   if (freq === 'biweekly' && week % 2 !== 0) return null;
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
+
+/**
+ * "What does this seller pay?" in one object — for the admin deal card and the seller's own
+ * fee page. `categories` are { _id, nameAr, nameEn } rows (top-level categories plus any the
+ * seller has a deal on). Rates are computed the same way checkout does (resolveCommission),
+ * for a typical sale: the seller's default shipping mode and `samplePrice`.
+ * Rules whose conditions depend on price, shipping mode or seller age are listed under
+ * `rules` so staff know the rate can differ for some sales.
+ */
+export function sellerDealSummary({ settings = {}, seller = null, categories = [], samplePrice = 100, now = new Date() }) {
+  const cfg = effectiveFeeConfig(settings, seller);
+  const fulfilledBy = seller?.defaultFulfillment || (seller?.allowedFulfillment || ['seller'])[0] || 'seller';
+  const rateFor = (catId) => resolveCommission({
+    settings, seller, config: cfg, unitPrice: samplePrice, fulfilledBy, now,
+    product: catId ? { category: catId, categoryAncestors: [], mainCategory: catId } : null,
+  });
+  const base = rateFor(null);
+  const rows = categories.map((c) => {
+    const r = rateFor(idOf(c._id || c));
+    return { category: idOf(c._id || c), nameAr: c.nameAr || '', nameEn: c.nameEn || '', rate: r.rate, source: r.source, label: r.label };
+  });
+  const planKey = cfg.plan?.key || '';
+  const rules = (settings.commissionRules || [])
+    .filter((r) => ruleIsLive(r, now))
+    .filter((r) => {
+      const sellers = (r.sellers || []).map(idOf);
+      const plans = r.plans || [];
+      return (!sellers.length || sellers.includes(idOf(seller))) && (!plans.length || plans.includes(planKey));
+    })
+    .map((r) => ({
+      name: r.name || '',
+      rate: Number(r.rate) || 0,
+      overridesDeal: r.overrideSellerDeals === true,
+      categories: (r.categories || []).map(idOf),
+      conditional: Boolean(num(r.minPrice) !== null || num(r.maxPrice) !== null || (r.fulfillment && r.fulfillment !== 'any') || num(r.newSellerDays)),
+      endsAt: r.endsAt || null,
+    }));
+  return {
+    plan: cfg.plan,
+    commissionFreeUntil: cfg.commissionFreeUntil && cfg.commissionFreeUntil > now ? cfg.commissionFreeUntil : null,
+    baseRate: { rate: base.rate, source: base.source, label: base.label },
+    sellerRate: seller?.commissionRate ?? null,
+    categories: rows,
+    rules,
+    fees: {
+      minCommissionPerItem: cfg.minCommissionPerItem,
+      maxCommissionPerItem: cfg.maxCommissionPerItem,
+      fixedFeePerItem: cfg.fixedFeePerItem,
+      fixedFeePerShipment: cfg.fixedFeePerShipment,
+      storeFulfillmentFeePerItem: cfg.storeFulfillmentFeePerItem,
+      monthlyFee: cfg.monthlyFee,
+      vatPercent: cfg.vatPercent,
+      paymentFees: cfg.paymentFees,
+    },
+    payout: {
+      holdDays: cfg.payoutHoldDays,
+      frequency: seller?.feeOverrides?.payoutFrequency || '',
+    },
+    fulfilledBy,
+    samplePrice,
+  };
+}

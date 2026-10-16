@@ -10,6 +10,8 @@ import { endExpiredVacations } from '../controllers/sellerCatalog.controller.js'
 import { runPromotionSchedule } from '../services/sellerPromotion.service.js';
 import { runCartRecoveryJob } from '../services/cartRecovery.service.js';
 import { runSubscriptionFees, runScheduledPayouts } from '../services/sellerLedger.service.js';
+import { runScheduledDealChanges } from '../services/sellerDeal.service.js';
+import { releaseDueAffiliateCommissions } from '../services/affiliate.service.js';
 
 const EVERY_MS = 5 * 60 * 1000;
 const tasks = [
@@ -20,6 +22,8 @@ const tasks = [
   ['abandoned-cart reminders', runCartRecoveryJob],
   ['seller plan fees', runSubscriptionFees],
   ['scheduled seller payouts', runScheduledPayouts],
+  ['scheduled seller deal changes', runScheduledDealChanges],
+  ['share & earn payouts', releaseDueAffiliateCommissions],
 ];
 let timer = null;
 
