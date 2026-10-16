@@ -458,6 +458,8 @@ orderSchema.index({ 'trash.stage': 1, createdAt: -1 });
 orderSchema.index({ 'trash.purgeAt': 1 }, { expireAfterSeconds: 0 });
 
 orderSchema.index({ sellerIds: 1, createdAt: -1 });
+// Integrations: order feed and change scanner page through orders by last change.
+orderSchema.index({ updatedAt: 1, _id: 1 });
 
 orderSchema.pre('validate', function validateOrderStatus(next) {
   if (this.orderStatus && !ORDER_STATUS_VALUES.includes(this.orderStatus)) {

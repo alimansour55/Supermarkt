@@ -36,6 +36,7 @@ export const ROLE_PERMISSIONS = {
   'homepage:write': ['admin', 'super_admin'],
   'delivery:write': ['admin', 'super_admin'],
   'settings:write': ['admin', 'super_admin'],
+  'integrations:write': ['admin', 'super_admin'],
   'content:write': ['admin', 'super_admin'],
   'reviews:moderate': ['admin', 'super_admin'],
   'reports:read': ['admin', 'super_admin'],

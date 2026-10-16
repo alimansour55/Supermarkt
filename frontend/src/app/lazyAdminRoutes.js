@@ -42,6 +42,7 @@ export const ReviewsPage = lazy(() => import('../admin/pages/ReviewsPage'), 'Rev
 export const DeliveryZonesPage = lazy(() => import('../admin/pages/DeliveryZonesPage'), 'DeliveryZonesPage');
 export const CoverageAreaPage = lazy(() => import('../admin/pages/CoverageAreaPage'), 'CoverageAreaPage');
 export const FulfillmentLocationsPage = lazy(() => import('../admin/pages/FulfillmentLocationsPage'), 'FulfillmentLocationsPage');
+export const IntegrationsPage = lazy(() => import('../admin/pages/IntegrationsPage'), 'IntegrationsPage');
 export const AdminRecurringDeliveriesPage = lazy(() => import('../admin/pages/RecurringDeliveriesPage'), 'RecurringDeliveriesPage');
 export const ReportsPage = lazy(() => import('../admin/pages/ReportsPage'), 'ReportsPage');
 export const PartnerRevenuePage = lazy(() => import('../admin/pages/PartnerRevenuePage'), 'PartnerRevenuePage');

@@ -146,6 +146,7 @@ export const ROLE_PERMISSIONS = {
   'users:write': ['super_admin'],
   'sellers:read': STAFF_ROLES,
   'sellers:write': ['admin', 'super_admin'],
+  'integrations:write': ['admin', 'super_admin'],
 };
 
 export const ALL_PERMISSIONS = Object.keys(ROLE_PERMISSIONS);
@@ -230,6 +231,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: 'notifications:read', labelEn: 'View notifications', labelAr: 'عرض الإشعارات' },
       { key: 'notifications:write', labelEn: 'Notification templates', labelAr: 'قوالب الإشعارات' },
+      { key: 'integrations:write', labelEn: 'Connected systems (cashier/POS, API keys)', labelAr: 'الأنظمة المربوطة (الكاشير ومفاتيح الربط)' },
     ],
   },
 ];

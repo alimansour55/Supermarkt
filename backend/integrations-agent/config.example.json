@@ -1,0 +1,33 @@
+{
+  "apiUrl": "https://your-store.com",
+  "apiKey": "mpk_paste_the_key_from_the_admin_here",
+  "intervalSeconds": 120,
+  "autoUpdate": true,
+
+  "source": {
+    "type": "folder",
+    "path": "C:\\POS\\Exports",
+    "pattern": "*.csv"
+  },
+
+  "orders": {
+    "exportFolder": "C:\\POS\\OnlineOrders",
+    "format": "csv",
+    "statuses": ["pending", "preparing"],
+    "acknowledge": false
+  },
+
+  "_examples": {
+    "sql_server_source": {
+      "type": "mssql",
+      "connectionString": "Server=localhost\\SQLEXPRESS;Database=POS;User Id=reader;Password=change-me;Encrypt=false;TrustServerCertificate=true",
+      "stockQuery": "SELECT Barcode AS code, QtyOnHand AS quantity, StoreCode AS location FROM Items",
+      "priceQuery": "SELECT Barcode AS code, SalePrice AS price, CostPrice AS cost FROM Items"
+    },
+    "access_source": {
+      "type": "odbc",
+      "connectionString": "Driver={Microsoft Access Driver (*.mdb, *.accdb)};Dbq=C:\\POS\\data.mdb;",
+      "stockQuery": "SELECT Barcode AS code, Qty AS quantity FROM Products"
+    }
+  }
+}

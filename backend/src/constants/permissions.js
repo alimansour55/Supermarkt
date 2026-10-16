@@ -29,6 +29,7 @@ export const ALL_PERMISSIONS = [
   'users:write',
   'sellers:read',
   'sellers:write',
+  'integrations:write',
 ];
 
 export const PERMISSION_GROUPS = [
@@ -112,6 +113,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: 'notifications:read', labelEn: 'View notifications', labelAr: 'عرض الإشعارات' },
       { key: 'notifications:write', labelEn: 'Notification templates', labelAr: 'قوالب الإشعارات' },
+      { key: 'integrations:write', labelEn: 'Connected systems (cashier/POS, API keys)', labelAr: 'الأنظمة المربوطة (الكاشير ومفاتيح الربط)' },
     ],
   },
 ];

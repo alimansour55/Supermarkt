@@ -51,6 +51,7 @@ export default function AdminRoutes() {
         <Route path="coverage-area" element={withSuspense(<P.AdminPermissionRoute permission="delivery:write"><P.CoverageAreaPage /></P.AdminPermissionRoute>)} />
         <Route path="delivery" element={withSuspense(<P.AdminPermissionRoute permission="delivery:write"><P.DeliveryZonesPage /></P.AdminPermissionRoute>)} />
         <Route path="fulfillment-locations" element={withSuspense(<P.AdminPermissionRoute permission="delivery:write"><P.FulfillmentLocationsPage /></P.AdminPermissionRoute>)} />
+        <Route path="integrations" element={withSuspense(<P.AdminPermissionRoute permission="integrations:write"><P.IntegrationsPage /></P.AdminPermissionRoute>)} />
         <Route path="sellers" element={withSuspense(<P.AdminPermissionRoute permission="sellers:read"><P.SellersPage /></P.AdminPermissionRoute>)} />
         <Route path="seller-inbound" element={withSuspense(<P.AdminPermissionRoute permission="products:read"><P.AdminSellerInboundPage /></P.AdminPermissionRoute>)} />
         <Route path="seller-payouts" element={withSuspense(<P.AdminPermissionRoute permission="reports:read"><P.SellerPayoutsPage /></P.AdminPermissionRoute>)} />

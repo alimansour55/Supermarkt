@@ -234,7 +234,7 @@ export const ADMIN_NAV_GROUPS = [
         labelAr: 'الإعدادات',
         labelEn: 'Settings',
         Icon: Settings,
-        permission: ['settings:write', 'delivery:write', 'notifications:write', 'users:write', 'audit:read'],
+        permission: ['settings:write', 'delivery:write', 'notifications:write', 'users:write', 'audit:read', 'integrations:write'],
       },
     ],
   },
@@ -266,6 +266,14 @@ export const SETTINGS_GROUPS = [
       { path: '/admin/delivery', labelAr: 'المناطق والأسعار', labelEn: 'Areas & fees', descAr: 'المناطق التي توصل لها وسعر كل منطقة', descEn: 'Where you deliver and what each area costs', permission: 'delivery:write' },
       { path: '/admin/coverage-area', labelAr: 'حدود التغطية', labelEn: 'Coverage limit', descAr: 'أقصى مسافة يقبل منها طلب', descEn: 'The furthest you accept orders from', permission: 'delivery:write' },
       { path: '/admin/fulfillment-locations', labelAr: 'الفروع والمخازن', labelEn: 'Branches & warehouses', descAr: 'من أين تخرج الطلبات', descEn: 'Where orders are packed and sent from', permission: 'delivery:write' },
+    ],
+  },
+  {
+    id: 'connections',
+    labelAr: 'الربط مع أنظمة أخرى',
+    labelEn: 'Connections',
+    items: [
+      { path: '/admin/integrations', labelAr: 'الأنظمة المربوطة', labelEn: 'Connected systems', descAr: 'ربط الكاشير والمخزن والحسابات — المخزون والأسعار والطلبات تلقائياً', descEn: 'Link your cashier, warehouse or accounting system — stock, prices and orders sync by themselves', permission: 'integrations:write' },
     ],
   },
   {

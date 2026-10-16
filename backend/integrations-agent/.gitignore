@@ -1,0 +1,5 @@
+agent-data/
+config.json
+run-agent.cmd
+node_modules/
+*.bak

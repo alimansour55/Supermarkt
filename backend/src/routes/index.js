@@ -35,6 +35,8 @@ import productQuestionsRoutes from './productQuestions.routes.js';
 import { trackProductEvent } from '../controllers/sellerGrowth.controller.js';
 import { productEventLimiter } from '../middleware/rateLimiter.js';
 import marketplaceAdminRoutes from './marketplaceAdmin.routes.js';
+import integrationAdminRoutes from './integrationAdmin.routes.js';
+import integrationApiRoutes from './integrationApi.routes.js';
 
 const router = Router();
 
@@ -48,6 +50,8 @@ router.use('/products', productRoutes);
 router.use('/payment', paymentRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/admin/marketplace', marketplaceAdminRoutes);
+router.use('/admin/integrations', integrationAdminRoutes);
+router.use('/integrations/v1', integrationApiRoutes);
 router.use('/admin', adminRoutes);
 router.use('/banners', bannerRoutes);
 router.use('/store-settings', storeSettingsRoutes);
