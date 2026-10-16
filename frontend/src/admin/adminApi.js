@@ -298,6 +298,19 @@ export const adminApi = {
   updateSeller: (id, data) => api.put(`/admin/marketplace/sellers/${id}`, data),
   setSellerStatus: (id, data) => api.post(`/admin/marketplace/sellers/${id}/status`, data),
   sendSellerAccess: (id, data) => api.post(`/admin/marketplace/sellers/${id}/access`, data || {}),
+  updateSellerMedia: (id, { logo, banner, remove } = {}) => {
+    const form = new FormData();
+    if (logo) form.append('logo', logo);
+    if (banner) form.append('banner', banner);
+    if (remove) form.append('remove', remove);
+    return api.post(`/admin/marketplace/sellers/${id}/media`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  addSellerLogin: (id, data) => api.post(`/admin/marketplace/sellers/${id}/users`, data),
+  updateSellerLogin: (id, userId, data) => api.put(`/admin/marketplace/sellers/${id}/users/${userId}`, data),
+  setSellerLoginPassword: (id, userId, data) => api.post(`/admin/marketplace/sellers/${id}/users/${userId}/password`, data),
+  signOutSellerLogin: (id, userId) => api.post(`/admin/marketplace/sellers/${id}/users/${userId}/sign-out`),
+  removeSellerLogin: (id, userId) => api.delete(`/admin/marketplace/sellers/${id}/users/${userId}`),
+  transferSellerOwner: (id, userId) => api.post(`/admin/marketplace/sellers/${id}/owner`, { userId }),
   reviewSellerDocument: (id, docId, data) => api.put(`/admin/marketplace/sellers/${id}/documents/${docId}`, data),
   listListingQueue: (params) => api.get('/admin/marketplace/listings', { params }),
   approveListing: (id, data) => api.post(`/admin/marketplace/listings/${id}/approve`, data || {}),

@@ -366,7 +366,11 @@ export async function loadSellerForUser(user) {
   return Seller.findById(user.seller);
 }
 
-export async function sellerUsers(sellerId) {
-  const users = await User.find({ seller: sellerId }).select('name email role isActive lastLoginAt createdAt sellerPermissions twoFactorEnabled').lean();
+/** Seller logins. `forStaff` adds what only store staff see: sign-in history, locks, temp passwords. */
+export async function sellerUsers(sellerId, { forStaff = false } = {}) {
+  const fields = 'name email role isActive lastLoginAt createdAt sellerPermissions twoFactorEnabled';
+  const users = await User.find({ seller: sellerId })
+    .select(forStaff ? `${fields} mustChangePassword failedLoginCount lockedUntil +loginHistory` : fields)
+    .lean();
   return users.map((u) => ({ ...u, permissions: sellerUserPermissions(u) }));
 }

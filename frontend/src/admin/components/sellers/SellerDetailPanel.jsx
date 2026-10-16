@@ -13,6 +13,8 @@ import { SELLER_NEXT_ACTIONS, sellerChecklist } from '../../utils/sellerAdmin';
 import SellerAccessSection from './SellerAccessSection';
 import SellerReasonDialog from './SellerReasonDialog';
 import SellerPenaltyForm from './SellerPenaltyForm';
+import SellerProfileEditor from './SellerProfileEditor';
+import { useAuth } from '../../../context/AuthContext';
 import FeeCalculator from '../sellerFees/FeeCalculator';
 import { cairoDate, cairoDayStart, categoryOptions, rangeFromPreset, toField, toNum } from '../../utils/sellerFeesAdmin';
 
@@ -50,6 +52,9 @@ function formFromSeller(s) {
     categoryCommissions: (s.categoryCommissions || []).map((r) => ({ category: String(r.category?._id || r.category), rate: String(r.rate) })),
     allowedFulfillment: s.allowedFulfillment || ['seller'],
     autoApproveListings: Boolean(s.autoApproveListings),
+    defaultFulfillment: s.defaultFulfillment || (s.allowedFulfillment || ['seller'])[0],
+    vacationOff: false,
+    deliveryZones: (s.deliveryZones || []).map((z) => String(z?._id || z)),
     handlingDays: String(s.handlingDays ?? 2),
     internalNote: s.internalNote || '',
     feePlan: s.feePlan || '',
@@ -84,7 +89,7 @@ const TABS = [
   { id: 'documents', ar: 'المستندات', en: 'Documents' },
   { id: 'rules', ar: 'العمولة والرسوم', en: 'Fees & rules' },
   { id: 'payouts', ar: 'الأرباح والمدفوعات', en: 'Money' },
-  { id: 'logins', ar: 'الدخول', en: 'Logins' },
+  { id: 'logins', ar: 'الدخول وكلمات المرور', en: 'Logins & passwords' },
 ];
 
 /** Approval checklist — advisory, shown while the seller is not yet active. */
@@ -119,11 +124,15 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
   const [balance, setBalance] = useState(null);
   const [tab, setTab] = useState(TABS.some((t) => t.id === initialTab) ? initialTab : 'overview');
   const [plans, setPlans] = useState([]);
+  const [zones, setZones] = useState([]);
   const [profit, setProfit] = useState(null);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reasonFor, setReasonFor] = useState('');
   const [docReject, setDocReject] = useState(null); // { id, note } while typing a rejection note
+  const [editingProfile, setEditingProfile] = useState(false);
+  const { user: me } = useAuth();
+  const isSuperAdmin = me?.role === 'super_admin';
 
   const load = useCallback(() => adminApi.getSeller(sellerId)
     .then(({ data }) => {
@@ -139,6 +148,7 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
   useEffect(() => {
     categoryService.getAll().then(({ data }) => setCategories(data.data || [])).catch(() => {});
     adminApi.getMarketplaceSettings().then(({ data }) => setPlans(data.data?.plans || [])).catch(() => {});
+    adminApi.getDeliveryZones().then(({ data }) => setZones((data.data || []).filter((z) => z.isActive !== false))).catch(() => {});
   }, []);
   const loadProfit = useCallback(() => Promise.all([
     adminApi.getSellerProfit({ sellerId, ...rangeFromPreset('30d') }),
@@ -199,6 +209,9 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
         commissionRate: form.commissionRate === '' ? null : Number(form.commissionRate),
         categoryCommissions: form.categoryCommissions.filter((r) => r.category && r.rate !== '').map((r) => ({ category: r.category, rate: Number(r.rate) })),
         allowedFulfillment: form.allowedFulfillment,
+        defaultFulfillment: form.allowedFulfillment.includes(form.defaultFulfillment) ? form.defaultFulfillment : form.allowedFulfillment[0],
+        ...(form.vacationOff ? { vacationOff: true } : {}),
+        deliveryZones: form.deliveryZones,
         autoApproveListings: form.autoApproveListings,
         handlingDays: Number(form.handlingDays),
         internalNote: form.internalNote,
@@ -332,7 +345,21 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
             )}
           </Card>
 
-          <Card title={isAr ? 'البيانات' : 'Details'}>
+          {editingProfile ? (
+            <Card title={isAr ? 'تعديل بيانات المتجر' : 'Edit store details'}>
+              <SellerProfileEditor
+                seller={seller}
+                isAr={isAr}
+                isSuperAdmin={isSuperAdmin}
+                onCancel={() => setEditingProfile(false)}
+                onSaved={({ keepEditing } = {}) => { if (!keepEditing) setEditingProfile(false); refresh(); }}
+              />
+            </Card>
+          ) : (
+          <Card
+            title={isAr ? 'البيانات' : 'Details'}
+            action={canWrite && <button type="button" onClick={() => setEditingProfile(true)} className="text-xs font-semibold text-primary-700 hover:underline">{isAr ? 'تعديل' : 'Edit'}</button>}
+          >
             <Row k={isAr ? 'المسؤول' : 'Contact'} v={seller.contactName} />
             <Row k={isAr ? 'البريد' : 'Email'} v={seller.email} ltr />
             <Row k={isAr ? 'الهاتف' : 'Phone'} v={seller.phone} ltr />
@@ -348,6 +375,7 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
             )}
             {seller.applicationNote && <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm">{seller.applicationNote}</p>}
           </Card>
+          )}
 
           <SellerReviewsCard sellerId={seller._id} isAr={isAr} canWrite={canWrite} />
 
@@ -514,6 +542,50 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
                 </label>
               ))}
             </div>
+            {form.allowedFulfillment.length > 1 && (
+              <label className="mb-4 block text-sm">
+                <span className="mb-1 block font-medium">{isAr ? 'الخيار الافتراضي للمنتجات الجديدة' : 'Default for new products'}</span>
+                <select className={`${inputCls} sm:w-64`} value={form.defaultFulfillment} onChange={(e) => setForm((f) => ({ ...f, defaultFulfillment: e.target.value }))} disabled={!canWrite}>
+                  {form.allowedFulfillment.map((m) => <option key={m} value={m}>{label(FULFILLMENT, m, isAr)}</option>)}
+                </select>
+              </label>
+            )}
+            {seller.vacation?.enabled && (
+              <div className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                <p className="font-medium">
+                  {isAr ? 'البائع في إجازة — منتجاته مخفية' : 'Seller is on vacation — products are hidden'}
+                  {seller.vacation.until && ` (${isAr ? 'حتى' : 'until'} ${fmtDate(seller.vacation.until, isAr)})`}
+                </p>
+                {canWrite && (
+                  <label className="mt-2 flex items-center gap-2">
+                    <input type="checkbox" checked={form.vacationOff} onChange={(e) => setForm((f) => ({ ...f, vacationOff: e.target.checked }))} />
+                    {isAr ? 'إنهاء الإجازة وإظهار المنتجات عند الحفظ' : 'End the vacation and show products on save'}
+                  </label>
+                )}
+              </div>
+            )}
+            {form.allowedFulfillment.includes('seller') && zones.length > 0 && (
+              <div className="mb-4">
+                <p className="mb-1 text-sm font-medium">{isAr ? 'المناطق التي يشحن إليها البائع بنفسه' : 'Zones the seller ships to itself'}</p>
+                <p className="mb-2 text-xs text-text-muted">{isAr ? 'بدون اختيار = كل المناطق النشطة.' : 'None selected = every active zone.'}</p>
+                <div className="flex flex-wrap gap-2">
+                  {zones.map((z) => {
+                    const on = form.deliveryZones.includes(String(z._id));
+                    return (
+                      <button
+                        key={z._id}
+                        type="button"
+                        disabled={!canWrite}
+                        onClick={() => setForm((f) => ({ ...f, deliveryZones: on ? f.deliveryZones.filter((id) => id !== String(z._id)) : [...f.deliveryZones, String(z._id)] }))}
+                        className={`rounded-full border px-3 py-1 text-xs ${on ? 'border-primary-500 bg-primary-50 font-semibold text-primary-800' : 'border-border text-text-muted'}`}
+                      >
+                        {isAr ? [z.cityAr, z.areaAr].filter(Boolean).join(' — ') : [z.cityEn, z.areaEn].filter(Boolean).join(' — ')}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <label className="mb-4 block text-sm">
               <span className="mb-1 block font-medium">{isAr ? 'مدة تجهيز الطلب (أيام)' : 'Handling time (days)'}</span>
               <input type="number" min="0" max="30" className={`${inputCls} w-28`} value={form.handlingDays} onChange={(e) => setForm((f) => ({ ...f, handlingDays: e.target.value }))} disabled={!canWrite} />
@@ -599,7 +671,7 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
         </div>
       )}
 
-      {tab === 'logins' && <SellerAccessSection seller={seller} isAr={isAr} canWrite={canWrite} />}
+      {tab === 'logins' && <SellerAccessSection seller={seller} isAr={isAr} canWrite={canWrite} onTeamChange={(team) => setSeller((s) => ({ ...s, team }))} />}
 
       {reasonFor && (
       <SellerReasonDialog

@@ -10,6 +10,7 @@ import SellerSidebar from './layout/SellerSidebar';
 import SellerTopbar from './layout/SellerTopbar';
 import SellerShortcuts from './layout/SellerShortcuts';
 import { PageSkeleton } from './ui';
+import ForcePasswordChange from './settings/ForcePasswordChange';
 
 const SELLER_ROLES = ['seller_owner', 'seller_staff'];
 const COLLAPSE_KEY = 'sellerCenter.sidebarCollapsed';
@@ -180,6 +181,8 @@ export default function SellerShell() {
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{loadError}</div>
           ) : !me ? (
             <PageSkeleton />
+          ) : me.user?.mustChangePassword ? (
+            <ForcePasswordChange isAr={isAr} onDone={reload} />
           ) : (
             <>
               <StatusBanner seller={seller} isAr={isAr} />

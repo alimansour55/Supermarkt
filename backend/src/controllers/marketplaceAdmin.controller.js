@@ -8,7 +8,7 @@ import { formatShipmentForOrder, updateShipmentStatus } from '../services/market
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { parsePagination, paginationMeta } from '../utils/listQuery.js';
-import { deleteManyFromCloudinary } from '../utils/cloudinaryUpload.js';
+import { deleteManyFromCloudinary, deleteFromCloudinary, uploadFileToCloudinary, CLOUDINARY_FOLDERS } from '../utils/cloudinaryUpload.js';
 import { resolveProductCategoryFields } from '../utils/productCategorySync.js';
 import { logAudit } from '../services/auditLog.service.js';
 import {
@@ -20,7 +20,11 @@ import {
   syncSellerProductNames,
   notifySellerUsers,
   documentsWithLinks,
+  syncSellerProductVisibility,
 } from '../services/marketplace.service.js';
+import { normalizePhone } from '../utils/phone.js';
+import { sellerChanges } from '../utils/sellerAudit.js';
+import { logSellerActivity } from '../services/sellerActivity.service.js';
 import { FULFILLMENT_MODES, SELLER_STATUSES } from '../constants/marketplace.js';
 import {
   sanitizeFees,
@@ -174,7 +178,7 @@ export const getSellerAdmin = asyncHandler(async (req, res) => {
     { path: 'statusHistory.changedBy', select: 'name role' },
   ]);
   const [team, listingRows, performance] = await Promise.all([
-    sellerUsers(seller._id),
+    sellerUsers(seller._id, { forStaff: true }),
     Product.aggregate([
       { $match: { seller: seller._id } },
       { $group: { _id: '$listingStatus', count: { $sum: 1 } } },
@@ -239,12 +243,45 @@ export const updateSellerAdmin = asyncHandler(async (req, res) => {
   const seller = await findSeller(req.params.id);
   const b = req.body || {};
   const str = (v, max = 2000) => String(v ?? '').trim().slice(0, max);
+  const before = seller.toObject();
 
   ['nameAr', 'nameEn'].forEach((f) => {
-    if (b[f] !== undefined && str(b[f], 120).length >= 2) seller[f] = str(b[f], 120);
+    if (b[f] === undefined) return;
+    if (str(b[f], 120).length < 2) throw new AppError('Store name needs at least 2 characters', 400);
+    seller[f] = str(b[f], 120);
   });
-  ['descriptionAr', 'descriptionEn', 'legalName', 'commercialRegisterNo', 'taxId', 'contactName', 'phone', 'internalNote']
+  ['descriptionAr', 'descriptionEn', 'legalName', 'commercialRegisterNo', 'taxId', 'contactName', 'internalNote']
     .forEach((f) => { if (b[f] !== undefined) seller[f] = str(b[f], f === 'internalNote' ? 4000 : 2000); });
+  if (b.phone !== undefined) {
+    const raw = str(b.phone, 30);
+    const phone = raw ? normalizePhone(raw) : '';
+    if (raw && !phone) throw new AppError('Invalid phone number', 400);
+    seller.phone = phone;
+  }
+  if (b.email !== undefined) {
+    const email = str(b.email, 200).toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new AppError('Invalid email', 400);
+    seller.email = email;
+  }
+  if (b.address && typeof b.address === 'object') {
+    ['street', 'city', 'governorate'].forEach((f) => {
+      if (b.address[f] !== undefined) seller.set(`address.${f}`, str(b.address[f], 200));
+    });
+  }
+  if (b.bank && typeof b.bank === 'object') {
+    // Payout details decide where money goes — only super admins may change them.
+    if (req.user.role !== 'super_admin') throw new AppError('Only a super admin can change payout details', 403);
+    ['bankName', 'accountName', 'accountNumber', 'iban', 'walletPhone'].forEach((f) => {
+      if (b.bank[f] !== undefined) seller.set(`bank.${f}`, str(b.bank[f], 120));
+    });
+  }
+  if (b.defaultFulfillment !== undefined) {
+    const allowed = Array.isArray(b.allowedFulfillment) ? b.allowedFulfillment : seller.allowedFulfillment;
+    if (!allowed.includes(b.defaultFulfillment)) throw new AppError('The default must be one of the allowed shipping options', 400);
+  }
+  if (b.vacationOff === true && seller.vacation?.enabled) {
+    seller.vacation = { enabled: false, startedAt: null, until: null, messageAr: '', messageEn: '' };
+  }
 
   if (b.commissionRate !== undefined) {
     if (b.commissionRate === null || b.commissionRate === '') seller.commissionRate = null;
@@ -267,6 +304,7 @@ export const updateSellerAdmin = asyncHandler(async (req, res) => {
     seller.allowedFulfillment = modes;
     if (!modes.includes(seller.defaultFulfillment)) seller.defaultFulfillment = modes[0];
   }
+  if (b.defaultFulfillment !== undefined) seller.defaultFulfillment = b.defaultFulfillment;
   if (b.deliveryZones !== undefined) {
     seller.deliveryZones = (Array.isArray(b.deliveryZones) ? b.deliveryZones : []).filter(isId);
   }
@@ -277,8 +315,10 @@ export const updateSellerAdmin = asyncHandler(async (req, res) => {
   }
 
   const renamed = seller.isModified('nameAr') || seller.isModified('nameEn');
+  const vacationEnded = before.vacation?.enabled && !seller.vacation?.enabled;
   await seller.save();
   if (renamed) await syncSellerProductNames(seller);
+  if (vacationEnded) await syncSellerProductVisibility(seller._id);
   // Fulfillment options shrank — products using a removed mode fall back to an allowed one.
   if (b.allowedFulfillment !== undefined) {
     await Product.updateMany(
@@ -286,7 +326,22 @@ export const updateSellerAdmin = asyncHandler(async (req, res) => {
       { $set: { fulfilledBy: seller.defaultFulfillment } },
     );
   }
-  await logAudit({ req, action: 'update', entityType: 'seller', entityId: seller._id, entityLabel: seller.nameEn });
+  const changes = sellerChanges(before, seller.toObject());
+  if (Object.keys(changes).length) {
+    await logAudit({ req, action: 'update', entityType: 'seller', entityId: seller._id, entityLabel: seller.nameEn, changes });
+    // The seller sees in its own activity log what staff changed (internal notes stay private).
+    await logSellerActivity(req, { sellerId: seller._id, action: 'staff.store_updated', entityType: 'seller', entityId: seller._id, label: seller.nameEn, details: { fields: Object.keys(changes) } });
+    if (Object.keys(changes).some((k) => k.startsWith('bank.'))) {
+      await notifySellerUsers(seller._id, {
+        type: 'seller_account',
+        titleAr: 'تم تغيير بيانات استلام الأموال',
+        titleEn: 'Your payout details were changed',
+        messageAr: 'غيّر فريق المتجر بيانات البنك أو المحفظة لمتجرك. تواصل معنا فوراً إذا لم تطلب ذلك.',
+        messageEn: 'Store staff changed your bank or wallet details. Contact us right away if you did not ask for this.',
+        link: '/seller-center/finance',
+      });
+    }
+  }
   res.json({ success: true, data: formatSellerPrivate(seller, { revealBank: req.user.role === 'super_admin' }) });
 });
 
@@ -497,4 +552,33 @@ export const updateShipmentStatusAdmin = asyncHandler(async (req, res) => {
     changes: { shipmentStatus: { from: null, to: status } },
   });
   res.json({ success: true, data: formatShipmentForOrder(shipment, { isStaff: true }) });
+});
+
+/** Staff replace (or remove with `remove=logo|banner`) a seller's logo / banner image. */
+export const updateSellerMediaAdmin = asyncHandler(async (req, res) => {
+  const seller = await findSeller(req.params.id);
+  const before = seller.toObject();
+  for (const kind of ['logo', 'banner']) {
+    const file = req.files?.[kind]?.[0];
+    const remove = req.body?.remove === kind;
+    if (!file && !remove) continue;
+    const oldId = seller[`${kind}PublicId`];
+    if (file) {
+      // eslint-disable-next-line no-await-in-loop
+      const up = await uploadFileToCloudinary(file, CLOUDINARY_FOLDERS.sellers);
+      seller[`${kind}Url`] = up.url;
+      seller[`${kind}PublicId`] = up.publicId;
+    } else {
+      seller[`${kind}Url`] = '';
+      seller[`${kind}PublicId`] = '';
+    }
+    // eslint-disable-next-line no-await-in-loop
+    if (oldId) await deleteFromCloudinary(oldId).catch(() => {});
+  }
+  await seller.save();
+  const changes = sellerChanges(before, seller.toObject());
+  if (Object.keys(changes).length) {
+    await logAudit({ req, action: 'update', entityType: 'seller', entityId: seller._id, entityLabel: seller.nameEn, changes });
+  }
+  res.json({ success: true, data: formatSellerPrivate(seller, { revealBank: req.user.role === 'super_admin' }) });
 });

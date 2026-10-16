@@ -18,7 +18,7 @@ import { SELLER_PERMISSIONS, DEFAULT_STAFF_PERMISSIONS, sellerUserPermissions } 
 import { logSellerActivity } from '../services/sellerActivity.service.js';
 import { assertStrongPassword } from './sellerAuth.controller.js';
 
-function readPermissions(value, fallback) {
+export function readPermissions(value, fallback) {
   if (!Array.isArray(value)) return fallback;
   return [...new Set(value.map(String).filter((p) => SELLER_PERMISSIONS.includes(p)))];
 }
@@ -30,7 +30,7 @@ const teamRow = (m) => ({
 
 const isId = (v) => mongoose.Types.ObjectId.isValid(v);
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const MAX_STAFF = 10;
+export const MAX_STAFF = 10;
 
 // ── Team (seller staff logins) ──
 

@@ -27,7 +27,17 @@ const ACTIONS = {
   'security.2fa_on': { ar: 'فعّل التحقق بخطوتين', en: 'turned on 2-step verification' },
   'security.2fa_off': { ar: 'أوقف التحقق بخطوتين', en: 'turned off 2-step verification' },
   'security.sign_out_all': { ar: 'سجّل الخروج من كل الأجهزة', en: 'signed out everywhere' },
+  // Done by store (marketplace) staff on the seller's behalf.
+  'staff.login_added': { ar: 'أضاف حساب دخول', en: 'added a login' },
+  'staff.login_updated': { ar: 'عدّل حساب دخول', en: 'changed a login' },
+  'staff.password_set': { ar: 'وضع كلمة مرور مؤقتة', en: 'set a temporary password' },
+  'staff.signed_out': { ar: 'سجّل خروج حساب من كل الأجهزة', en: 'signed a login out everywhere' },
+  'staff.login_removed': { ar: 'حذف حساب دخول', en: 'removed a login' },
+  'staff.owner_changed': { ar: 'غيّر مالك المتجر', en: 'changed the store owner' },
+  'staff.store_updated': { ar: 'عدّل بيانات المتجر', en: 'updated store details' },
 };
+
+const isStaffAction = (action = '') => action.startsWith('staff.');
 
 const FIELD = { price: { ar: 'السعر', en: 'Price', money: true }, oldPrice: { ar: 'قبل الخصم', en: 'Was', money: true }, stock: { ar: 'المخزون', en: 'Stock' }, nameEn: { ar: 'الاسم (EN)', en: 'Name (EN)' }, nameAr: { ar: 'الاسم (ع)', en: 'Name (AR)' }, status: { ar: 'الحالة', en: 'Status' } };
 
@@ -91,9 +101,9 @@ export default function SellerActivityPage() {
               const label = a.label && (to ? <Link to={to} className="font-semibold text-indigo-700 hover:underline">{a.label}</Link> : <span className="font-semibold">{a.label}</span>);
               return (
                 <li key={a._id} className="flex gap-3 px-5 py-3 text-sm">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600">{(a.actorName || '?').slice(0, 2).toUpperCase()}</span>
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600">{isStaffAction(a.action) ? '★' : (a.actorName || '?').slice(0, 2).toUpperCase()}</span>
                   <div className="min-w-0 flex-1">
-                    <p><span className="font-semibold">{a.actorName || (isAr ? 'النظام' : 'System')}</span> {meta ? (isAr ? meta.ar : meta.en) : a.action} {label}</p>
+                    <p><span className="font-semibold">{isStaffAction(a.action) ? (isAr ? 'فريق المتجر' : 'Store team') : a.actorName || (isAr ? 'النظام' : 'System')}</span> {meta ? (isAr ? meta.ar : meta.en) : a.action} {label}</p>
                     <Details details={a.details} isAr={isAr} />
                   </div>
                   <span className="shrink-0 text-xs text-slate-400">{new Date(a.createdAt).toLocaleString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>

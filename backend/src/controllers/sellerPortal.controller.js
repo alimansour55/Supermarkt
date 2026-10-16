@@ -63,6 +63,7 @@ export const getSellerMe = asyncHandler(async (req, res) => {
         email: req.user.email,
         role: req.user.role,
         permissions: sellerUserPermissions(req.user),
+        mustChangePassword: req.user.mustChangePassword === true,
       },
       team,
       marketplace: {

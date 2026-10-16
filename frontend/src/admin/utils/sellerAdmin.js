@@ -119,3 +119,63 @@ export function sellersToCsv(sellers, { isAr = false } = {}) {
   ]);
   return `${BOM}${[header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n')}`;
 }
+
+// ── Seller logins (admin Logins tab) ──
+
+const TEMP_LETTERS = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ';
+const TEMP_DIGITS = '23456789';
+
+/**
+ * A temporary password staff can read over the phone: no look-alike characters (0/O, 1/l/I),
+ * always letters + digits so it passes the seller password rule. `rand` is injectable for tests.
+ */
+export function generateTempPassword(rand = Math.random) {
+  const pick = (set) => set[Math.floor(rand() * set.length) % set.length];
+  const letters = Array.from({ length: 6 }, () => pick(TEMP_LETTERS)).join('');
+  const digits = Array.from({ length: 4 }, () => pick(TEMP_DIGITS)).join('');
+  return `${letters}${digits}`;
+}
+
+/** Same rule as the backend: 8+ characters with a letter and a digit. */
+export const isStrongSellerPassword = (p) => String(p || '').length >= 8 && /[A-Za-z\u0600-\u06FF]/.test(p) && /\d/.test(p);
+
+/** Status chips for one login, most important first. */
+export function loginBadges(user = {}, now = new Date()) {
+  const out = [];
+  if (user.isActive === false) out.push('off');
+  if (user.lockedUntil && new Date(user.lockedUntil) > now) out.push('locked');
+  if (user.mustChangePassword) out.push('temp_password');
+  if (!user.lastLoginAt) out.push('never');
+  if (user.twoFactorEnabled) out.push('two_factor');
+  return out;
+}
+
+export const LOGIN_BADGES = {
+  off: { ar: 'موقوف', en: 'Turned off', tone: 'bg-red-50 text-red-700' },
+  locked: { ar: 'مقفول مؤقتاً', en: 'Locked', tone: 'bg-red-50 text-red-700' },
+  temp_password: { ar: 'كلمة مرور مؤقتة', en: 'Temporary password', tone: 'bg-amber-50 text-amber-800' },
+  never: { ar: 'لم يدخل بعد', en: 'Never signed in', tone: 'bg-amber-50 text-amber-800' },
+  two_factor: { ar: 'تحقق بخطوتين', en: '2-step on', tone: 'bg-emerald-50 text-emerald-700' },
+};
+
+/** "Chrome · Windows" from a user agent. */
+export function deviceLabel(ua = '') {
+  const browser = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  const os = /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : '';
+  return os ? `${browser} · ${os}` : browser;
+}
+
+/** WhatsApp text for a temporary password — never emailed, staff share it themselves. */
+export function tempPasswordMessage({ storeName = '', email = '', password, loginUrl }) {
+  const store = storeName ? ` (${storeName})` : '';
+  return [
+    `كلمة مرور مؤقتة لحسابك في مركز البائعين${store}:`,
+    password,
+    `البريد: ${email}`,
+    `ادخل من هنا: ${loginUrl}`,
+    'سيُطلب منك اختيار كلمة مرور جديدة بعد الدخول.',
+    '',
+    `Temporary Seller Center password${store}: ${password}`,
+    `Sign in: ${loginUrl} — you will choose a new password right after.`,
+  ].join('\n');
+}

@@ -1,5 +1,14 @@
 import { Router } from 'express';
 import { requirePermission } from '../middleware/auth.js';
+import { optionalUploadFields } from '../middleware/upload.js';
+import {
+  addSellerLoginAdmin,
+  updateSellerLoginAdmin,
+  setSellerLoginPasswordAdmin,
+  signOutSellerLoginAdmin,
+  removeSellerLoginAdmin,
+  transferSellerOwnerAdmin,
+} from '../controllers/sellerAdminAccess.controller.js';
 import { listSellerReviewsAdmin, setSellerReviewStatusAdmin } from '../controllers/sellerReview.controller.js';
 import { listInboundAdmin, receiveInboundAdmin } from '../controllers/sellerOps.controller.js';
 import { listPromotionsAdmin, reviewPromotionAdmin } from '../controllers/sellerGrowth.controller.js';
@@ -27,6 +36,7 @@ import {
   createSellerAdmin,
   sendSellerAccessAdmin,
   updateSellerAdmin,
+  updateSellerMediaAdmin,
   changeSellerStatusAdmin,
   reviewSellerDocument,
   listListingQueue,
@@ -52,6 +62,14 @@ router.put('/sellers/:id', ...write, updateSellerAdmin);
 router.post('/sellers/:id/status', ...write, changeSellerStatusAdmin);
 router.put('/sellers/:id/documents/:docId', ...write, reviewSellerDocument);
 router.post('/sellers/:id/access', ...write, sendSellerAccessAdmin);
+router.post('/sellers/:id/media', ...write, optionalUploadFields([{ name: 'logo', maxCount: 1 }, { name: 'banner', maxCount: 1 }]), updateSellerMediaAdmin);
+// Logins (support: temporary password, sign out, unlock, 2-step reset, team, owner)
+router.post('/sellers/:id/users', ...write, addSellerLoginAdmin);
+router.put('/sellers/:id/users/:userId', ...write, updateSellerLoginAdmin);
+router.post('/sellers/:id/users/:userId/password', ...write, setSellerLoginPasswordAdmin);
+router.post('/sellers/:id/users/:userId/sign-out', ...write, signOutSellerLoginAdmin);
+router.delete('/sellers/:id/users/:userId', ...write, removeSellerLoginAdmin);
+router.post('/sellers/:id/owner', ...write, transferSellerOwnerAdmin);
 
 router.get('/listings', ...read, listListingQueue);
 router.post('/listings/:id/approve', ...write, approveListing);

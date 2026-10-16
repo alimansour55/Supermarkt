@@ -119,6 +119,11 @@ const userSchema = new mongoose.Schema(
     sessionVersion: { type: Number, default: 0 },
     /** Seller logins: email a one-time code on every sign-in. */
     twoFactorEnabled: { type: Boolean, default: false },
+    /** Seller logins: staff set a temporary password — the user must pick their own next. */
+    mustChangePassword: { type: Boolean, default: false },
+    /** Seller logins: wrong passwords in a row; too many locks sign-in for a while. */
+    failedLoginCount: { type: Number, default: 0 },
+    lockedUntil: { type: Date, default: null },
     loginCodeHash: { type: String, select: false },
     loginCodeExpires: { type: Date, select: false },
     loginCodeAttempts: { type: Number, default: 0, select: false },

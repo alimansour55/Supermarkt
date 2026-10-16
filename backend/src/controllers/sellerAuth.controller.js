@@ -25,6 +25,9 @@ import {
 const CODE_TTL_MS = 10 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
 const MAX_CODE_ATTEMPTS = 5;
+/** Wrong passwords in a row before sign-in locks, and for how long. */
+export const MAX_PASSWORD_ATTEMPTS = 10;
+export const LOCK_MS = 15 * 60 * 1000;
 const sha256 = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
 const secret = () => process.env.JWT_SECRET;
 
@@ -38,7 +41,7 @@ export function assertStrongPassword(password) {
 
 const maskEmail = (email) => String(email || '').replace(/^(.)(.*)(.@.*)$/, (_m, a, b, c) => `${a}${'•'.repeat(Math.min(6, b.length))}${c}`);
 
-function sendQuietly(message, to) {
+export function sendQuietly(message, to) {
   sendEmail({ to, ...message }).catch((err) => console.error('Seller email failed:', err.message));
 }
 
@@ -46,7 +49,7 @@ function authPayload(user) {
   return {
     success: true,
     token: generateToken(user._id, { sv: user.sessionVersion }),
-    user: { id: user._id, name: user.name, email: user.email, role: user.role, seller: user.seller },
+    user: { id: user._id, name: user.name, email: user.email, role: user.role, seller: user.seller, mustChangePassword: user.mustChangePassword === true },
   };
 }
 
@@ -54,7 +57,7 @@ async function completeSignIn(user, req, res) {
   const entry = { at: new Date(), ip: clientIp(req), userAgent: String(req.headers['user-agent'] || '').slice(0, 300) };
   await User.updateOne(
     { _id: user._id },
-    { $set: { lastLoginAt: entry.at }, $push: { loginHistory: { $each: [entry], $position: 0, $slice: 10 } } },
+    { $set: { lastLoginAt: entry.at, failedLoginCount: 0, lockedUntil: null }, $push: { loginHistory: { $each: [entry], $position: 0, $slice: 10 } } },
   );
   sendQuietly(sellerNewSignInTemplate(user, entry), user.email);
   await logSellerActivity(req, { sellerId: user.seller, actor: user, action: 'security.login', label: entry.ip });
@@ -79,7 +82,20 @@ export const sellerSignIn = asyncHandler(async (req, res) => {
   if (!email || !password) throw new AppError('Email and password are required', 400);
 
   const user = await User.findOne({ email, role: { $in: SELLER_ROLES } }).select('+password');
+  if (user?.lockedUntil && user.lockedUntil > new Date()) {
+    const minutes = Math.max(1, Math.ceil((user.lockedUntil - Date.now()) / 60000));
+    throw new AppError(`Too many wrong passwords. Try again in ${minutes} minutes, or ask the store team to unlock your login.`, 429);
+  }
   if (!user || user.isActive === false || !user.password || !(await user.comparePassword(password))) {
+    if (user && user.isActive !== false) {
+      const count = (user.failedLoginCount || 0) + 1;
+      await User.updateOne(
+        { _id: user._id },
+        count >= MAX_PASSWORD_ATTEMPTS
+          ? { $set: { failedLoginCount: 0, lockedUntil: new Date(Date.now() + LOCK_MS) } }
+          : { $set: { failedLoginCount: count } },
+      );
+    }
     throw new AppError('Invalid email or password', 401);
   }
 
@@ -131,7 +147,7 @@ export const resendSellerSignInCode = asyncHandler(async (req, res) => {
 // ── Forgot / reset password ──
 
 /** Store a fresh one-time password link for a seller user; returns the raw token. */
-async function issuePasswordToken(user, ttlMs) {
+export async function issuePasswordToken(user, ttlMs) {
   const token = crypto.randomBytes(32).toString('hex');
   await User.updateOne(
     { _id: user._id },
@@ -188,6 +204,7 @@ export const resetSellerPassword = asyncHandler(async (req, res) => {
   user.password = String(req.body.password);
   user.resetPasswordToken = undefined;
   user.resetPasswordExpires = undefined;
+  user.mustChangePassword = false;
   user.sessionVersion = (user.sessionVersion || 0) + 1;
   await user.save();
   await logSellerActivity(req, { sellerId: user.seller, actor: user, action: 'security.password_reset' });
@@ -222,6 +239,7 @@ export const changeMyPassword = asyncHandler(async (req, res) => {
   assertStrongPassword(req.body.newPassword);
   if (await user.comparePassword(String(req.body.newPassword))) throw new AppError('Choose a different password', 400);
   user.password = String(req.body.newPassword);
+  user.mustChangePassword = false;
   user.sessionVersion = (user.sessionVersion || 0) + 1;
   await user.save();
   await logSellerActivity(req, { action: 'security.password_change' });

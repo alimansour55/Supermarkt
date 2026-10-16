@@ -142,3 +142,33 @@ export const sellerLowStockTemplate = ({ seller, product, available }) => ({
   }),
   text: `Low stock: ${product.nameEn || product.nameAr} has ${available} left.`,
 });
+
+/** Store staff changed something on a seller login — the seller always hears about it. */
+const STAFF_CHANGE_TEXT = {
+  password: ['وضع فريق المتجر كلمة مرور مؤقتة لحسابك. ستُطلب منك كلمة مرور جديدة عند الدخول.', 'Store staff set a temporary password on your login.'],
+  email: ['غيّر فريق المتجر البريد الذي تدخل به إلى مركز البائعين.', 'Store staff changed the email you sign in with.'],
+  two_factor_off: ['أوقف فريق المتجر التحقق بخطوتين لحسابك. يمكنك تفعيله مجدداً من صفحة الأمان.', 'Store staff turned off 2-step verification on your login.'],
+  signed_out: ['سجّل فريق المتجر خروج حسابك من كل الأجهزة.', 'Store staff signed your login out of every device.'],
+  owner: ['أصبحت المالك لهذا المتجر في مركز البائعين.', 'You are now the owner of this store in Seller Center.'],
+};
+
+export const sellerStaffChangeTemplate = (user, { change, seller } = {}) => {
+  const [ar, en] = STAFF_CHANGE_TEXT[change] || STAFF_CHANGE_TEXT.password;
+  return {
+    subject: 'تغيير على حسابك في مركز البائعين',
+    html: renderEmailLayout({
+      preheader: ar,
+      title: 'تغيير على حسابك',
+      heading: 'تغيير على حسابك',
+      subtitle: esc(seller?.nameAr || seller?.nameEn || 'مركز البائعين — Seller Center'),
+      bodyHtml: `
+        <p style="margin: 0 0 16px;">مرحباً <strong>${esc(user.name)}</strong>،</p>
+        <p style="margin: 0 0 16px;">${ar}</p>
+        <p style="margin: 0 0 16px;">إذا لم تطلب هذا، تواصل مع فريق المتجر فوراً.</p>
+        ${renderButton(`${clientUrl()}/seller-center/store/security`, 'صفحة الأمان')}
+      `,
+      footerNote: en,
+    }),
+    text: `${en} If you did not ask for this, contact the store team.`,
+  };
+};
