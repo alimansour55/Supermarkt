@@ -14,6 +14,12 @@ import {
   exportPendingPayoutsAdmin,
 } from '../controllers/sellerFinance.controller.js';
 import {
+  getProfitReportAdmin,
+  exportProfitReportAdmin,
+  previewFeesAdmin,
+  chargePenaltyAdmin,
+} from '../controllers/sellerProfit.controller.js';
+import {
   getMarketplaceAdminSettings,
   updateMarketplaceAdminSettings,
   listSellers,
@@ -71,5 +77,11 @@ router.get('/payouts', ...requirePermission('reports:read'), listPayoutsAdmin);
 router.get('/payouts/export', ...write, exportPendingPayoutsAdmin);
 router.post('/payouts/:id/paid', ...write, markPayoutPaidAdmin);
 router.post('/payouts/:id/cancel', ...write, cancelPayoutAdmin);
+router.post('/sellers/:id/penalties', ...write, chargePenaltyAdmin);
+
+// Profit from sellers and the fee calculator.
+router.get('/profit', ...requirePermission('reports:read'), getProfitReportAdmin);
+router.get('/profit/export', ...requirePermission('reports:read'), exportProfitReportAdmin);
+router.post('/fees/preview', ...read, previewFeesAdmin);
 
 export default router;

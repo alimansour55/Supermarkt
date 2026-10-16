@@ -3,8 +3,9 @@
  * posting — a retried request, a status set twice — can never double-pay a seller.
  *
  * Lifecycle: delivered shipment → sale, fees, commission (and cash the seller collected),
- * all payable after the hold period → a staff-generated payout locks the payable entries →
- * marking it paid posts the payout debit.
+ * all payable after the hold period → a payout (staff-generated or from the automatic schedule)
+ * locks the payable entries → marking it paid posts the payout debit. Monthly plan fees and
+ * staff-charged penalties are debited as they happen.
  */
 import mongoose from 'mongoose';
 import Seller from '../models/Seller.js';
@@ -14,6 +15,7 @@ import SellerPayout from '../models/SellerPayout.js';
 import Counter from '../models/Counter.js';
 import { AppError } from '../utils/AppError.js';
 import { getMarketplaceSettings } from './marketplace.service.js';
+import { effectiveFeeConfig, computeReturnReversal, cairoMonthKey, payoutRunKey } from '../utils/sellerFees.js';
 import { createUserNotification } from './userNotification.service.js';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -44,9 +46,13 @@ async function postEntries(entries) {
  */
 export async function postShipmentSettlement(shipment) {
   if (shipment.status !== 'delivered') return 0;
-  const settings = await getMarketplaceSettings();
+  const [settings, seller] = await Promise.all([
+    getMarketplaceSettings(),
+    Seller.findById(shipment.seller).select('feePlan feeOverrides').lean(),
+  ]);
+  const holdDays = effectiveFeeConfig(settings, seller).payoutHoldDays;
   const deliveredAt = shipment.deliveredAt || new Date();
-  const availableAt = new Date(deliveredAt.getTime() + (settings.payoutHoldDays || 0) * DAY);
+  const availableAt = new Date(deliveredAt.getTime() + (holdDays || 0) * DAY);
   const base = {
     seller: shipment.seller,
     shipment: shipment._id,
@@ -60,6 +66,9 @@ export async function postShipmentSettlement(shipment) {
     { ...base, type: 'delivery_fee', amount: shipment.deliveryFee, key: k('delivery_fee') },
     { ...base, type: 'commission', amount: -shipment.commissionTotal, key: k('commission') },
     { ...base, type: 'fulfillment_fee', amount: -shipment.fulfillmentFee, key: k('fulfillment_fee') },
+    { ...base, type: 'fixed_fee', amount: -(shipment.fixedFees || 0), key: k('fixed_fee') },
+    { ...base, type: 'payment_fee', amount: -(shipment.paymentFee || 0), key: k('payment_fee') },
+    { ...base, type: 'fee_vat', amount: -(shipment.feeVat || 0), key: k('fee_vat') },
     { ...base, type: 'cod_collected', amount: -(shipment.collectAmount || 0), key: k('cod_collected') },
   ]);
   if (!shipment.settledAt) {
@@ -69,8 +78,9 @@ export async function postShipmentSettlement(shipment) {
 }
 
 /**
- * An approved return of a seller line: take back its value and give back its commission,
- * in proportion to the returned quantity. Idempotent per return.
+ * An approved return of a seller line: take back its value and give back its commission (minus
+ * the refund admin fee, plus the VAT charged on it), in proportion to the returned quantity.
+ * Fixed and payment fees are not refunded. Idempotent per return.
  */
 export async function postReturnReversal(order, returnDoc) {
   const item = order.items?.[returnDoc.itemIndex];
@@ -92,9 +102,23 @@ export async function postReturnReversal(order, returnDoc) {
   // Not settled yet (return approved before delivery was posted) → settle first so the
   // reversal nets against real entries.
   if (shipment.status === 'delivered' && !shipment.settledAt) await postShipmentSettlement(shipment);
+  const settings = await getMarketplaceSettings();
+  const back = computeReturnReversal({
+    line,
+    ratio,
+    vatPercent: shipment.vatPercent || 0,
+    returnAdminFeePercent: settings.fees?.returnAdminFeePercent || 0,
+  });
   return postEntries([
-    { ...base, type: 'return', amount: -(line.lineTotal * ratio), key: k('return') },
-    { ...base, type: 'commission_reversal', amount: line.commission * ratio, key: k('commission') },
+    { ...base, type: 'return', amount: -back.value, key: k('return') },
+    {
+      ...base,
+      type: 'commission_reversal',
+      amount: back.commissionBack,
+      note: back.adminFeeKept ? `Refund admin fee kept: ${back.adminFeeKept}` : '',
+      key: k('commission'),
+    },
+    { ...base, type: 'fee_vat', amount: back.vatBack, key: k('fee_vat') },
   ]);
 }
 
@@ -161,6 +185,84 @@ export async function addAdjustment(sellerId, { amount, note, actor }) {
   return entry;
 }
 
+export const PENALTY_REASONS = ['late_shipment', 'cancellation', 'wrong_item', 'policy', 'other'];
+
+/** A fee staff charge a seller (late shipment, seller cancellation, policy breach…). */
+export async function chargePenalty(sellerId, { amount, reason, note, actor }) {
+  const value = round2(amount);
+  if (!(value > 0)) throw new AppError('Fee must be more than zero', 400);
+  if (!PENALTY_REASONS.includes(reason)) throw new AppError('Choose a reason', 400);
+  return SellerLedgerEntry.create({
+    seller: sellerId,
+    type: 'penalty',
+    amount: -value,
+    availableAt: new Date(),
+    reason,
+    note: String(note || '').trim().slice(0, 500),
+    createdBy: actor?._id || null,
+    key: `pen:${new mongoose.Types.ObjectId()}`,
+  });
+}
+
+/**
+ * Monthly plan fees: one `subscription_fee` per active seller per Cairo month (idempotent by
+ * key, so running it every few minutes is safe). Sellers on a 0 fee are skipped.
+ */
+export async function runSubscriptionFees(now = new Date()) {
+  const settings = await getMarketplaceSettings();
+  const anyFee = (settings.fees?.monthlyFee || 0) > 0 || (settings.plans || []).some((p) => p.monthlyFee > 0);
+  const filter = { status: 'active' };
+  if (!anyFee) filter['feeOverrides.monthlyFee'] = { $gt: 0 };
+  const sellers = await Seller.find(filter).select('feePlan feeOverrides').lean();
+  const month = cairoMonthKey(now);
+  let posted = 0;
+  for (const seller of sellers) {
+    const fee = effectiveFeeConfig(settings, seller).monthlyFee;
+    if (!(fee > 0)) continue;
+    // eslint-disable-next-line no-await-in-loop
+    posted += await postEntries([{
+      seller: seller._id,
+      type: 'subscription_fee',
+      amount: -fee,
+      availableAt: now,
+      reference: `Plan ${month}`,
+      key: `sub:${seller._id}:${month}`,
+    }]);
+  }
+  return posted;
+}
+
+/**
+ * Automatic payout runs: on a payout day, generate a payout for every seller with enough
+ * payable money and payout details. Staff still transfer the money and mark it paid.
+ * A seller's own frequency (feeOverrides.payoutFrequency) replaces the marketplace one.
+ */
+export async function runScheduledPayouts(now = new Date()) {
+  const settings = await getMarketplaceSettings();
+  const base = settings.payoutSchedule || { frequency: 'manual' };
+  if (base.frequency === 'manual'
+    && !(await Seller.exists({ 'feeOverrides.payoutFrequency': { $in: ['weekly', 'biweekly', 'monthly'] } }))) return 0;
+  const balances = await listSellerBalances({ now });
+  const min = Math.max(settings.minPayoutAmount || 0, 0.01);
+  const due = balances.filter((b) => b.available >= min && b.seller?.status === 'active' && b.seller?.hasBank);
+  if (!due.length) return 0;
+  const sellers = await Seller.find({ _id: { $in: due.map((b) => b.seller._id) } }).select('feeOverrides').lean();
+  let created = 0;
+  for (const seller of sellers) {
+    const freq = seller.feeOverrides?.payoutFrequency || base.frequency;
+    const runKey = payoutRunKey({ ...base, frequency: freq }, now);
+    if (!runKey) continue;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await generatePayout(seller._id, { now, scheduleKey: `${freq}:${runKey}` });
+      created += 1;
+    } catch (err) {
+      if (err?.code !== 11000 && !(err instanceof AppError)) throw err;
+    }
+  }
+  return created;
+}
+
 async function nextPayoutNumber() {
   const counter = await Counter.findOneAndUpdate(
     { _id: 'sellerPayout' },
@@ -174,10 +276,13 @@ async function nextPayoutNumber() {
  * Lock every payable entry of a seller into a new payout. Refuses when the payable total is
  * below the marketplace minimum (or not positive — the seller owes money).
  */
-export async function generatePayout(sellerId, { actor = null, now = new Date() } = {}) {
+export async function generatePayout(sellerId, { actor = null, now = new Date(), scheduleKey } = {}) {
   const seller = await Seller.findById(sellerId);
   if (!seller) throw new AppError('Seller not found', 404);
   const settings = await getMarketplaceSettings();
+  if (scheduleKey && await SellerPayout.exists({ seller: seller._id, scheduleKey })) {
+    throw new AppError('Already paid out in this run', 409);
+  }
 
   const filter = { seller: seller._id, payout: null, type: { $ne: 'payout' }, availableAt: { $lte: now } };
   const entries = await SellerLedgerEntry.find(filter).select('_id amount').lean();
@@ -197,6 +302,7 @@ export async function generatePayout(sellerId, { actor = null, now = new Date() 
     periodEnd: now,
     bankSnapshot: seller.bank ? { ...seller.bank.toObject?.() ?? seller.bank } : null,
     createdBy: actor?._id || null,
+    ...(scheduleKey ? { scheduleKey } : {}),
   });
   // Lock exactly the entries that were summed (an entry posted meanwhile stays for next time).
   await SellerLedgerEntry.updateMany({ _id: { $in: entries.map((e) => e._id) }, payout: null }, { $set: { payout: payout._id } });
@@ -235,7 +341,7 @@ export async function markPayoutPaid(payoutId, { method = 'bank_transfer', refer
       type: 'seller_payout',
       titleAr: 'تم تحويل أرباحك',
       titleEn: 'Payout sent',
-      messageAr: `حوّلنا ${payout.amount} ج.م (${payout.payoutNumber}).`,
+      messageAr: `حوّلنا ${payout.amount} EGP (${payout.payoutNumber}).`,
       messageEn: `We sent you ${payout.amount} EGP (${payout.payoutNumber}).`,
       link: '/seller-center/finance',
       data: { payoutId: payout._id },

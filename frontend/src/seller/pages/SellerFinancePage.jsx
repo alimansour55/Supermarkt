@@ -8,6 +8,39 @@ import { LEDGER_TYPE, PAYOUT_STATUS, label } from '../sellerLabels';
 import StatusBadge from '../StatusBadge';
 import { PageSkeleton } from '../ui';
 
+/** The seller's own fee terms, so it knows what it pays before it sells. */
+function FeeTerms({ fees, isAr }) {
+  const rows = [
+    [isAr ? 'العمولة' : 'Commission', `${fees.commissionRate}%${fees.categoryRates ? (isAr ? ' (تختلف حسب القسم)' : ' (varies by category)') : ''}`],
+    fees.minCommissionPerItem > 0 && [isAr ? 'أقل عمولة للقطعة' : 'Minimum per item', formatPrice(fees.minCommissionPerItem)],
+    fees.maxCommissionPerItem > 0 && [isAr ? 'أقصى عمولة للقطعة' : 'Maximum per item', formatPrice(fees.maxCommissionPerItem)],
+    fees.fixedFeePerItem > 0 && [isAr ? 'رسوم لكل قطعة مباعة' : 'Fee per item sold', formatPrice(fees.fixedFeePerItem)],
+    fees.fixedFeePerShipment > 0 && [isAr ? 'رسوم لكل شحنة' : 'Fee per shipment', formatPrice(fees.fixedFeePerShipment)],
+    fees.storeFulfillmentFeePerItem > 0 && [isAr ? 'شحن المتجر لكل قطعة' : 'Store fulfillment per item', formatPrice(fees.storeFulfillmentFeePerItem)],
+    fees.monthlyFee > 0 && [isAr ? 'اشتراك شهري' : 'Monthly fee', formatPrice(fees.monthlyFee)],
+    fees.vatPercent > 0 && [isAr ? 'ضريبة على الرسوم' : 'VAT on fees', `${fees.vatPercent}%`],
+  ].filter(Boolean);
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="font-bold">
+        {isAr ? 'رسومك' : 'Your fees'}
+        {fees.plan && <span className="ms-2 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">{isAr ? fees.plan.nameAr || fees.plan.nameEn : fees.plan.nameEn || fees.plan.nameAr}</span>}
+      </h2>
+      {fees.commissionFreeUntil && (
+        <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {isAr ? 'بدون عمولة حتى ' : 'No commission until '}
+          {new Date(new Date(fees.commissionFreeUntil).getTime() - 1).toLocaleDateString(isAr ? 'ar-EG' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Cairo' })}
+        </p>
+      )}
+      <dl className="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-3 border-b border-slate-100 py-1"><dt className="text-slate-500">{k}</dt><dd className="font-semibold tabular-nums" dir="ltr">{v}</dd></div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 function fmtDate(value, isAr) {
   return value ? new Date(value).toLocaleDateString(isAr ? 'ar-EG-u-nu-latn' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 }
@@ -74,6 +107,8 @@ export default function SellerFinancePage() {
           ? 'تُحتسب أرباح كل شحنة عند تسليمها: قيمة المنتجات ورسوم التوصيل، مخصوماً منها العمولة ورسوم الشحن والنقدية التي حصّلتها بنفسك.'
           : 'Each shipment is credited on delivery: items plus delivery fee, minus commission, fulfillment fees and any cash you collected yourself.'}
       </p>
+
+      {finance.fees && <FeeTerms fees={finance.fees} isAr={isAr} />}
 
       <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <h2 className="border-b border-slate-100 px-5 py-3 font-bold">{isAr ? 'التحويلات' : 'Payouts'}</h2>

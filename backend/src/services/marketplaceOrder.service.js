@@ -16,7 +16,8 @@ import User from '../models/User.js';
 import Shipment, { SELLER_SHIPMENT_TRANSITIONS } from '../models/Shipment.js';
 import { AppError } from '../utils/AppError.js';
 import { normalizeVariantId } from '../utils/productCatalog.js';
-import { getMarketplaceSettings, resolveCommissionRate } from './marketplace.service.js';
+import { getMarketplaceSettings } from './marketplace.service.js';
+import { computeShipmentFees } from '../utils/sellerFees.js';
 import { pushStatusHistory } from './orderManagement.service.js';
 import { createUserNotification } from './userNotification.service.js';
 import { postShipmentSettlement } from './sellerLedger.service.js';
@@ -39,7 +40,7 @@ export async function planMarketplaceItems(items = [], { deliveryZoneId = null, 
 
   const sellerIds = [...new Set(products.filter((p) => p.seller).map((p) => String(p.seller)))];
   const sellers = sellerIds.length
-    ? await Seller.find({ _id: { $in: sellerIds } }).select('nameAr nameEn status deliveryZones commissionRate categoryCommissions').lean()
+    ? await Seller.find({ _id: { $in: sellerIds } }).select('nameAr nameEn status deliveryZones commissionRate categoryCommissions feePlan feeOverrides approvedAt createdAt').lean()
     : [];
   const sellerById = new Map(sellers.map((s) => [String(s._id), s]));
 
@@ -106,11 +107,22 @@ export async function createShipmentsForOrder(order, plan, { lineTotals = [] } =
   const payableRatio = gross > 0 ? Math.min(1, (Number(order.total) || 0) / gross) : 0;
 
   const docs = plan.sellerGroups.map((group, n) => {
-    const items = group.indices.map((i) => {
+    const deliveryFee = group.fulfilledBy === 'seller' ? round2(settings.sellerShipmentDeliveryFee) : 0;
+    const fees = computeShipmentFees({
+      settings,
+      seller: group.seller,
+      fulfilledBy: group.fulfilledBy,
+      deliveryFee,
+      paymentMethod: order.paymentMethod,
+      lines: group.indices.map((i) => ({
+        product: plan.lines[i].product,
+        quantity: order.items[i].quantity,
+        lineTotal: lineTotals[i] ?? order.items[i].price * order.items[i].quantity,
+      })),
+    });
+    const items = group.indices.map((i, k) => {
       const item = order.items[i];
-      const product = plan.lines[i].product;
       const lineTotal = round2(lineTotals[i] ?? item.price * item.quantity);
-      const commissionRate = resolveCommissionRate({ seller: group.seller, product, settings });
       return {
         itemIndex: i,
         product: item.product,
@@ -124,15 +136,10 @@ export async function createShipmentsForOrder(order, plan, { lineTotals = [] } =
         price: item.price,
         quantity: item.quantity,
         lineTotal,
-        commissionRate,
-        commission: round2((lineTotal * commissionRate) / 100),
+        ...fees.items[k],
       };
     });
-    const subtotal = round2(items.reduce((s, it) => s + it.lineTotal, 0));
-    const commissionTotal = round2(items.reduce((s, it) => s + it.commission, 0));
-    const units = items.reduce((s, it) => s + it.quantity, 0);
-    const deliveryFee = group.fulfilledBy === 'seller' ? round2(settings.sellerShipmentDeliveryFee) : 0;
-    const fulfillmentFee = group.fulfilledBy === 'store' ? round2(units * (settings.storeFulfillmentFeePerItem || 0)) : 0;
+    const { subtotal } = fees;
     return {
       order: order._id,
       orderNumber: order.orderNumber,
@@ -145,9 +152,14 @@ export async function createShipmentsForOrder(order, plan, { lineTotals = [] } =
       items,
       subtotal,
       deliveryFee,
-      commissionTotal,
-      fulfillmentFee,
-      sellerNet: round2(subtotal + deliveryFee - commissionTotal - fulfillmentFee),
+      commissionTotal: fees.commissionTotal,
+      fulfillmentFee: fees.fulfillmentFee,
+      fixedFees: fees.fixedFees,
+      paymentFee: fees.paymentFee,
+      feeVat: fees.feeVat,
+      vatPercent: fees.vatPercent,
+      feePlan: fees.plan?.key || '',
+      sellerNet: fees.sellerNet,
       paymentMethod: order.paymentMethod,
       collectAmount: order.paymentMethod === 'cod' && group.fulfilledBy === 'seller'
         ? round2((subtotal + deliveryFee) * payableRatio)

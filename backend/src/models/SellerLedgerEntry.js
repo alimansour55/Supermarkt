@@ -9,6 +9,11 @@ export const SELLER_LEDGER_TYPES = [
   'delivery_fee', // + delivery fee the customer paid for a seller-shipped shipment
   'commission', // − marketplace commission
   'fulfillment_fee', // − store fulfillment fee (store-shipped seller items)
+  'fixed_fee', // − fixed fee per item sold / per shipment
+  'payment_fee', // − payment processing fee
+  'fee_vat', // − VAT on marketplace fees (+ when given back on a return)
+  'subscription_fee', // − monthly plan fee
+  'penalty', // − fee charged by staff (late shipment, cancellation, policy…)
   'cod_collected', // − cash the seller collected from the customer itself
   'return', // − refunded line value of a returned item
   'commission_reversal', // + commission given back on a returned item
@@ -30,6 +35,8 @@ const sellerLedgerEntrySchema = new mongoose.Schema(
     /** Payout this entry was settled in (set when the payout is generated). */
     payout: { type: mongoose.Schema.Types.ObjectId, ref: 'SellerPayout', default: null, index: true },
     note: { type: String, trim: true, default: '' },
+    /** Penalty reason code (late_shipment, cancellation, …). */
+    reason: { type: String, trim: true, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     /** Idempotency key — the same business event can never be posted twice. */
     key: { type: String, required: true, unique: true },
@@ -39,6 +46,7 @@ const sellerLedgerEntrySchema = new mongoose.Schema(
 
 sellerLedgerEntrySchema.index({ seller: 1, createdAt: -1 });
 sellerLedgerEntrySchema.index({ seller: 1, payout: 1, availableAt: 1 });
+sellerLedgerEntrySchema.index({ createdAt: -1, type: 1 });
 
 const SellerLedgerEntry = mongoose.model('SellerLedgerEntry', sellerLedgerEntrySchema);
 

@@ -12,6 +12,9 @@ import { formatDate, formatMoneyLatin } from '../../../utils/formatters';
 import { SELLER_NEXT_ACTIONS, sellerChecklist } from '../../utils/sellerAdmin';
 import SellerAccessSection from './SellerAccessSection';
 import SellerReasonDialog from './SellerReasonDialog';
+import SellerPenaltyForm from './SellerPenaltyForm';
+import FeeCalculator from '../sellerFees/FeeCalculator';
+import { cairoDate, cairoDayStart, categoryOptions, rangeFromPreset, toField, toNum } from '../../utils/sellerFeesAdmin';
 
 const inputCls = 'w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-slate-50';
 const money = (n, isAr) => `${formatMoneyLatin(n || 0, { maximumFractionDigits: 0 })} ${isAr ? 'ج.م' : 'EGP'}`;
@@ -49,14 +52,38 @@ function formFromSeller(s) {
     autoApproveListings: Boolean(s.autoApproveListings),
     handlingDays: String(s.handlingDays ?? 2),
     internalNote: s.internalNote || '',
+    feePlan: s.feePlan || '',
+    feeOverrides: overridesForm(s.feeOverrides),
+  };
+}
+
+const OVERRIDE_NUMBERS = ['fixedFeePerItem', 'fixedFeePerShipment', 'minCommissionPerItem', 'maxCommissionPerItem', 'storeFulfillmentFeePerItem', 'monthlyFee', 'payoutHoldDays'];
+
+function overridesForm(o = {}) {
+  return {
+    ...Object.fromEntries(OVERRIDE_NUMBERS.map((k) => [k, toField(o?.[k])])),
+    // Stored as the instant after the last free day.
+    commissionFreeUntil: o?.commissionFreeUntil ? cairoDate(new Date(new Date(o.commissionFreeUntil).getTime() - 1)) : '',
+    vatExempt: o?.vatExempt === true,
+    payoutFrequency: o?.payoutFrequency || '',
+  };
+}
+
+function overridesPayload(o) {
+  return {
+    ...Object.fromEntries(OVERRIDE_NUMBERS.map((k) => [k, toNum(o[k])])),
+    // "Free until" a date includes that whole day.
+    commissionFreeUntil: o.commissionFreeUntil ? new Date(new Date(cairoDayStart(o.commissionFreeUntil)).getTime() + 86400000).toISOString() : null,
+    vatExempt: o.vatExempt,
+    payoutFrequency: o.payoutFrequency,
   };
 }
 
 const TABS = [
   { id: 'overview', ar: 'نظرة عامة', en: 'Overview' },
   { id: 'documents', ar: 'المستندات', en: 'Documents' },
-  { id: 'rules', ar: 'العمولة والقواعد', en: 'Commission & rules' },
-  { id: 'payouts', ar: 'المدفوعات', en: 'Payouts' },
+  { id: 'rules', ar: 'العمولة والرسوم', en: 'Fees & rules' },
+  { id: 'payouts', ar: 'الأرباح والمدفوعات', en: 'Money' },
   { id: 'logins', ar: 'الدخول', en: 'Logins' },
 ];
 
@@ -82,7 +109,7 @@ function Checklist({ items, isAr }) {
   );
 }
 
-export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMoney, onChanged, onDirtyChange }) {
+export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMoney, onChanged, onDirtyChange, initialTab = 'overview' }) {
   const toast = useToast();
   const confirm = useConfirm();
   const [seller, setSeller] = useState(null);
@@ -90,7 +117,9 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
   const [initialForm, setInitialForm] = useState(null);
   const [categories, setCategories] = useState([]);
   const [balance, setBalance] = useState(null);
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(TABS.some((t) => t.id === initialTab) ? initialTab : 'overview');
+  const [plans, setPlans] = useState([]);
+  const [profit, setProfit] = useState(null);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [reasonFor, setReasonFor] = useState('');
@@ -109,7 +138,16 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     categoryService.getAll().then(({ data }) => setCategories(data.data || [])).catch(() => {});
+    adminApi.getMarketplaceSettings().then(({ data }) => setPlans(data.data?.plans || [])).catch(() => {});
   }, []);
+  const loadProfit = useCallback(() => Promise.all([
+    adminApi.getSellerProfit({ sellerId, ...rangeFromPreset('30d') }),
+    adminApi.getSellerProfit({ sellerId, from: '2000-01-01', to: cairoDate() }),
+  ]).then(([recent, all]) => setProfit({ recent: recent.data.data.totals, all: all.data.data.totals })).catch(() => setProfit({})), [sellerId]);
+  useEffect(() => {
+    if (tab !== 'payouts' || !canSeeMoney || profit) return;
+    loadProfit();
+  }, [tab, canSeeMoney, profit, loadProfit]);
   useEffect(() => {
     if (tab !== 'payouts' || !canSeeMoney || balance) return;
     adminApi.getSellerLedger(sellerId, { limit: 1 }).then(({ data }) => setBalance(data.balance || {})).catch(() => setBalance({}));
@@ -164,6 +202,8 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
         autoApproveListings: form.autoApproveListings,
         handlingDays: Number(form.handlingDays),
         internalNote: form.internalNote,
+        feePlan: form.feePlan,
+        feeOverrides: overridesPayload(form.feeOverrides),
       });
       toast.success(isAr ? 'تم الحفظ' : 'Saved');
       refresh();
@@ -190,7 +230,8 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
   const checklist = sellerChecklist(seller);
   const next = SELLER_NEXT_ACTIONS[seller.status] || [];
   const health = seller.performance?.health && ACCOUNT_HEALTH[seller.performance.health];
-  const roots = categories.filter((c) => !c.parentCategory);
+  const catOptions = categoryOptions(categories, isAr);
+  const setOverride = (k, v) => setForm((f) => ({ ...f, feeOverrides: { ...f.feeOverrides, [k]: v } }));
   const setRule = (i, key, value) => setForm((f) => ({ ...f, categoryCommissions: f.categoryCommissions.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)) }));
   const toggleMode = (mode) => setForm((f) => ({
     ...f,
@@ -380,17 +421,30 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
 
       {tab === 'rules' && (
         <div className="space-y-4 pb-16">
-          <Card title={isAr ? 'العمولة' : 'Commission'}>
-            <label className="mb-3 block text-sm">
-              <span className="mb-1 block font-medium">{isAr ? 'نسبة العمولة %' : 'Commission %'}</span>
-              <input type="number" min="0" max="100" step="0.5" className={inputCls} value={form.commissionRate} placeholder={isAr ? 'فارغ = النسبة العامة' : 'Empty = marketplace default'} onChange={(e) => setForm((f) => ({ ...f, commissionRate: e.target.value }))} disabled={!canWrite} />
-            </label>
+          <Card title={isAr ? 'العمولة' : 'Commission'} action={<Link to="/admin/seller-fees" className="text-xs font-semibold text-primary-700 hover:underline">{isAr ? 'الرسوم العامة' : 'Standard fees'}</Link>}>
+            <div className="mb-3 grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">{isAr ? 'الباقة' : 'Plan'}</span>
+                <select className={inputCls} value={form.feePlan} onChange={(e) => setForm((f) => ({ ...f, feePlan: e.target.value }))} disabled={!canWrite}>
+                  <option value="">{(() => { const d = plans.find((p) => p.isDefault); return d ? `${isAr ? 'الافتراضية' : 'Default'} (${isAr ? d.nameAr || d.nameEn : d.nameEn || d.nameAr})` : (isAr ? 'بدون باقة (الرسوم العامة)' : 'No plan (standard fees)'); })()}</option>
+                  {plans.map((p) => <option key={p.key} value={p.key}>{isAr ? p.nameAr || p.nameEn : p.nameEn || p.nameAr}{p.monthlyFee ? ` · ${money(p.monthlyFee, isAr)}/${isAr ? 'شهر' : 'mo'}` : ''}</option>)}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">{isAr ? 'نسبة عمولة خاصة %' : 'Negotiated commission %'}</span>
+                <input type="number" min="0" max="100" step="0.5" className={inputCls} value={form.commissionRate} placeholder={isAr ? 'فارغ = حسب القسم/الباقة' : 'Empty = category / plan rate'} onChange={(e) => setForm((f) => ({ ...f, commissionRate: e.target.value }))} disabled={!canWrite} />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                <span className="mb-1 block font-medium">{isAr ? 'بدون عمولة حتى (عرض ترحيبي)' : 'No commission until (welcome offer)'}</span>
+                <input type="date" className={inputCls} value={form.feeOverrides.commissionFreeUntil} onChange={(e) => setOverride('commissionFreeUntil', e.target.value)} disabled={!canWrite} />
+              </label>
+            </div>
             <p className="mb-2 text-sm font-medium">{isAr ? 'عمولة خاصة لأقسام معينة' : 'Category-specific commission'}</p>
             {form.categoryCommissions.map((r, i) => (
               <div key={i} className="mb-2 flex gap-2">
                 <select className={inputCls} value={r.category} onChange={(e) => setRule(i, 'category', e.target.value)} disabled={!canWrite}>
                   <option value="">{isAr ? 'اختر قسماً' : 'Choose a category'}</option>
-                  {roots.map((c) => <option key={c._id} value={c._id}>{isAr ? c.nameAr : c.nameEn}</option>)}
+                  {catOptions.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
                 <input type="number" min="0" max="100" className={`${inputCls} w-24`} value={r.rate} onChange={(e) => setRule(i, 'rate', e.target.value)} disabled={!canWrite} aria-label="%" />
                 {canWrite && <button type="button" onClick={() => setForm((f) => ({ ...f, categoryCommissions: f.categoryCommissions.filter((_, idx) => idx !== i) }))} className="px-2 text-red-600" aria-label={isAr ? 'حذف' : 'Remove'}>×</button>}
@@ -402,6 +456,53 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
               </button>
             )}
           </Card>
+
+          <Card title={isAr ? 'شروط خاصة بهذا البائع' : 'This seller’s deal'}>
+            <p className="mb-3 text-xs text-text-muted">{isAr ? 'اترك الخانة فارغة لتأخذ قيمة الباقة أو الرسوم العامة.' : 'Leave a field empty to use the plan or standard value.'}</p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                ['fixedFeePerItem', 'رسوم لكل قطعة', 'Fee per item'],
+                ['fixedFeePerShipment', 'رسوم لكل شحنة', 'Fee per shipment'],
+                ['minCommissionPerItem', 'أقل عمولة للقطعة', 'Min commission / item'],
+                ['maxCommissionPerItem', 'أقصى عمولة للقطعة', 'Max commission / item'],
+                ['storeFulfillmentFeePerItem', 'رسوم الشحن من مخزنك', 'Fulfillment fee / item'],
+                ['monthlyFee', 'اشتراك شهري', 'Monthly fee'],
+                ['payoutHoldDays', 'أيام الانتظار قبل التحويل', 'Hold before payout (days)'],
+              ].map(([k, ar, en]) => (
+                <label key={k} className="block text-sm">
+                  <span className="mb-1 block text-xs font-medium">{isAr ? ar : en}</span>
+                  <input type="number" min="0" step={k === 'payoutHoldDays' ? 1 : 0.5} className={inputCls} value={form.feeOverrides[k]} placeholder={isAr ? 'تلقائي' : 'Auto'} onChange={(e) => setOverride(k, e.target.value)} disabled={!canWrite} dir="ltr" />
+                </label>
+              ))}
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium">{isAr ? 'التحويل التلقائي' : 'Automatic payouts'}</span>
+                <select className={inputCls} value={form.feeOverrides.payoutFrequency} onChange={(e) => setOverride('payoutFrequency', e.target.value)} disabled={!canWrite}>
+                  <option value="">{isAr ? 'حسب الإعداد العام' : 'Marketplace schedule'}</option>
+                  <option value="manual">{isAr ? 'يدوياً فقط' : 'Manual only'}</option>
+                  <option value="weekly">{isAr ? 'أسبوعياً' : 'Weekly'}</option>
+                  <option value="biweekly">{isAr ? 'كل أسبوعين' : 'Every two weeks'}</option>
+                  <option value="monthly">{isAr ? 'شهرياً' : 'Monthly'}</option>
+                </select>
+              </label>
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.feeOverrides.vatExempt} onChange={(e) => setOverride('vatExempt', e.target.checked)} disabled={!canWrite} />
+              {isAr ? 'معفى من ضريبة القيمة المضافة على الرسوم' : 'Exempt from VAT on fees'}
+            </label>
+          </Card>
+
+          <FeeCalculator
+            compact
+            sellerId={sellerId}
+            seller={{
+              commissionRate: form.commissionRate === '' ? null : Number(form.commissionRate),
+              categoryCommissions: form.categoryCommissions.filter((r) => r.category && r.rate !== '').map((r) => ({ category: r.category, rate: Number(r.rate) })),
+              feePlan: form.feePlan,
+              feeOverrides: overridesPayload(form.feeOverrides),
+            }}
+            categories={catOptions}
+            isAr={isAr}
+          />
 
           <Card title={isAr ? 'التشغيل' : 'Operations'}>
             <p className="mb-2 text-sm font-medium">{isAr ? 'من يشحن الطلبات؟' : 'Who ships orders?'}</p>
@@ -454,6 +555,36 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
                 </div>
               )}
             </Card>
+          )}
+          {canSeeMoney && (
+            <Card title={isAr ? 'ربحك من هذا البائع' : 'Your profit from this seller'} action={<Link to="/admin/seller-profit" className="text-xs font-semibold text-primary-700 hover:underline">{isAr ? 'تقرير الأرباح' : 'Profit report'}</Link>}>
+              {!profit ? <Loader size="sm" /> : !profit.all ? <p className="text-sm text-text-muted">{isAr ? 'تعذّر التحميل' : 'Could not load'}</p> : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs text-text-muted"><tr><th className="py-1 text-start" /><th className="py-1 text-end">{isAr ? 'آخر ٣٠ يوماً' : 'Last 30 days'}</th><th className="py-1 text-end">{isAr ? 'منذ البداية' : 'All time'}</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {[
+                        ['netSales', 'صافي المبيعات', 'Net sales'],
+                        ['commission', 'العمولة', 'Commission'],
+                        ['feeIncome', 'كل الرسوم', 'All fees'],
+                        ['discountCost', 'خصومات دفعتها', 'Discounts you paid'],
+                        ['netProfit', 'صافي ربحك', 'Net profit'],
+                      ].map(([k, ar, en]) => (
+                        <tr key={k} className={k === 'netProfit' ? 'font-bold' : ''}>
+                          <td className="py-1.5">{isAr ? ar : en}</td>
+                          <td className="py-1.5 text-end tabular-nums">{money(profit.recent?.[k], isAr)}</td>
+                          <td className="py-1.5 text-end tabular-nums">{money(profit.all[k], isAr)}</td>
+                        </tr>
+                      ))}
+                      <tr className="text-text-muted"><td className="py-1.5">{isAr ? 'نسبتك الفعلية' : 'Effective take rate'}</td><td className="py-1.5 text-end">{profit.recent?.takeRate ?? 0}%</td><td className="py-1.5 text-end">{profit.all.takeRate}%</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          )}
+          {canWrite && canSeeMoney && (
+            <SellerPenaltyForm sellerId={sellerId} isAr={isAr} onCharged={(b) => { setBalance(b); setProfit(null); }} />
           )}
           <Card title={isAr ? 'بيانات استلام الأموال' : 'Payout details'}>
             <Row k={isAr ? 'البنك' : 'Bank'} v={seller.bank?.bankName} />

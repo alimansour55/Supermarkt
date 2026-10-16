@@ -34,9 +34,25 @@ and pays sellers after a hold period.
 | Manual adjustment | ± (e.g. seller paid commission in cash) |
 | Payout marked paid | − the payout |
 
-- **Commission**, the most specific rule wins: seller × category → seller rate → marketplace ×
-  category → marketplace default (**Admin → Marketplace settings**). The rate is copied onto each
-  order line, so later changes never rewrite past sales.
+- **Fees** (**Admin → Sellers → Fees & commission**, engine in `backend/src/utils/sellerFees.js`):
+  commission % (clamped per unit to a min/cap) + fixed fee per item + fixed fee per shipment +
+  store fulfillment fee + payment fee (% + fixed, per payment method) + VAT on all fees. Every
+  number is snapshotted on the shipment at checkout, so later changes never rewrite past sales.
+- **Which commission rate**: seller commission-free period → rules marked "beats seller deals" →
+  seller × category → seller rate → other rules (list order, first match) → marketplace ×
+  category → plan rate → marketplace default. Rules match on category, seller, plan, who ships,
+  item price band, date window and "new seller within N days", and may replace the per-item fee.
+- **Plans** (`MarketplaceSettings.plans`, Amazon "Individual / Professional"): any fee field;
+  empty = inherit. Sellers pick one via `Seller.feePlan`; `Seller.feeOverrides` is the seller's
+  own deal (wins over the plan). Monthly plan fees post once per Cairo month (`sub:<seller>:<YYYY-MM>`).
+- **Returns** give back the commission minus the refund admin fee % (plus its VAT); fixed and
+  payment fees are kept.
+- **Penalties**: staff charge a reasoned fee from the seller panel (ledger type `penalty`).
+- **Automatic payouts** (`payoutSchedule` weekly / biweekly / monthly, per-seller override):
+  the job creates the payout (unique `scheduleKey` per run); staff still transfer and mark paid.
+- **Profit report** (**Admin → Sellers → Profit from sellers**, `marketplaceProfit.service.js`):
+  read from the ledger; net profit = fees − manual credits − coupons/points paid on seller items.
+  VAT on fees is shown apart and never counted as profit.
 - **Discounts** (coupons, points) are paid for by the marketplace; sellers earn the full item value.
 - **Hold period** (default 14 days) covers the return window before money becomes payable.
 - **Cash on delivery:** each seller-shipped shipment records how much cash that seller collects;

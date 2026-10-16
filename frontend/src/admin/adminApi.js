@@ -318,6 +318,10 @@ export const adminApi = {
   markSellerPayoutPaid: (id, data) => api.post(`/admin/marketplace/payouts/${id}/paid`, data),
   cancelSellerPayout: (id) => api.post(`/admin/marketplace/payouts/${id}/cancel`),
   exportSellerPayouts: () => api.get('/admin/marketplace/payouts/export', { responseType: 'blob' }),
+  chargeSellerPenalty: (id, data) => api.post(`/admin/marketplace/sellers/${id}/penalties`, data),
+  getSellerProfit: (params) => api.get('/admin/marketplace/profit', { params }),
+  exportSellerProfit: (params) => api.get('/admin/marketplace/profit/export', { params, responseType: 'blob' }),
+  previewSellerFees: (data) => api.post('/admin/marketplace/fees/preview', data),
 };
 
 /**

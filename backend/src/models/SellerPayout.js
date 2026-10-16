@@ -23,6 +23,8 @@ const sellerPayoutSchema = new mongoose.Schema(
     referenceNumber: { type: String, trim: true, default: '' },
     note: { type: String, trim: true, default: '' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    /** Set on payouts made by the automatic schedule: one per seller per run. */
+    scheduleKey: { type: String, trim: true, default: undefined },
     paidAt: { type: Date, default: null },
     paidBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     cancelledAt: { type: Date, default: null },
@@ -32,6 +34,7 @@ const sellerPayoutSchema = new mongoose.Schema(
 );
 
 sellerPayoutSchema.index({ seller: 1, createdAt: -1 });
+sellerPayoutSchema.index({ seller: 1, scheduleKey: 1 }, { unique: true, partialFilterExpression: { scheduleKey: { $type: 'string' } } });
 
 const SellerPayout = mongoose.model('SellerPayout', sellerPayoutSchema);
 

@@ -17,6 +17,7 @@ import {
   listSellerBalances,
 } from '../services/sellerLedger.service.js';
 import { SELLER_LEDGER_TYPES } from '../models/SellerLedgerEntry.js';
+import { effectiveFeeConfig } from '../utils/sellerFees.js';
 
 const isId = (v) => mongoose.Types.ObjectId.isValid(v);
 
@@ -54,11 +55,26 @@ export const getMyFinance = asyncHandler(async (req, res) => {
     getMarketplaceSettings(),
     SellerPayout.find({ seller: req.seller._id }).sort({ createdAt: -1 }).limit(20).lean(),
   ]);
+  const cfg = effectiveFeeConfig(settings, req.seller);
   res.json({
     success: true,
     data: {
       balance,
-      payoutHoldDays: settings.payoutHoldDays,
+      // The seller's own fee terms, so it can see what it pays before it sells.
+      fees: {
+        plan: cfg.plan,
+        commissionRate: req.seller.commissionRate ?? cfg.defaultCommissionRate,
+        categoryRates: (req.seller.categoryCommissions?.length ? req.seller.categoryCommissions : settings.categoryCommissions || []).length,
+        minCommissionPerItem: cfg.minCommissionPerItem,
+        maxCommissionPerItem: cfg.maxCommissionPerItem,
+        fixedFeePerItem: cfg.fixedFeePerItem,
+        fixedFeePerShipment: cfg.fixedFeePerShipment,
+        storeFulfillmentFeePerItem: cfg.storeFulfillmentFeePerItem,
+        monthlyFee: cfg.monthlyFee,
+        vatPercent: cfg.vatPercent,
+        commissionFreeUntil: cfg.commissionFreeUntil && cfg.commissionFreeUntil > new Date() ? cfg.commissionFreeUntil : null,
+      },
+      payoutHoldDays: cfg.payoutHoldDays,
       minPayoutAmount: settings.minPayoutAmount,
       payouts: payouts.map((p) => formatPayout(p, { revealBank: req.user.role === 'seller_owner' })),
     },

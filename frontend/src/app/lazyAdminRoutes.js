@@ -7,6 +7,8 @@ export const AdminLoginPage = lazy(() => import('../admin/pages/AdminLoginPage')
 export const SellersPage = lazy(() => import('../admin/pages/SellersPage'), 'SellersPage');
 export const AdminSellerInboundPage = lazy(() => import('../admin/pages/SellerInboundPage'), 'AdminSellerInboundPage');
 export const SellerPayoutsPage = lazy(() => import('../admin/pages/SellerPayoutsPage'), 'SellerPayoutsPage');
+export const SellerProfitPage = lazy(() => import('../admin/pages/SellerProfitPage'), 'SellerProfitPage');
+export const SellerFeesPage = lazy(() => import('../admin/pages/SellerFeesPage'), 'SellerFeesPage');
 export const SellerShipmentsPage = lazy(() => import('../admin/pages/SellerShipmentsPage'), 'SellerShipmentsPage');
 export const ListingReviewPage = lazy(() => import('../admin/pages/ListingReviewPage'), 'ListingReviewPage');
 export const SellerPromotionsAdminPage = lazy(() => import('../admin/pages/SellerPromotionsAdminPage'), 'SellerPromotionsAdminPage');

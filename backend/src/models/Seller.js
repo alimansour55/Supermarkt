@@ -84,6 +84,23 @@ const sellerSchema = new mongoose.Schema(
     /** null = marketplace default. */
     commissionRate: { type: Number, min: 0, max: 100, default: null },
     categoryCommissions: { type: [categoryCommissionSchema], default: [] },
+    /** Fee plan key from MarketplaceSettings.plans ('' = the default plan). */
+    feePlan: { type: String, trim: true, default: '' },
+    /** Seller-specific deal terms; null = inherit the plan / marketplace value. */
+    feeOverrides: {
+      minCommissionPerItem: { type: Number, min: 0, default: null },
+      maxCommissionPerItem: { type: Number, min: 0, default: null },
+      fixedFeePerItem: { type: Number, min: 0, default: null },
+      fixedFeePerShipment: { type: Number, min: 0, default: null },
+      storeFulfillmentFeePerItem: { type: Number, min: 0, default: null },
+      monthlyFee: { type: Number, min: 0, default: null },
+      payoutHoldDays: { type: Number, min: 0, max: 90, default: null },
+      /** No commission on sales until this date (onboarding offer). */
+      commissionFreeUntil: { type: Date, default: null },
+      vatExempt: { type: Boolean, default: false },
+      /** '' = marketplace schedule; 'manual' keeps this seller out of automatic payouts. */
+      payoutFrequency: { type: String, enum: ['', 'manual', 'weekly', 'biweekly', 'monthly'], default: '' },
+    },
 
     /** Fulfillment modes this seller may use on its products. */
     allowedFulfillment: {

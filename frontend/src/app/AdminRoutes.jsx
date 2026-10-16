@@ -55,6 +55,8 @@ export default function AdminRoutes() {
         <Route path="sellers" element={withSuspense(<P.AdminPermissionRoute permission="sellers:read"><P.SellersPage /></P.AdminPermissionRoute>)} />
         <Route path="seller-inbound" element={withSuspense(<P.AdminPermissionRoute permission="products:read"><P.AdminSellerInboundPage /></P.AdminPermissionRoute>)} />
         <Route path="seller-payouts" element={withSuspense(<P.AdminPermissionRoute permission="reports:read"><P.SellerPayoutsPage /></P.AdminPermissionRoute>)} />
+        <Route path="seller-profit" element={withSuspense(<P.AdminPermissionRoute permission="reports:read"><P.SellerProfitPage /></P.AdminPermissionRoute>)} />
+        <Route path="seller-fees" element={withSuspense(<P.AdminPermissionRoute permission="settings:write"><P.SellerFeesPage /></P.AdminPermissionRoute>)} />
         <Route path="seller-shipments" element={withSuspense(<P.AdminPermissionRoute permission="orders:read"><P.SellerShipmentsPage /></P.AdminPermissionRoute>)} />
         <Route path="listing-review" element={withSuspense(<P.AdminPermissionRoute permission="sellers:read"><P.ListingReviewPage /></P.AdminPermissionRoute>)} />
         <Route path="seller-promotions" element={withSuspense(<P.AdminPermissionRoute permission="sellers:read"><P.SellerPromotionsAdminPage /></P.AdminPermissionRoute>)} />

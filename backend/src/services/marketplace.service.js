@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import MarketplaceSettings from '../models/MarketplaceSettings.js';
+import { resolveCommission } from '../utils/sellerFees.js';
 import Seller from '../models/Seller.js';
 import Product from '../models/Product.js';
 import User from '../models/User.js';
@@ -49,26 +50,7 @@ const idOf = (v) => String(v?._id || v || '');
  * A category rule matches the product's leaf category or any of its ancestors (deepest first).
  */
 export function resolveCommissionRate({ seller, product, settings }) {
-  const chain = [
-    idOf(product?.category),
-    ...[...(product?.categoryAncestors || [])].reverse().map(idOf),
-    idOf(product?.mainCategory),
-  ].filter(Boolean);
-
-  const matchIn = (rules = []) => {
-    for (const categoryId of chain) {
-      const hit = rules.find((r) => idOf(r.category) === categoryId);
-      if (hit) return Number(hit.rate);
-    }
-    return null;
-  };
-
-  const sellerCategory = matchIn(seller?.categoryCommissions);
-  if (sellerCategory != null) return sellerCategory;
-  if (seller?.commissionRate != null) return Number(seller.commissionRate);
-  const globalCategory = matchIn(settings?.categoryCommissions);
-  if (globalCategory != null) return globalCategory;
-  return Number(settings?.defaultCommissionRate ?? DEFAULT_MARKETPLACE_SETTINGS.defaultCommissionRate);
+  return resolveCommission({ settings, seller, product }).rate;
 }
 
 // ── Sellers ──
@@ -252,6 +234,8 @@ export function formatSellerPrivate(seller, { revealBank = false } = {}) {
     documents: documentsWithLinks(s.documents || []),
     commissionRate: s.commissionRate,
     categoryCommissions: s.categoryCommissions || [],
+    feePlan: s.feePlan || '',
+    feeOverrides: s.feeOverrides || {},
     allowedFulfillment: s.allowedFulfillment || ['seller'],
     defaultFulfillment: s.defaultFulfillment || 'seller',
     deliveryZones: s.deliveryZones || [],

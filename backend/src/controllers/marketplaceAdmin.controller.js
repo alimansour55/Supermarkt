@@ -22,6 +22,13 @@ import {
   documentsWithLinks,
 } from '../services/marketplace.service.js';
 import { FULFILLMENT_MODES, SELLER_STATUSES } from '../constants/marketplace.js';
+import {
+  sanitizeFees,
+  sanitizePlans,
+  sanitizeCommissionRules as sanitizeFeeRules,
+  sanitizePayoutSchedule,
+  sanitizeFeeOverrides,
+} from '../utils/sellerFeeInput.js';
 import { formatSellerProduct } from './sellerPortal.controller.js';
 import { getSellerPerformance } from '../services/sellerReputation.service.js';
 import { validateSellerApplication, createSellerWithOwner } from './sellerPublic.controller.js';
@@ -67,6 +74,12 @@ export const updateMarketplaceAdminSettings = asyncHandler(async (req, res) => {
   if (b.sellerShipmentDeliveryFee !== undefined) doc.sellerShipmentDeliveryFee = num(b.sellerShipmentDeliveryFee, 0, 100000, 'Delivery fee');
   if (b.minPayoutAmount !== undefined) doc.minPayoutAmount = num(b.minPayoutAmount, 0, 1000000, 'Minimum payout');
   if (b.categoryCommissions !== undefined) doc.categoryCommissions = sanitizeCommissionRules(b.categoryCommissions);
+  if (b.fees !== undefined) doc.fees = sanitizeFees(b.fees);
+  if (b.plans !== undefined) doc.plans = sanitizePlans(b.plans);
+  if (b.commissionRules !== undefined) {
+    doc.commissionRules = sanitizeFeeRules(b.commissionRules, { planKeys: (doc.plans || []).map((p) => p.key) });
+  }
+  if (b.payoutSchedule !== undefined) doc.payoutSchedule = sanitizePayoutSchedule(b.payoutSchedule);
   ['termsAr', 'termsEn'].forEach((f) => {
     if (b[f] !== undefined) doc[f] = String(b[f]).slice(0, 20000);
   });
@@ -242,6 +255,12 @@ export const updateSellerAdmin = asyncHandler(async (req, res) => {
     }
   }
   if (b.categoryCommissions !== undefined) seller.categoryCommissions = sanitizeCommissionRules(b.categoryCommissions);
+  if (b.feePlan !== undefined) {
+    const key = str(b.feePlan, 40);
+    if (key && !(await getMarketplaceSettingsDoc()).plans.some((p) => p.key === key)) throw new AppError('Unknown fee plan', 400);
+    seller.feePlan = key;
+  }
+  if (b.feeOverrides !== undefined) seller.feeOverrides = sanitizeFeeOverrides(b.feeOverrides);
   if (b.allowedFulfillment !== undefined) {
     const modes = [...new Set((Array.isArray(b.allowedFulfillment) ? b.allowedFulfillment : []).filter((m) => FULFILLMENT_MODES.includes(m)))];
     if (!modes.length) throw new AppError('Choose at least one fulfillment option', 400);

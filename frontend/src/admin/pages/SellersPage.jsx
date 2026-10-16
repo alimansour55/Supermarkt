@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, ChevronLeft, ChevronRight, Download, FileCheck2, PackageSearch, Plus, Store, Wallet,
+  AlertTriangle, ChevronLeft, ChevronRight, Download, FileCheck2, LineChart, PackageSearch, Percent, Plus, Store, Wallet,
 } from 'lucide-react';
 import { Link, useNavigate } from '../../app/router';
 import { useLanguage } from '../../context/LanguageContext';
@@ -106,7 +106,12 @@ export default function SellersPage() {
   const [summary, setSummary] = useState({ pendingListings: 0 });
   const [owed, setOwed] = useState(null);
   const [settings, setSettings] = useState(null);
-  const [openId, setOpenId] = useState('');
+  // Deep link from other screens: /admin/sellers?open=<id>&tab=rules|payouts
+  const [deepLink] = useState(() => {
+    const q = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+    return { id: q.get('open') || '', tab: q.get('tab') || 'overview' };
+  });
+  const [openId, setOpenId] = useState(deepLink.id);
   const [creating, setCreating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const detailDirty = useRef(false);
@@ -296,7 +301,7 @@ export default function SellersPage() {
     { value: 'suspended', label: label(SELLER_STATUS, 'suspended', isAr), count: counts.suspended || 0 },
     { value: 'rejected', label: label(SELLER_STATUS, 'rejected', isAr), count: counts.rejected || 0 },
   ];
-  const showNotices = summary.pendingListings > 0 || (canSeeMoney && owed > 0);
+  const showNotices = summary.pendingListings > 0 || canSeeMoney;
 
   return (
     <div className="space-y-4">
@@ -340,6 +345,16 @@ export default function SellersPage() {
           {canSeeMoney && owed > 0 && (
             <NoticeChip to="/admin/seller-payouts" icon={Wallet} isAr={isAr}>
               {isAr ? `${money(owed, isAr)} مستحق للبائعين` : `${money(owed, isAr)} owed to sellers`}
+            </NoticeChip>
+          )}
+          {canSeeMoney && (
+            <NoticeChip to="/admin/seller-profit" icon={LineChart} isAr={isAr}>
+              {isAr ? 'أرباحك من البائعين' : 'Your profit from sellers'}
+            </NoticeChip>
+          )}
+          {hasPermission(user, 'settings:write') && (
+            <NoticeChip to="/admin/seller-fees" icon={Percent} isAr={isAr}>
+              {isAr ? 'العمولات والرسوم' : 'Fees & commission'}
             </NoticeChip>
           )}
         </div>
@@ -387,6 +402,7 @@ export default function SellersPage() {
             canSeeMoney={canSeeMoney}
             onChanged={() => { onChanged(); loadOwed(); }}
             onDirtyChange={onDirtyChange}
+            initialTab={openId === deepLink.id ? deepLink.tab : 'overview'}
           />
         )}
       </AdminSlidePanel>
