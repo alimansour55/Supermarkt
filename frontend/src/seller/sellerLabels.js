@@ -88,6 +88,19 @@ export function apiError(err, fallback) {
   return err?.response?.data?.message || fallback;
 }
 
+/** Per-field problems from the API ({ field: message } in the current language), or {}. */
+export function fieldErrors(err, isAr) {
+  const list = err?.response?.data?.fields;
+  if (!Array.isArray(list)) return {};
+  return Object.fromEntries(list.filter((f) => f?.field).map((f) => [f.field, isAr ? f.ar || f.en : f.en || f.ar]));
+}
+
+/** One readable sentence for a toast: the field messages in the current language, else the API message. */
+export function apiErrorText(err, fallback, isAr) {
+  const fields = Object.values(fieldErrors(err, isAr));
+  return fields.length ? fields.join(' · ') : apiError(err, fallback);
+}
+
 /** Account health levels from getSellerPerformance (Amazon-style thresholds). */
 export const ACCOUNT_HEALTH = {
   good: { ar: 'ممتاز', en: 'Healthy', tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', Icon: ShieldCheck },

@@ -376,6 +376,7 @@ export default function SellerDetailPanel({ sellerId, isAr, canWrite, canSeeMone
             <button type="button" onClick={() => setTab('products')} className="text-primary-700 hover:underline">{isAr ? 'منتجات البائع' : 'Products'}</button>
             <button type="button" onClick={() => setTab('orders')} className="text-primary-700 hover:underline">{isAr ? 'الطلبات' : 'Orders'}</button>
             <button type="button" onClick={() => setTab('messages')} className="text-primary-700 hover:underline">{isAr ? 'مراسلة البائع' : 'Message seller'}</button>
+            <button type="button" onClick={() => setTab('logins')} className="text-primary-700 hover:underline">{isAr ? 'إعادة تعيين كلمة المرور' : 'Reset password'}</button>
             {canSeeMoney && <Link to="/admin/seller-payouts" className="text-primary-700 hover:underline">{isAr ? 'المستحقات' : 'Payouts'}</Link>}
           </div>
         </div>

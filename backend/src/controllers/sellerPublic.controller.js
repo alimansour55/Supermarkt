@@ -60,18 +60,25 @@ export async function validateSellerApplication(body, { requirePassword = true }
       .slice(0, 20),
   };
 
-  const errors = [];
-  if (data.nameAr.length < 2) errors.push('Arabic store name is required');
-  if (data.nameEn.length < 2) errors.push('English store name is required');
-  if (data.contactName.length < 2) errors.push('Contact name is required');
-  if (!EMAIL_RE.test(data.email)) errors.push('A valid email is required');
-  if (!data.phone) errors.push('A valid phone number is required');
-  if (requirePassword && data.password.length < 8) errors.push('Password must be at least 8 characters');
-  if (!data.address.city) errors.push('City is required');
-  if (errors.length) throw new AppError(errors.join('. '), 400);
+  // The English name is optional: Arabic-only shops use the Arabic name everywhere.
+  if (data.nameEn.length < 2 && data.nameAr.length >= 2) data.nameEn = data.nameAr;
 
-  if (await User.exists({ email: data.email })) {
-    throw new AppError('This email is already registered — sign in or use another email', 409);
+  const errors = [];
+  const add = (field, ar, en) => errors.push({ field, ar, en });
+  if (data.nameAr.length < 2) add('nameAr', 'اكتب اسم المتجر بالعربية (حرفان على الأقل)', 'Enter the Arabic store name (at least 2 characters)');
+  if (data.contactName.length < 2) add('contactName', 'اكتب اسم المسؤول عن المتجر', 'Enter the contact person’s name');
+  if (!EMAIL_RE.test(data.email)) add('email', 'اكتب بريداً إلكترونياً صحيحاً', 'Enter a valid email');
+  if (!data.phone) add('phone', 'اكتب رقم هاتف مصري صحيح (مثل 01012345678)', 'Enter a valid Egyptian phone number (e.g. 01012345678)');
+  if (requirePassword && (data.password.length < 8 || !/[A-Za-z؀-ۿ]/.test(data.password) || !/\d/.test(data.password))) {
+    add('password', 'كلمة المرور: 8 أحرف على الأقل وفيها حروف وأرقام', 'Password: at least 8 characters with letters and numbers');
+  }
+  if (!data.address.city) add('city', 'اكتب المدينة', 'Enter the city');
+  if (!errors.length && await User.exists({ email: data.email })) {
+    add('email', 'هذا البريد مستخدم لحساب آخر (عميل أو موظف أو بائع). استخدم بريداً مختلفاً لحساب البائع.', 'This email already belongs to another account (customer, staff or seller). Use a different email for the seller login.');
+  }
+  if (errors.length) {
+    const status = errors.some((e) => e.field === 'email' && e.en.startsWith('This email already')) ? 409 : 400;
+    throw new AppError(errors.map((e) => `${e.ar} — ${e.en}`).join(' · '), status, errors);
   }
   return data;
 }

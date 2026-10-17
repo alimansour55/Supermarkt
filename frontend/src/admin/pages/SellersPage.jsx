@@ -115,6 +115,7 @@ export default function SellersPage() {
     return { id: q.get('open') || '', tab: q.get('tab') || 'overview' };
   });
   const [openId, setOpenId] = useState(deepLink.id);
+  const [openTab, setOpenTab] = useState(deepLink.tab);
   const [creating, setCreating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [bulkDeal, setBulkDeal] = useState(false);
@@ -287,7 +288,10 @@ export default function SellersPage() {
   );
 
   const rowActions = (s) => {
-    const actions = [{ label: isAr ? 'فتح الملف' : 'Open', onClick: () => setOpenId(s._id) }];
+    const actions = [{ label: isAr ? 'فتح الملف' : 'Open', onClick: () => { setOpenTab('overview'); setOpenId(s._id); } }];
+    if (canWrite) {
+      actions.push({ label: isAr ? 'إعادة تعيين كلمة المرور / الدخول' : 'Reset password / logins', onClick: () => { setOpenTab('logins'); setOpenId(s._id); } });
+    }
     if (s.status === 'active') {
       actions.push({ label: isAr ? 'عرض صفحة المتجر' : 'View store page', onClick: () => window.open(`/${isAr ? 'ar' : 'en'}/sellers/${s.slug}`, '_blank', 'noopener') });
     }
@@ -444,7 +448,7 @@ export default function SellersPage() {
           sort={list.sort}
           onSort={list.toggleSort}
           rowActions={rowActions}
-          onRowClick={(s) => setOpenId(s._id)}
+          onRowClick={(s) => { setOpenTab('overview'); setOpenId(s._id); }}
           emptyIcon={FileCheck2}
           emptyTitle={isAr ? 'لا توجد نتائج' : 'No results'}
           emptyDescription={isAr ? 'جرّب كلمة بحث أو حالة مختلفة' : 'Try a different search or status'}
@@ -464,14 +468,14 @@ export default function SellersPage() {
       >
         {openId && (
           <SellerDetailPanel
-            key={openId}
+            key={`${openId}:${openTab}`}
             sellerId={openId}
             isAr={isAr}
             canWrite={canWrite}
             canSeeMoney={canSeeMoney}
             onChanged={() => { onChanged(); loadOwed(); }}
             onDirtyChange={onDirtyChange}
-            initialTab={openId === deepLink.id ? deepLink.tab : 'overview'}
+            initialTab={openTab}
           />
         )}
       </AdminSlidePanel>
@@ -499,7 +503,7 @@ export default function SellersPage() {
           <CreateSellerPanel
             isAr={isAr}
             onCreated={onChanged}
-            onOpenSeller={(id) => { setCreating(false); setOpenId(id); }}
+            onOpenSeller={(id) => { setCreating(false); setOpenTab('overview'); setOpenId(id); }}
           />
         )}
       </AdminSlidePanel>

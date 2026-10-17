@@ -213,3 +213,21 @@ test('profile edit: contact, address, vacation off, bank needs super admin, hist
   assert.ok(all['bank.iban'].to.startsWith('••••'), 'bank numbers are masked in the log');
   assert.ok(all['login.password_set'], 'login actions are in the same history');
 });
+
+test('create seller: English name optional; problems come back per field in both languages', async (ctx) => {
+  if (skip) return ctx.skip('MongoDB not reachable');
+  const base = { nameAr: 'متجر عربي', contactName: 'Hany', email: 'arabic-only@x.test', phone: '01055556666', city: 'Cairo' };
+  const ok = await call('POST', '/admin/marketplace/sellers', base, t.managerToken);
+  assert.equal(ok.status, 201, ok.text);
+  assert.equal(ok.body.data.nameEn, 'متجر عربي', 'Arabic name used when English is empty');
+  assert.ok(ok.body.data.slug, 'a slug is still generated');
+
+  const dup = await call('POST', '/admin/marketplace/sellers', { ...base, nameAr: 'متجر ثاني', phone: '01055556667' }, t.managerToken);
+  assert.equal(dup.status, 409);
+  assert.equal(dup.body.fields[0].field, 'email');
+  assert.match(dup.body.fields[0].ar, /مستخدم لحساب آخر/);
+
+  const bad = await call('POST', '/admin/marketplace/sellers', { nameAr: 'م', email: 'nope', phone: 'x', city: '', password: 'abcdefgh' }, t.managerToken);
+  assert.equal(bad.status, 400);
+  assert.deepEqual(bad.body.fields.map((f) => f.field).sort(), ['city', 'contactName', 'email', 'nameAr', 'password', 'phone']);
+});

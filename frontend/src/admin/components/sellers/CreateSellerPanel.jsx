@@ -3,19 +3,21 @@ import { Mail, KeyRound } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import { useToast } from '../index';
 import { adminApi } from '../../adminApi';
-import { apiError } from '../../../seller/sellerLabels';
+import { apiErrorText, fieldErrors } from '../../../seller/sellerLabels';
 import SellerAccessResult from './SellerAccessResult';
 
 const inputCls = 'w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100';
 
 const EMPTY = { nameAr: '', nameEn: '', contactName: '', email: '', phone: '', city: '', password: '', activate: true };
 
-function Field({ label, hint, children }) {
+function Field({ label, hint, error, children }) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block font-medium">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-text-muted">{hint}</span>}
+      {error
+        ? <span className="mt-1 block text-xs font-medium text-red-700" role="alert">{error}</span>
+        : hint && <span className="mt-1 block text-xs text-text-muted">{hint}</span>}
     </label>
   );
 }
@@ -30,11 +32,16 @@ export default function CreateSellerPanel({ isAr, onCreated, onOpenSeller }) {
   const [mode, setMode] = useState('invite');
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(null);
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  const [errors, setErrors] = useState({});
+  const set = (k) => (e) => {
+    setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+    setErrors((er) => (er[k] ? { ...er, [k]: '' } : er));
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
+    setErrors({});
     try {
       const payload = { ...form, password: mode === 'password' ? form.password : '' };
       const { data } = await adminApi.createSeller(payload);
@@ -42,7 +49,8 @@ export default function CreateSellerPanel({ isAr, onCreated, onOpenSeller }) {
       setDone({ seller: data.data, access: data.access });
       onCreated(data.data._id);
     } catch (err) {
-      toast.error(apiError(err, isAr ? 'تعذّر الإنشاء' : 'Could not create seller'));
+      setErrors(fieldErrors(err, isAr));
+      toast.error(apiErrorText(err, isAr ? 'تعذّر الإنشاء' : 'Could not create seller', isAr));
     } finally {
       setSaving(false);
     }
@@ -74,20 +82,20 @@ export default function CreateSellerPanel({ isAr, onCreated, onOpenSeller }) {
       <section className="space-y-3">
         <h3 className="text-sm font-bold text-text">{isAr ? 'المتجر' : 'Store'}</h3>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={isAr ? 'اسم المتجر (عربي)' : 'Store name (Arabic)'}><input required minLength={2} className={inputCls} value={form.nameAr} onChange={set('nameAr')} /></Field>
-          <Field label={isAr ? 'اسم المتجر (إنجليزي)' : 'Store name (English)'}><input required minLength={2} className={inputCls} value={form.nameEn} onChange={set('nameEn')} dir="ltr" /></Field>
+          <Field label={isAr ? 'اسم المتجر (عربي)' : 'Store name (Arabic)'} error={errors.nameAr}><input className={inputCls} value={form.nameAr} onChange={set('nameAr')} /></Field>
+          <Field label={isAr ? 'اسم المتجر (إنجليزي) — اختياري' : 'Store name (English) — optional'} hint={isAr ? 'إن تركته فارغاً نستخدم الاسم العربي' : 'Left empty, the Arabic name is used'} error={errors.nameEn}><input className={inputCls} value={form.nameEn} onChange={set('nameEn')} dir="ltr" /></Field>
         </div>
-        <Field label={isAr ? 'المدينة' : 'City'}><input required className={inputCls} value={form.city} onChange={set('city')} /></Field>
+        <Field label={isAr ? 'المدينة' : 'City'} error={errors.city}><input className={inputCls} value={form.city} onChange={set('city')} /></Field>
       </section>
 
       <section className="space-y-3">
         <h3 className="text-sm font-bold text-text">{isAr ? 'المسؤول عن المتجر' : 'Store owner'}</h3>
-        <Field label={isAr ? 'الاسم' : 'Name'}><input required minLength={2} className={inputCls} value={form.contactName} onChange={set('contactName')} /></Field>
+        <Field label={isAr ? 'الاسم' : 'Name'} error={errors.contactName}><input className={inputCls} value={form.contactName} onChange={set('contactName')} /></Field>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={isAr ? 'البريد الإلكتروني' : 'Email'} hint={isAr ? 'يدخل به إلى مركز البائعين' : 'Used to sign in to Seller Center'}>
-            <input required type="email" className={inputCls} value={form.email} onChange={set('email')} dir="ltr" />
+          <Field label={isAr ? 'البريد الإلكتروني' : 'Email'} hint={isAr ? 'يدخل به إلى مركز البائعين — يجب ألا يكون مستخدماً لحساب آخر' : 'Used to sign in to Seller Center — must not belong to another account'} error={errors.email}>
+            <input type="email" className={inputCls} value={form.email} onChange={set('email')} dir="ltr" />
           </Field>
-          <Field label={isAr ? 'الهاتف' : 'Phone'}><input required type="tel" className={inputCls} value={form.phone} onChange={set('phone')} dir="ltr" /></Field>
+          <Field label={isAr ? 'الهاتف' : 'Phone'} error={errors.phone}><input type="tel" className={inputCls} value={form.phone} onChange={set('phone')} dir="ltr" /></Field>
         </div>
       </section>
 
@@ -107,8 +115,8 @@ export default function CreateSellerPanel({ isAr, onCreated, onOpenSeller }) {
           </label>
         ))}
         {mode === 'password' && (
-          <Field label={isAr ? 'كلمة المرور' : 'Password'} hint={isAr ? '8 أحرف على الأقل، حروف وأرقام' : 'At least 8 characters with letters and numbers'}>
-            <input required minLength={8} type="password" autoComplete="new-password" className={inputCls} value={form.password} onChange={set('password')} dir="ltr" />
+          <Field label={isAr ? 'كلمة المرور' : 'Password'} hint={isAr ? '8 أحرف على الأقل، حروف وأرقام' : 'At least 8 characters with letters and numbers'} error={errors.password}>
+            <input type="password" autoComplete="new-password" className={inputCls} value={form.password} onChange={set('password')} dir="ltr" />
           </Field>
         )}
       </section>
