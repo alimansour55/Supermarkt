@@ -37,7 +37,9 @@ if (!existsSync(proxyBin)) {
 
 const proxy = spawn(
   process.execPath,
-  [proxyBin, '--source', String(SOURCE_PORT), '--target', String(TARGET_PORT)],
+  // Pin the target to IPv4: Vite listens on 0.0.0.0, and the proxy's default "localhost" can
+  // resolve to ::1 and get ECONNREFUSED.
+  [proxyBin, '--hostname', '127.0.0.1', '--source', String(SOURCE_PORT), '--target', String(TARGET_PORT)],
   { stdio: 'inherit' },
 );
 

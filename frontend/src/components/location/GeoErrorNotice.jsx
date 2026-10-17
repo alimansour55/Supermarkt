@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ChevronDown, RefreshCw, Settings } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ExternalLink, RefreshCw, Settings } from 'lucide-react';
 import { isNativeApp, onAppResume, openAppSettings } from '../../utils/nativeLocation';
 import { getLocationPermissionSteps } from '../../utils/geoPermissionHelp';
+
+// Port of the dev HTTPS proxy started by `npm run dev:mobile-https` (scripts/mobile-https-proxy.mjs).
+const MOBILE_HTTPS_PORT = 5174;
+
+/** Same page on the dev HTTPS proxy, so a phone on the LAN http:// link can switch in one tap. */
+function getSecureDevUrl() {
+  if (typeof window === 'undefined' || window.location.protocol !== 'http:') return null;
+  const { hostname, pathname, search, hash } = window.location;
+  return `https://${hostname}:${MOBILE_HTTPS_PORT}${pathname}${search}${hash}`;
+}
 
 /**
  * Geolocation error with a way forward instead of a dead end: a retry button, and — for
@@ -12,6 +22,7 @@ export default function GeoErrorNotice({
   message, code, isAr, onRetry, retrying = false, autoDetect = false,
 }) {
   const isPermissionDenied = code === 1 || code === 'PERMISSION_DENIED';
+  const secureUrl = code === 'INSECURE_CONTEXT' ? getSecureDevUrl() : null;
   // Steps are the only way forward on a denied permission, so show them without an extra tap.
   const [showSteps, setShowSteps] = useState(isPermissionDenied);
   const native = isNativeApp();
@@ -48,6 +59,16 @@ export default function GeoErrorNotice({
             <RefreshCw className={`h-3.5 w-3.5 ${retrying ? 'animate-spin' : ''}`} aria-hidden />
             {isAr ? 'حاول مرة أخرى' : 'Try again'}
           </button>
+        )}
+        {secureUrl && (
+          <a
+            href={secureUrl}
+            dir="ltr"
+            className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700"
+          >
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            {isAr ? 'افتح الرابط الآمن (https)' : 'Open secure link (https)'}
+          </a>
         )}
         {native && isPermissionDenied && (
           <button
