@@ -25,6 +25,7 @@ function formatAddressLine(address, isAr) {
     address.street,
     address.building,
     address.floor,
+    address.landmark,
     address.area || address.city,
     address.governorate,
   ].filter(Boolean).join(isAr ? '، ' : ', ');
@@ -89,6 +90,7 @@ export default function MyAddressesPage() {
       street: address.street || '',
       building: address.building || '',
       floor: address.floor || '',
+      landmark: address.landmark || '',
       city: address.city || '',
       governorate: address.governorate || '',
       area: address.area || '',
@@ -97,6 +99,7 @@ export default function MyAddressesPage() {
       lng: address.lng ?? null,
       formattedAddress: address.formattedAddress || '',
       placeId: address.placeId || '',
+      locationSource: address.lat != null && address.lng != null ? (address.locationSource || '') : 'manual',
       isDefault: Boolean(address.isDefault),
     });
     setFormOpen(true);
@@ -120,6 +123,7 @@ export default function MyAddressesPage() {
         street: form.street.trim(),
         building: form.building,
         floor: form.floor,
+        landmark: form.landmark?.trim() || '',
         city: form.city.trim() || location?.cityEn || '',
         governorate: form.governorate.trim() || location?.cityEn || '',
         area: form.area.trim() || location?.areaEn || form.city.trim(),

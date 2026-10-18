@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { MapPin, PenLine } from 'lucide-react';
 import { deliveryZoneService } from '../../services/apiServices';
 import { parseOsmSelection } from '../../utils/osmGeocode';
 import { parsePhotonSelection } from '../../utils/photonGeocode';
@@ -19,6 +20,7 @@ export default function AddressMapCapture({
   isAr = false,
   showManualFields = true,
   enableMap = true,
+  streetError = '',
 }) {
   const [zoneWarning, setZoneWarning] = useState('');
   const [livePin, setLivePin] = useState(null);
@@ -322,32 +324,79 @@ export default function AddressMapCapture({
     }
   }, [deliveryZone?.id]);
 
+  const manualMode = value?.locationSource === 'manual';
+
+  // Typing the address by hand is a first-class choice: drop any stale pin so
+  // nothing downstream asks for the map again.
+  const switchToManual = () => {
+    setLivePin(null);
+    setZoneWarning('');
+    clearLocateError();
+    onChange?.({
+      ...value,
+      lat: null,
+      lng: null,
+      placeId: '',
+      formattedAddress: '',
+      locationSource: 'manual',
+      gpsConfirmed: false,
+    });
+  };
+
+  const switchToMap = () => {
+    onChange?.({ ...value, locationSource: '' });
+  };
+
+  const addressFields = (
+    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+      <div className="col-span-2">
+        <Input
+          id="checkout-street-input"
+          label={isAr ? 'الشارع / المنطقة' : 'Street / district'}
+          value={value?.street || ''}
+          onChange={(e) => applyPatch({ street: e.target.value })}
+          required
+          error={streetError}
+          placeholder={isAr ? 'مثال: شارع التسعين، التجمع الخامس' : 'e.g. 90th St, Fifth Settlement'}
+        />
+      </div>
+      <Input
+        label={isAr ? 'رقم العمارة' : 'Building'}
+        value={value?.building || ''}
+        onChange={(e) => applyPatch({ building: e.target.value })}
+        placeholder={isAr ? 'مثال: 12' : 'e.g. 12'}
+      />
+      <Input
+        label={isAr ? 'الدور / الشقة' : 'Floor / Apt'}
+        value={value?.floor || ''}
+        onChange={(e) => applyPatch({ floor: e.target.value })}
+        placeholder={isAr ? 'مثال: الدور 3 - شقة 5' : 'e.g. Floor 3, Apt 5'}
+      />
+      <div className="col-span-2">
+        <Input
+          label={isAr ? 'علامة مميزة (اختياري)' : 'Landmark (optional)'}
+          value={value?.landmark || ''}
+          onChange={(e) => applyPatch({ landmark: e.target.value })}
+          maxLength={150}
+          placeholder={isAr ? 'مثال: بجوار مسجد النور / أمام صيدلية العزبي' : 'e.g. Next to Al-Nour mosque'}
+        />
+      </div>
+    </div>
+  );
+
+  const deliveryZoneLine = deliveryZone && (
+    <p className="text-xs text-text-muted">
+      {isAr ? 'منطقة التوصيل:' : 'Delivery area:'}{' '}
+      <span className="font-medium text-text">
+        {isAr ? deliveryZone.nameAr : deliveryZone.nameEn}
+      </span>
+    </p>
+  );
+
   if (!enableMap) {
     return (
       <div className="space-y-3">
-        {showManualFields && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <Input
-                label={isAr ? 'الشارع' : 'Street'}
-                value={value?.street || ''}
-                onChange={(e) => applyPatch({ street: e.target.value })}
-                required
-                placeholder={isAr ? 'اسم الشارع' : 'Street name'}
-              />
-            </div>
-            <Input
-              label={isAr ? 'رقم العمارة' : 'Building'}
-              value={value?.building || ''}
-              onChange={(e) => applyPatch({ building: e.target.value })}
-            />
-            <Input
-              label={isAr ? 'الدور / الشقة' : 'Floor / Apt'}
-              value={value?.floor || ''}
-              onChange={(e) => applyPatch({ floor: e.target.value })}
-            />
-          </div>
-        )}
+        {showManualFields && addressFields}
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-text-muted">
           {isAr
             ? 'التوصيل بالعنوان النصي فقط — تحديد الموقع على الخريطة غير مفعّل في هذا المتجر.'
@@ -357,8 +406,48 @@ export default function AddressMapCapture({
     );
   }
 
+  const modeTabs = (
+    <div role="tablist" className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+      {[
+        { key: 'map', active: !manualMode, onClick: switchToMap, Icon: MapPin, ar: 'على الخريطة', en: 'On the map' },
+        { key: 'manual', active: manualMode, onClick: switchToManual, Icon: PenLine, ar: 'اكتب العنوان بنفسك', en: 'Type it yourself' },
+      ].map(({ key, active, onClick, Icon, ar, en }) => (
+        <button
+          key={key}
+          type="button"
+          role="tab"
+          aria-selected={active}
+          onClick={active ? undefined : onClick}
+          className={[
+            'flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-sm font-semibold transition-colors',
+            active ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+          ].join(' ')}
+        >
+          <Icon className="h-4 w-4" aria-hidden />
+          {isAr ? ar : en}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (manualMode) {
+    return (
+      <div className="space-y-3 sm:space-y-4">
+        {modeTabs}
+        <p className="rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-900">
+          {isAr
+            ? 'اكتب عنوانك بالتفصيل وأضف علامة مميزة قريبة — المندوب هيتصل بيك لو احتاج يتأكد من المكان.'
+            : 'Write your address in detail and add a nearby landmark — the driver will call you if needed.'}
+        </p>
+        {showManualFields && addressFields}
+        {deliveryZoneLine}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2.5 sm:space-y-4">
+      {modeTabs}
       <CurrentLocationButton
         isAr={isAr}
         loading={locating}
@@ -418,30 +507,7 @@ export default function AddressMapCapture({
         </p>
       </div>
 
-      {showManualFields && (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
-          <div className="col-span-2">
-            <Input
-              id="checkout-street-input"
-              label={isAr ? 'الشارع' : 'Street'}
-              value={value?.street || ''}
-              onChange={(e) => applyPatch({ street: e.target.value })}
-              required
-              placeholder={isAr ? 'اسم الشارع' : 'Street name'}
-            />
-          </div>
-          <Input
-            label={isAr ? 'رقم العمارة' : 'Building'}
-            value={value?.building || ''}
-            onChange={(e) => applyPatch({ building: e.target.value })}
-          />
-          <Input
-            label={isAr ? 'الدور / الشقة' : 'Floor / Apt'}
-            value={value?.floor || ''}
-            onChange={(e) => applyPatch({ floor: e.target.value })}
-          />
-        </div>
-      )}
+      {showManualFields && addressFields}
 
       {value?.gpsConfirmed && value?.locationSource === 'gps' && value?.lat != null && !gpsWarning && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
@@ -471,14 +537,7 @@ export default function AddressMapCapture({
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{zoneWarning}</p>
       )}
 
-      {deliveryZone && (
-        <p className="text-xs text-text-muted">
-          {isAr ? 'منطقة التوصيل:' : 'Delivery area:'}{' '}
-          <span className="font-medium text-text">
-            {isAr ? deliveryZone.nameAr : deliveryZone.nameEn}
-          </span>
-        </p>
-      )}
+      {deliveryZoneLine}
     </div>
   );
 }

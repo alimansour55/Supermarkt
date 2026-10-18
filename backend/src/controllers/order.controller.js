@@ -462,6 +462,7 @@ export const createOrder = asyncHandler(async (req, res) => {
         street: enrichedShipping.street,
         building: enrichedShipping.building,
         floor: enrichedShipping.floor,
+        landmark: enrichedShipping.landmark,
         city: enrichedShipping.city || area,
         governorate: enrichedShipping.governorate,
         area: enrichedShipping.area || area,

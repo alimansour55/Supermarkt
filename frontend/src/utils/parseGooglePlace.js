@@ -97,6 +97,7 @@ export const emptyAddressCapture = () => ({
   street: '',
   building: '',
   floor: '',
+  landmark: '',
   city: '',
   governorate: '',
   area: '',

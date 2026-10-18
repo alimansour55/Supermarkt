@@ -82,7 +82,7 @@ function setDefaultAddress(user, addressId) {
 }
 
 function applyAddressPayload(address, payload) {
-  const fields = ['label', 'street', 'building', 'floor', 'city', 'governorate', 'area', 'postalCode'];
+  const fields = ['label', 'street', 'building', 'floor', 'landmark', 'city', 'governorate', 'area', 'postalCode'];
   fields.forEach((field) => {
     if (payload[field] !== undefined) {
       address[field] = String(payload[field] || '').trim();
@@ -405,6 +405,7 @@ export const addMyAddress = asyncHandler(async (req, res) => {
     street: enriched.street,
     building: enriched.building,
     floor: enriched.floor,
+    landmark: enriched.landmark,
     city: enriched.city,
     governorate: enriched.governorate,
     area: enriched.area,
@@ -414,6 +415,7 @@ export const addMyAddress = asyncHandler(async (req, res) => {
     lng: enriched.lng,
     formattedAddress: enriched.formattedAddress,
     placeId: enriched.placeId,
+    locationSource: enriched.locationSource,
   });
 
   await req.user.save();
@@ -437,6 +439,7 @@ export const updateMyAddress = asyncHandler(async (req, res) => {
       street: req.body.street ?? address.street,
       building: req.body.building ?? address.building,
       floor: req.body.floor ?? address.floor,
+      landmark: req.body.landmark ?? address.landmark,
       city: req.body.city ?? address.city,
       governorate: req.body.governorate ?? address.governorate,
       area: req.body.area ?? address.area,
@@ -447,6 +450,7 @@ export const updateMyAddress = asyncHandler(async (req, res) => {
         lng: req.body.lng ?? address.lng,
         formattedAddress: req.body.formattedAddress ?? address.formattedAddress,
         placeId: req.body.placeId ?? address.placeId,
+        locationSource: req.body.locationSource ?? address.locationSource,
       }),
     };
 

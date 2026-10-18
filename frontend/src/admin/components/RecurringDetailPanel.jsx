@@ -25,6 +25,7 @@ function formatAddress(address, isAr) {
     address.street,
     address.building,
     address.floor,
+    address.landmark,
     address.area || address.city,
     address.governorate,
   ].filter(Boolean).join(isAr ? '، ' : ', ');

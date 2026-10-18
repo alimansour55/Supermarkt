@@ -36,6 +36,7 @@ const recurringDeliverySubscriptionSchema = new mongoose.Schema(
       street: String,
       building: String,
       floor: String,
+      landmark: String,
       city: String,
       governorate: String,
       area: String,

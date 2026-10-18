@@ -88,6 +88,7 @@ export default function LocationGateModal({ open }) {
     street: savedManual?.street || '',
     building: savedManual?.building || '',
     floor: savedManual?.floor || '',
+    landmark: savedManual?.landmark || '',
   }));
   const [manualError, setManualError] = useState('');
   const [manualSaving, setManualSaving] = useState(false);
@@ -216,6 +217,7 @@ export default function LocationGateModal({ open }) {
         street: savedManual.street || '',
         building: savedManual.building || '',
         floor: savedManual.floor || '',
+        landmark: savedManual.landmark || '',
       });
     }
   }, [open, savedManual]);
@@ -371,10 +373,12 @@ export default function LocationGateModal({ open }) {
     const governorate = manual.governorate.trim() || zoneCity;
     const building = manual.building.trim();
     const floor = manual.floor.trim();
+    const landmark = (manual.landmark || '').trim();
     const address = {
       street,
       building,
       floor,
+      landmark,
       city,
       area,
       governorate,
@@ -639,7 +643,7 @@ export default function LocationGateModal({ open }) {
                 type="text"
                 value={manual.street}
                 onChange={updateManual('street')}
-                placeholder={isAr ? 'اسم الشارع والعلامة المميزة' : 'Street name and a nearby landmark'}
+                placeholder={isAr ? 'مثال: شارع التسعين، التجمع الخامس' : 'e.g. 90th St, Fifth Settlement'}
                 className="w-full rounded-xl border border-border bg-surface px-3 py-3 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </label>
@@ -664,6 +668,18 @@ export default function LocationGateModal({ open }) {
                 />
               </label>
             </div>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-text">{isAr ? 'علامة مميزة (اختياري)' : 'Landmark (optional)'}</span>
+              <input
+                type="text"
+                value={manual.landmark}
+                onChange={updateManual('landmark')}
+                maxLength={150}
+                placeholder={isAr ? 'مثال: بجوار مسجد النور' : 'e.g. Next to Al-Nour mosque'}
+                className="w-full rounded-xl border border-border bg-surface px-3 py-3 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              />
+            </label>
 
             {manualError && (
               <p className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">

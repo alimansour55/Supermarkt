@@ -22,7 +22,7 @@ function addressLabelText(address, isAr) {
 }
 
 function formatAddressLine(address, isAr) {
-  return [address.street, address.building, address.floor, address.area || address.city, address.governorate]
+  return [address.street, address.building, address.floor, address.landmark, address.area || address.city, address.governorate]
     .filter(Boolean)
     .join(isAr ? '، ' : ', ');
 }

@@ -145,6 +145,7 @@ export default function CheckoutPage() {
   const [walletToRedeem, setWalletToRedeem] = useState('');
   const [wallet, setWallet] = useState(null);
   const [address, setAddress] = useState(emptyAddressCapture);
+  const [showStreetError, setShowStreetError] = useState(false);
   const [selectedSavedAddressId, setSelectedSavedAddressId] = useState('');
   const [step, setStep] = useState(1);
   const [maxStepReached, setMaxStepReached] = useState(1);
@@ -239,6 +240,7 @@ export default function CheckoutPage() {
       street: locationManualAddress.street || prev.street,
       building: locationManualAddress.building || prev.building,
       floor: locationManualAddress.floor || prev.floor,
+      landmark: locationManualAddress.landmark || prev.landmark,
       city: locationManualAddress.city || prev.city,
       governorate: locationManualAddress.governorate || prev.governorate,
       area: locationManualAddress.area || prev.area,
@@ -259,6 +261,7 @@ export default function CheckoutPage() {
       street: saved.street || '',
       building: saved.building || '',
       floor: saved.floor || '',
+      landmark: saved.landmark || '',
       city: saved.city || '',
       governorate: saved.governorate || '',
       area: saved.area || '',
@@ -267,6 +270,7 @@ export default function CheckoutPage() {
       lng: saved.lng ?? null,
       formattedAddress: saved.formattedAddress || '',
       placeId: saved.placeId || '',
+      locationSource: saved.lat != null && saved.lng != null ? (saved.locationSource || '') : 'manual',
     });
     setSelectedSavedAddressId(saved._id || '');
   }, [user?.addresses, locationConfirmed, locationPin?.lat]);
@@ -287,6 +291,7 @@ export default function CheckoutPage() {
       street: saved.street || '',
       building: saved.building || '',
       floor: saved.floor || '',
+      landmark: saved.landmark || '',
       city: saved.city || '',
       governorate: saved.governorate || '',
       area: saved.area || '',
@@ -295,6 +300,7 @@ export default function CheckoutPage() {
       lng: saved.lng ?? null,
       formattedAddress: saved.formattedAddress || '',
       placeId: saved.placeId || '',
+      locationSource: saved.lat != null && saved.lng != null ? (saved.locationSource || '') : 'manual',
     });
   };
 
@@ -485,18 +491,25 @@ export default function CheckoutPage() {
 
   const needsSchedule = deliveryMethod === 'scheduled' || deliveryMethod === 'recurring';
 
+  const resolvedAddressStreet = address.street?.trim() || address.formattedAddress?.trim() || '';
+  const streetRequiredMessage = language === 'ar'
+    ? 'اكتب اسم الشارع والمنطقة، أو حدد موقعك على الخريطة.'
+    : 'Enter your street and district, or pin your location on the map.';
+
+  // Point the shopper at the exact field instead of a generic banner.
+  const flagMissingStreet = () => {
+    setShowStreetError(true);
+    requestAnimationFrame(() => {
+      const input = document.getElementById('checkout-street-input');
+      input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      input?.focus({ preventScroll: true });
+    });
+  };
+
   const validateAddressStep = () => {
-    const resolvedStreet = address.street?.trim() || address.formattedAddress?.trim() || '';
     // Either a map pin or a hand-typed street is enough — never demand both.
-    if (gpsMapEnabled && !hasAddressPin(address) && !resolvedStreet) {
-      return language === 'ar'
-        ? 'يرجى تحديد موقع التوصيل على الخريطة أو البحث عن عنوانك.'
-        : 'Please pin your delivery location on the map or search for your address.';
-    }
-    if (!resolvedStreet) {
-      return language === 'ar'
-        ? 'يرجى تحديد عنوان التوصيل على الخريطة أو إدخال اسم الشارع.'
-        : 'Please pin your delivery address or enter a street name.';
+    if (!resolvedAddressStreet) {
+      return streetRequiredMessage;
     }
     if (!form.phoneLocal || form.phoneLocal.length < 10) {
       return language === 'ar' ? 'يرجى إدخال رقم هاتف صحيح' : 'Please enter a valid phone number';
@@ -571,7 +584,11 @@ export default function CheckoutPage() {
     setError('');
     if (step === 1) {
       const err = validateAddressStep();
-      if (err) { setError(err); return; }
+      if (err) {
+        setError(err);
+        if (err === streetRequiredMessage) flagMissingStreet();
+        return;
+      }
     } else if (step === 2) {
       const err = validateDeliveryStep();
       if (err) { setError(err); return; }
@@ -612,7 +629,12 @@ export default function CheckoutPage() {
     }
 
     const addressErr = validateAddressStep();
-    if (addressErr) { setError(addressErr); setStep(1); return; }
+    if (addressErr) {
+      setError(addressErr);
+      setStep(1);
+      if (addressErr === streetRequiredMessage) flagMissingStreet();
+      return;
+    }
 
     const deliveryErr = validateDeliveryStep();
     if (deliveryErr) { setError(deliveryErr); setStep(2); return; }
@@ -649,6 +671,7 @@ export default function CheckoutPage() {
           street: resolvedStreet,
           building: address.building,
           floor: address.floor,
+          landmark: address.landmark?.trim() || '',
           city: address.city || (language === 'ar' ? location.nameAr : location.nameEn),
           governorate: address.governorate || (language === 'ar' ? location.cityAr : location.cityEn),
           area: address.area || (language === 'ar' ? location.areaAr : location.areaEn),
@@ -786,6 +809,14 @@ export default function CheckoutPage() {
                   onChange={(e) => setAddress((prev) => ({ ...prev, floor: e.target.value }))}
                   placeholder={language === 'ar' ? 'مثال: الدور 3 - شقة 5' : 'e.g. Floor 3, Apt 5'}
                 />
+                <Input
+                  className="col-span-2"
+                  label={language === 'ar' ? 'علامة مميزة (اختياري)' : 'Landmark (optional)'}
+                  value={address.landmark || ''}
+                  onChange={(e) => setAddress((prev) => ({ ...prev, landmark: e.target.value }))}
+                  maxLength={150}
+                  placeholder={language === 'ar' ? 'مثال: بجوار مسجد النور' : 'e.g. Next to Al-Nour mosque'}
+                />
               </div>
             )}
 
@@ -816,6 +847,7 @@ export default function CheckoutPage() {
                 deliveryZone={location}
                 isAr={language === 'ar'}
                 enableMap={gpsMapEnabled}
+                streetError={showStreetError && !resolvedAddressStreet ? streetRequiredMessage : ''}
               />
             )}
 

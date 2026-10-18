@@ -142,6 +142,7 @@ const shippingAddressSchema = new mongoose.Schema(
     street: { type: String, required: true },
     building: String,
     floor: String,
+    landmark: String,
     city: String,
     governorate: String,
     area: String,

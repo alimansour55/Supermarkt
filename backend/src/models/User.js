@@ -11,6 +11,7 @@ const addressSchema = new mongoose.Schema(
     street: { type: String, trim: true, required: true },
     building: { type: String, trim: true },
     floor: { type: String, trim: true },
+    landmark: { type: String, trim: true },
     city: { type: String, trim: true, required: true },
     governorate: { type: String, trim: true },
     area: { type: String, trim: true },

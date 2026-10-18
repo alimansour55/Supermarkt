@@ -6,6 +6,7 @@ function formatAddress(addr, isAr) {
     addr.street,
     addr.building && (isAr ? `مبنى ${addr.building}` : `Bldg ${addr.building}`),
     addr.floor && (isAr ? `طابق ${addr.floor}` : `Floor ${addr.floor}`),
+    addr.landmark && (isAr ? `بجوار: ${addr.landmark}` : `Landmark: ${addr.landmark}`),
     addr.area,
     addr.city,
     addr.governorate,
