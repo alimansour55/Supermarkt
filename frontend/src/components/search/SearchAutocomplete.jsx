@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from '../../app/router';
 import {
-  Search, Clock, Flame, Package, FolderOpen, X, ChevronDown,
+  Search, Clock, Flame, Package, FolderOpen, X,
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -10,206 +9,22 @@ import { fetchSearchSuggestions, buildSearchResultsUrl, fetchTrendingSearches, r
 import { getRecentSearches, addRecentSearch, clearRecentSearches } from '../../utils/searchStorage';
 import { setLastSearchQuery } from '../../utils/searchSession';
 import { POPULAR_SEARCHES, SEARCH_DEBOUNCE_MS } from '../../utils/searchConstants';
-import { getCategoryLabel, useCategories } from '../../context/CategoriesContext';
-import { getDescendantsUnderRoot, filterSubcategoryLabel } from '../../utils/categoryHelpers';
 import { formatPrice } from '../../utils/formatters';
 import { pickProductImage } from '../../utils/imageHelpers';
 import ProductImage from '../ui/ProductImage';
 import CategoryImage from '../category/CategoryImage';
 import { Skeleton } from '../ui/Skeleton';
 
-function SearchCategoryPicker({
-  category,
-  setCategory,
-  rootCategories,
-  categories,
-  isAr,
-  refetchCategories,
-  onNavigate,
-  categoriesLoading,
-}) {
-  const navigate = useNavigate();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const pickerRef = useRef(null);
-  const menuRef = useRef(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 200 });
-
-  const pickableCategories = rootCategories.flatMap((main) => {
-    const descendants = getDescendantsUnderRoot(categories, main.slug);
-    return [{ ...main, isMain: true, depth: 0 }, ...descendants];
-  });
-
-  const activeEntry = category && category !== 'all'
-    ? pickableCategories.find((c) => c.slug === category)
-    : null;
-  const label = activeEntry
-    ? (activeEntry.isMain ? getCategoryLabel(activeEntry, isAr) : filterSubcategoryLabel(activeEntry, isAr))
-    : (isAr ? 'كل الأقسام' : 'All categories');
-
-  const updateMenuPosition = useCallback(() => {
-    if (!pickerRef.current) return;
-    const rect = pickerRef.current.getBoundingClientRect();
-    setMenuPos({
-      top: rect.bottom + 6,
-      left: rect.left,
-      width: Math.max(rect.width, 220),
-    });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!menuOpen) return undefined;
-    updateMenuPosition();
-    window.addEventListener('resize', updateMenuPosition);
-    window.addEventListener('scroll', updateMenuPosition, true);
-    return () => {
-      window.removeEventListener('resize', updateMenuPosition);
-      window.removeEventListener('scroll', updateMenuPosition, true);
-    };
-  }, [menuOpen, updateMenuPosition]);
-
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const close = (e) => {
-      const target = e.target;
-      if (pickerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
-      setMenuOpen(false);
-    };
-    document.addEventListener('click', close, true);
-    return () => document.removeEventListener('click', close, true);
-  }, [menuOpen]);
-
-  const openSubcategories = (e) => {
-    e.stopPropagation();
-    setMenuOpen(false);
-    setCategory('all');
-    onNavigate?.();
-    navigate('/subcategories');
-  };
-
-  const pickCategory = (slug, e) => {
-    e.stopPropagation();
-    setCategory(slug);
-    setMenuOpen(false);
-  };
-
-  const toggleMenu = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!menuOpen) {
-      updateMenuPosition();
-      refetchCategories();
-    }
-    setMenuOpen((v) => !v);
-  };
-
-  const menu = menuOpen ? (
-    <ul
-      ref={menuRef}
-      role="listbox"
-      style={{
-        position: 'fixed',
-        top: menuPos.top,
-        left: menuPos.left,
-        width: menuPos.width,
-        zIndex: 9999,
-      }}
-      className="max-h-80 overflow-y-auto rounded-xl border border-border bg-white py-1 shadow-2xl"
-    >
-      <li role="option">
-        <button
-          type="button"
-          onClick={(e) => pickCategory('all', e)}
-          className={`flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-primary-50 ${
-            category === 'all' ? 'bg-primary-50 font-semibold text-primary-800' : 'text-text'
-          }`}
-        >
-          {isAr ? 'بدون تحديد' : 'Any department'}
-        </button>
-      </li>
-      <li role="option">
-        <button
-          type="button"
-          onClick={openSubcategories}
-          className="flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm font-semibold text-primary-700 hover:bg-primary-50"
-        >
-          <FolderOpen className="h-4 w-4 shrink-0" aria-hidden />
-          {isAr ? 'تصفح كل الأقسام' : 'Browse all categories'}
-        </button>
-      </li>
-      <li className="my-1 border-t border-border" aria-hidden />
-      {categoriesLoading && rootCategories.length === 0 ? (
-        <li className="px-3 py-3 text-sm text-text-muted">
-          {isAr ? 'جاري التحميل...' : 'Loading...'}
-        </li>
-      ) : (
-        rootCategories.map((main) => {
-          const descendants = getDescendantsUnderRoot(categories, main.slug);
-          return (
-            <li key={main.slug || main._id} className="border-b border-border/60 last:border-b-0">
-              <button
-                type="button"
-                role="option"
-                aria-selected={category === main.slug}
-                onClick={(e) => pickCategory(main.slug, e)}
-                className={`flex w-full items-center gap-2 px-3 py-2.5 text-start text-sm hover:bg-primary-50 ${
-                  category === main.slug ? 'bg-primary-50 font-semibold text-primary-800' : 'text-text'
-                }`}
-              >
-                <CategoryImage category={main} size="xs" />
-                <span className="truncate font-semibold">{getCategoryLabel(main, isAr)}</span>
-              </button>
-              {descendants.map((sub) => (
-                <button
-                  key={sub.slug}
-                  type="button"
-                  role="option"
-                  aria-selected={category === sub.slug}
-                  onClick={(e) => pickCategory(sub.slug, e)}
-                  style={{ paddingInlineStart: `${12 + (sub.depth || 1) * 10}px` }}
-                  className={`flex w-full items-center gap-2 py-2 pe-3 text-start text-xs hover:bg-primary-50 ${
-                    category === sub.slug ? 'bg-primary-50 font-semibold text-primary-800' : 'text-text-muted'
-                  }`}
-                >
-                  <span className="truncate">{filterSubcategoryLabel(sub, isAr)}</span>
-                </button>
-              ))}
-            </li>
-          );
-        })
-      )}
-    </ul>
-  ) : null;
-
-  return (
-    <div ref={pickerRef} className="relative shrink-0 border-e border-border">
-      <button
-        type="button"
-        onClick={toggleMenu}
-        onMouseDown={(e) => e.stopPropagation()}
-        className="flex h-full min-h-[44px] w-full min-w-[120px] max-w-[172px] items-center gap-1 bg-surface px-3 py-2.5 text-sm font-medium text-text hover:bg-surface/80 sm:min-w-[140px]"
-        aria-expanded={menuOpen}
-        aria-haspopup="listbox"
-      >
-        <span className="min-w-0 flex-1 truncate text-start">{label}</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-text-muted transition-transform ${menuOpen ? 'rotate-180' : ''}`} aria-hidden />
-      </button>
-      {typeof document !== 'undefined' && menuOpen && createPortal(menu, document.body)}
-    </div>
-  );
-}
-
 export default function SearchAutocomplete({
   className = '',
   autoFocus = false,
   initialQuery = '',
-  showCategorySelect = true,
   variant = 'default',
 }) {
   const isPill = variant === 'pill';
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const isAr = language === 'ar';
-  const { rootCategories, categories: allCategories, refetchCategories, loading: categoriesLoading } = useCategories();
   const wrapperRef = useRef(null);
 
   const [query, setQuery] = useState(initialQuery);
@@ -313,7 +128,7 @@ export default function SearchAutocomplete({
             onFocus={() => { setOpen(true); refreshRecent(); }}
             autoFocus={autoFocus}
             placeholder={t.nav.search}
-            className="min-w-0 flex-1 bg-transparent text-sm text-text placeholder:text-primary-400 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-base text-text md:text-sm placeholder:text-primary-400 focus:outline-none"
             autoComplete="off"
             aria-expanded={showDropdown}
             aria-autocomplete="list"
@@ -332,18 +147,6 @@ export default function SearchAutocomplete({
       ) : (
       <div className="flex overflow-hidden rounded-xl border border-border bg-white shadow-sm">
       <form onSubmit={handleSubmit} className="flex min-w-0 flex-1">
-        {showCategorySelect && (
-          <SearchCategoryPicker
-            category={category}
-            setCategory={setCategory}
-            rootCategories={rootCategories}
-            categories={allCategories}
-            isAr={isAr}
-            refetchCategories={refetchCategories}
-            categoriesLoading={categoriesLoading}
-            onNavigate={() => setOpen(false)}
-          />
-        )}
         <div className="relative min-w-0 flex-1">
           <input
             type="search"
@@ -352,7 +155,7 @@ export default function SearchAutocomplete({
             onFocus={() => { setOpen(true); refreshRecent(); }}
             autoFocus={autoFocus}
             placeholder={t.nav.search}
-            className="w-full px-3 py-3 text-sm focus:outline-none md:px-4 md:py-2.5"
+            className="w-full px-3 py-3 text-base focus:outline-none md:px-4 md:py-2.5 md:text-sm"
             autoComplete="off"
             aria-expanded={showDropdown}
             aria-autocomplete="list"
