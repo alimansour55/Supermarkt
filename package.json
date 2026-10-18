@@ -13,6 +13,7 @@
     "build": "npm run build --prefix frontend",
     "start": "npm run start --prefix backend",
     "seed": "npm run seed --prefix backend",
+    "update": "git checkout main && git pull origin main && npm install",
     "install:all": "npm install && npm install --prefix frontend && npm install --prefix backend",
     "postinstall": "npm install --prefix frontend && npm install --prefix backend"
   },

@@ -163,6 +163,7 @@ Without Twilio, OTP codes are printed to the backend terminal in development.
 |---------|-------------|
 | `npm run install:all` | Install all dependencies |
 | `npm run dev` | Frontend + backend concurrently |
+| `npm run update` | Switch to `main`, pull the latest changes and install new packages (restart `npm run dev` after) |
 | `npm run dev:frontend` | Vite only (port 5173) |
 | `npm run dev:backend` | API only (port 5000) |
 | `npm run seed` | Populate MongoDB with demo data |
