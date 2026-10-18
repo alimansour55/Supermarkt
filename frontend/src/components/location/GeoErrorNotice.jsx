@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ExternalLink, RefreshCw, Settings } from 'lucide-react';
 import { isNativeApp, onAppResume, openAppSettings } from '../../utils/nativeLocation';
-import { getLocationPermissionSteps } from '../../utils/geoPermissionHelp';
+import { getLocationPermissionSections } from '../../utils/geoPermissionHelp';
 
 // Port of the dev HTTPS proxy started by `npm run dev:mobile-https` (scripts/mobile-https-proxy.mjs).
 const MOBILE_HTTPS_PORT = 5174;
 
 /** Same page on the dev HTTPS proxy, so a phone on the LAN http:// link can switch in one tap. */
+/** Render «Label» segments of a step bold, without the guillemets. */
+function StepText({ text }) {
+  return text.split(/(«[^»]+»)/).map((part, i) => (
+    part.startsWith('«') && part.endsWith('»')
+      ? <strong key={`${i}-${part}`} className="font-bold text-red-800">{part.slice(1, -1)}</strong>
+      : <span key={`${i}-${part}`}>{part}</span>
+  ));
+}
+
 function getSecureDevUrl() {
   if (typeof window === 'undefined' || window.location.protocol !== 'http:') return null;
   const { hostname, pathname, search, hash } = window.location;
@@ -19,7 +28,7 @@ function getSecureDevUrl() {
  * directly, so this points the customer to where the toggle actually lives.
  */
 export default function GeoErrorNotice({
-  message, code, isAr, onRetry, retrying = false, autoDetect = false, canReprompt = false,
+  message, code, isAr, onRetry, retrying = false, canReprompt = false, stillBlocked = false,
 }) {
   const isPermissionDenied = code === 1 || code === 'PERMISSION_DENIED';
   const secureUrl = code === 'INSECURE_CONTEXT' ? getSecureDevUrl() : null;
@@ -44,7 +53,7 @@ export default function GeoErrorNotice({
 
   if (!message) return null;
 
-  const steps = isPermissionDenied ? getLocationPermissionSteps(isAr) : [];
+  const sections = isPermissionDenied ? getLocationPermissionSections(isAr) : [];
 
   return (
     <div className="space-y-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -52,6 +61,15 @@ export default function GeoErrorNotice({
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
         <p className="flex-1">{message}</p>
       </div>
+      {stillBlocked && (
+        <p role="status" className="ms-6 rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+          <StepText
+            text={isAr
+              ? 'ما زال الموقع محظوراً — نفّذ الخطوات بالأسفل أولاً، ثم اضغط «حاول مرة أخرى».'
+              : 'Location is still blocked — do the steps below first, then tap «Try again».'}
+          />
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-3 ps-6">
         {onRetry && (
           <button
@@ -98,20 +116,23 @@ export default function GeoErrorNotice({
         )}
       </div>
       {isPermissionDenied && !native && showSteps && (
-        <>
-          <ol className="ms-6 list-decimal space-y-1 ps-1 text-xs text-red-700/90">
-            {steps.map((step) => <li key={step}>{step}</li>)}
-          </ol>
-          <p className="ms-6 ps-1 text-xs font-medium text-red-700/90">
-            {autoDetect
-              ? (isAr
-                ? '✓ بمجرد التفعيل سنكتشف ذلك تلقائياً ونحدد موقعك — لا داعي للعودة هنا.'
-                : '✓ Once enabled, we’ll detect it automatically and locate you — no need to come back here.')
-              : (isAr
-                ? 'بعد التفعيل، ارجع لهذه الصفحة واضغط "حاول مرة أخرى".'
-                : 'After enabling it, come back to this page and tap "Try again".')}
-          </p>
-        </>
+        <div className="space-y-3 rounded-lg bg-white/70 p-3 text-xs text-red-800">
+          {sections.map((section) => (
+            <div key={section.title || 'steps'} className="space-y-1.5">
+              {section.title && <p className="font-bold">{section.title}</p>}
+              <ol className="space-y-1.5">
+                {section.steps.map((step, i) => (
+                  <li key={step} className="flex items-start gap-2 leading-5">
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">
+                      {i + 1}
+                    </span>
+                    <span className="flex-1"><StepText text={step} /></span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

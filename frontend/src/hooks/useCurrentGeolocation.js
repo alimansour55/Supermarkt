@@ -10,8 +10,8 @@ export function getGeolocationErrorMessage(error, isAr = false) {
   }
   if (code === 1 || code === 'PERMISSION_DENIED') {
     return isAr
-      ? 'تم رفض إذن الموقع. فعّل الموقع من إعدادات المتصفح ثم حاول مرة أخرى.'
-      : 'Location permission denied. Enable location in your browser settings and try again.';
+      ? 'إذن الموقع مرفوض لهذا الموقع. فعّله من الإعدادات كما هو موضح بالأسفل.'
+      : 'Location permission is blocked for this site. Turn it on in settings as shown below.';
   }
   if (code === 2 || code === 'POSITION_UNAVAILABLE') {
     return isAr

@@ -2,68 +2,66 @@ import { isNativeApp } from './nativeLocation';
 import { detectMobilePlatform } from './geoPermissionHelp';
 
 /**
- * iOS Safari (and every iOS browser — they're all WebKit) only shows the location prompt
- * once per page load: after "Don't Allow", any further request on the same page is denied
- * instantly with no prompt. A reload gives a fresh prompt. So on iOS web, "Try again" after a
- * denial reloads the page and re-requests on the way back, which brings the Allow dialog back.
+ * iOS browsers (all WebKit) show the location prompt at most once per page load: after
+ * "Don't Allow", every further request on that page is refused instantly, with no prompt —
+ * so a plain "Try again" looks like it does nothing. Only a fresh page load can ask again.
  *
- * If the request after that reload is denied *instantly* (no human taps "Don't Allow" that
- * fast), no prompt was shown — the site/browser is set to Deny — so we stop reloading and
- * fall back to the settings steps instead of looping.
+ * So on iOS web, retrying after a denial reloads the page and reopens the popup with a
+ * "tap to allow" button. That tap is the first request of the new page load, made from a
+ * real user gesture, so it's a clean test:
+ *   - the prompt appears → the customer chooses (a "Don't Allow" takes human time), or
+ *   - it's refused instantly → no prompt was shown, location is blocked in Settings, and
+ *     the only way forward is the settings steps.
  */
-const RETRY_KEY = 'geo_retry_after_reload';
-const HARD_BLOCK_KEY = 'geo_hard_blocked';
+const RETRY_KEY = 'geo_retry_after_reload_v2';
 const INSTANT_DENIAL_MS = 600;
 
-function read(key) {
-  try {
-    return window.sessionStorage.getItem(key) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function write(key, on) {
-  try {
-    if (on) window.sessionStorage.setItem(key, '1');
-    else window.sessionStorage.removeItem(key);
-  } catch {
-    // ignore — private mode / storage disabled
-  }
-}
+let requestedThisPageLoad = false;
 
 export function isPermissionDeniedCode(code) {
   return code === 1 || code === 'PERMISSION_DENIED';
 }
 
-/** True when a denial on this device can be undone just by asking again after a reload. */
-export function canReloadToReprompt() {
-  return !isNativeApp() && detectMobilePlatform() === 'ios' && !read(HARD_BLOCK_KEY);
+export function isIOSWeb() {
+  return !isNativeApp() && detectMobilePlatform() === 'ios';
+}
+
+/** Call right before each location request; true only for the first one this page load. */
+export function claimFirstRequestThisPageLoad() {
+  const first = !requestedThisPageLoad;
+  requestedThisPageLoad = true;
+  return first;
+}
+
+/** A denial this fast means the browser never showed a prompt. */
+export function wasInstantDenial(elapsedMs) {
+  return elapsedMs < INSTANT_DENIAL_MS;
 }
 
 export function reloadToRetryLocation() {
-  write(RETRY_KEY, true);
+  try {
+    window.sessionStorage.setItem(RETRY_KEY, '1');
+  } catch {
+    // ignore — private mode / storage disabled; the reload still gives a fresh prompt
+  }
   window.location.reload();
 }
 
 /** Whether this page load was started by reloadToRetryLocation (does not clear it). */
 export function hasPendingReloadRetry() {
-  return read(RETRY_KEY);
+  try {
+    return window.sessionStorage.getItem(RETRY_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 export function consumeReloadRetry() {
-  const pending = read(RETRY_KEY);
-  write(RETRY_KEY, false);
+  const pending = hasPendingReloadRetry();
+  try {
+    window.sessionStorage.removeItem(RETRY_KEY);
+  } catch {
+    // ignore
+  }
   return pending;
-}
-
-/** Record the outcome of a locate attempt that followed a reload. */
-export function noteReloadRetryResult(err, elapsedMs) {
-  if (!err) {
-    write(HARD_BLOCK_KEY, false);
-    return;
-  }
-  if (isPermissionDeniedCode(err?.code) && elapsedMs < INSTANT_DENIAL_MS) {
-    write(HARD_BLOCK_KEY, true);
-  }
 }

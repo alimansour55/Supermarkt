@@ -11,8 +11,8 @@ import { getGeolocationErrorMessage } from '../../hooks/useCurrentGeolocation';
 import { useGeolocationPermission } from '../../hooks/useGeolocationPermission';
 import { getApproximatePosition } from '../../utils/approxLocate';
 import {
-  canReloadToReprompt, consumeReloadRetry, isPermissionDeniedCode, noteReloadRetryResult,
-  reloadToRetryLocation,
+  claimFirstRequestThisPageLoad, consumeReloadRetry, isIOSWeb, isPermissionDeniedCode,
+  reloadToRetryLocation, wasInstantDenial,
 } from '../../utils/geoRetry';
 import { anyZoneHasCoords, findCoveringZone, haversineKm, nearestZone } from '../../utils/zoneDistance';
 import { markLocationGateDismissed } from '../../utils/locationGate';
@@ -21,10 +21,16 @@ import GeoErrorNotice from './GeoErrorNotice';
 
 const HELWAN = { lat: 29.8453, lng: 31.3339 };
 
-// iOS denial that a fresh page load can undo — tell them the prompt will come back.
+// iOS: the customer tapped "Don't Allow" — a fresh page load can show the prompt again.
 const SOFT_DENIED = {
-  ar: 'لم يتم السماح بالوصول للموقع. اضغط «اطلب الإذن مرة أخرى» وسيظهر طلب الإذن من جديد — اختر «السماح».',
-  en: 'Location access wasn’t allowed. Tap “Ask again” and the permission prompt will appear again — choose “Allow”.',
+  ar: 'لم تسمح بالوصول لموقعك. اضغط «اطلب الإذن مرة أخرى» وسيظهر طلب الإذن من جديد — اختر «السماح».',
+  en: 'You didn’t allow location access. Tap “Ask again” and the permission prompt will show again — choose “Allow”.',
+};
+
+// iOS: refused with no prompt at all — blocked in Settings, only the steps can fix it.
+const IOS_BLOCKED = {
+  ar: 'الموقع محظور لهذا الموقع على جهازك، لذلك لا يظهر طلب الإذن. فعّله بالخطوات التالية:',
+  en: 'Location is blocked for this site on your device, so the permission prompt can’t appear. Turn it on with these steps:',
 };
 
 const NOT_COVERED = {
@@ -85,6 +91,12 @@ export default function LocationGateModal({ open }) {
   const [submitting, setSubmitting] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locateSuccess, setLocateSuccess] = useState(false);
+  // Location-permission denial: 'soft' (iOS, prompt can come back) | 'blocked' | null.
+  const [denial, setDenial] = useState(null);
+  const denialRef = useRef(null);
+  const [stillBlocked, setStillBlocked] = useState(false);
+  const [awaitingAllowTap, setAwaitingAllowTap] = useState(false);
+  const allowTapRef = useRef(null);
   const listRef = useRef(null);
   const geoPermission = useGeolocationPermission();
   const prevGeoPermissionRef = useRef(geoPermission);
@@ -245,51 +257,75 @@ export default function LocationGateModal({ open }) {
     [locations, selectedZoneId],
   );
 
-  const handleUseMyLocation = useCallback(async ({ afterReload = false } = {}) => {
+  const handleUseMyLocation = useCallback(async ({ isRetry = false } = {}) => {
     if (locating) return;
     setGeoError('');
     setGeoErrorCode(null);
+    setStillBlocked(false);
+    setAwaitingAllowTap(false);
     setLocateSuccess(false);
     setLocating(true);
+    const firstThisPageLoad = claimFirstRequestThisPageLoad();
     const startedAt = Date.now();
     try {
       const coords = await getApproximatePosition();
-      if (afterReload) noteReloadRetryResult(null);
+      denialRef.current = null;
+      setDenial(null);
       const { blocked } = await applyPin(coords.lat, coords.lng, 'gps');
       if (!blocked) {
         setLocateSuccess(true);
         toast.success(isAr ? 'تم تحديد موقعك بنجاح' : 'Your location was detected successfully');
       }
     } catch (err) {
-      if (afterReload) noteReloadRetryResult(err, Date.now() - startedAt);
       const code = err?.code ?? err?.name ?? null;
-      setGeoError(isPermissionDeniedCode(code) && canReloadToReprompt()
-        ? (isAr ? SOFT_DENIED.ar : SOFT_DENIED.en)
-        : getGeolocationErrorMessage(err, isAr));
+      let kind = null;
+      if (isPermissionDeniedCode(code)) {
+        if (isIOSWeb()) {
+          // Only the first request of a page load can show a prompt on iOS, so only that one
+          // tells us anything; later ones (e.g. the focus auto-retry) keep the last verdict.
+          kind = firstThisPageLoad
+            ? (wasInstantDenial(Date.now() - startedAt) ? 'blocked' : 'soft')
+            : (denialRef.current || 'soft');
+        } else {
+          kind = 'blocked';
+        }
+      }
+      denialRef.current = kind;
+      setDenial(kind);
+      setStillBlocked(isRetry && kind === 'blocked');
+      let message = getGeolocationErrorMessage(err, isAr);
+      if (kind && isIOSWeb()) {
+        const text = kind === 'soft' ? SOFT_DENIED : IOS_BLOCKED;
+        message = isAr ? text.ar : text.en;
+      }
+      setGeoError(message);
       setGeoErrorCode(code);
     } finally {
       setLocating(false);
     }
   }, [applyPin, isAr, locating, toast]);
 
-  // "Try again" after a denial on iOS web: the prompt only comes back on a fresh page load,
-  // so reload and re-request on the way back (see utils/geoRetry.js). Everywhere else a plain
-  // retry is all that can be done from the page.
+  // Retry after a denial on iOS web: the page can't ask twice, so reload; the popup reopens
+  // with a "tap to allow" button whose tap is a fresh, clean request (see utils/geoRetry.js).
+  // Everywhere else a plain in-page retry is all that's possible.
   const handleRetryLocation = useCallback(() => {
-    if (isPermissionDeniedCode(geoErrorCode) && canReloadToReprompt()) {
+    if (isPermissionDeniedCode(geoErrorCode) && isIOSWeb()) {
       reloadToRetryLocation();
       return;
     }
-    handleUseMyLocation();
+    handleUseMyLocation({ isRetry: true });
   }, [geoErrorCode, handleUseMyLocation]);
 
-  // Second half of that reload: request again as soon as the popup is back on screen.
+  // Second half of that reload: bring the "tap to allow" button into view.
   const reloadRetryHandledRef = useRef(false);
   useEffect(() => {
     if (!open || mode !== 'area' || reloadRetryHandledRef.current) return;
     reloadRetryHandledRef.current = true;
-    if (consumeReloadRetry()) handleUseMyLocation({ afterReload: true });
-  }, [open, mode, handleUseMyLocation]);
+    if (consumeReloadRetry()) setAwaitingAllowTap(true);
+  }, [open, mode]);
+  useEffect(() => {
+    if (awaitingAllowTap) allowTapRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [awaitingAllowTap]);
 
   // Chromium browsers report permission changes live (no reload needed): if the customer
   // left this open, went to the browser/site settings, and flipped location on, re-run the
@@ -533,14 +569,32 @@ export default function LocationGateModal({ open }) {
             </p>
           )}
 
+          {awaitingAllowTap && (
+            <div ref={allowTapRef} className="space-y-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-3 text-sm text-primary-800">
+              <p className="font-semibold">
+                {isAr
+                  ? 'اضغط الزر بالأسفل، وعند ظهور نافذة الإذن اختر «السماح».'
+                  : 'Tap the button below, and when the permission window appears choose “Allow”.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => handleUseMyLocation({ isRetry: true })}
+                disabled={locating}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-primary-700 disabled:opacity-60"
+              >
+                <Crosshair className={`h-4 w-4 ${locating ? 'animate-spin' : ''}`} aria-hidden />
+                {isAr ? 'السماح بالوصول لموقعي' : 'Allow access to my location'}
+              </button>
+            </div>
+          )}
           <GeoErrorNotice
             message={geoError}
             code={geoErrorCode}
             isAr={isAr}
             onRetry={handleRetryLocation}
             retrying={locating}
-            autoDetect
-            canReprompt={isPermissionDeniedCode(geoErrorCode) && canReloadToReprompt()}
+            canReprompt={denial === 'soft'}
+            stillBlocked={stillBlocked}
           />
           {locateSuccess && !coverageError && (
             <p className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
