@@ -146,79 +146,13 @@ function ActionIcon({ name, isAr }) {
   return <Icon className="h-3.5 w-3.5 shrink-0 opacity-80" />;
 }
 
-function QuickMenuBar({ isAr, onAction, disabled }) {
-  const items = [
-    { id: 'browse_shop', label: isAr ? 'تسوق الآن' : 'Shop now', icon: 'browse' },
-    { id: 'orders', label: isAr ? 'طلباتي' : 'My orders', icon: 'orders' },
-    { id: 'cart', label: isAr ? 'السلة' : 'Cart', icon: 'cart' },
-    { id: 'delivery', label: isAr ? 'التوصيل' : 'Delivery', icon: 'delivery' },
-    { id: 'contact', label: isAr ? 'تواصل معنا' : 'Contact us', icon: 'contact' },
-  ];
-
-  return (
-    <div
-      className="flex shrink-0 gap-1.5 overflow-x-auto border-t border-slate-100 bg-slate-50/90 px-2.5 py-2 scrollbar-thin"
-      dir={isAr ? 'rtl' : 'ltr'}
-    >
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          disabled={disabled}
-          onClick={() => onAction(item.id, { id: item.id, icon: item.icon })}
-          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-800 disabled:opacity-40"
-        >
-          <ActionIcon name={item.icon} isAr={isAr} />
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ChatFooterBar({ isAr, onAction, disabled, canGoBack }) {
-  const BackIcon = isAr ? ArrowRight : ArrowLeft;
-  return (
-    <div
-      className="flex shrink-0 gap-2 border-t border-slate-100 bg-white px-3 py-2.5"
-      dir={isAr ? 'rtl' : 'ltr'}
-    >
-      <button
-        type="button"
-        disabled={disabled || !canGoBack}
-        onClick={() => onAction('back', { id: 'back' })}
-        className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <BackIcon className="h-3.5 w-3.5" />
-        {isAr ? 'الرجوع' : 'Back'}
-      </button>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onAction('change_selection', { id: 'change_selection' })}
-        className="inline-flex flex-1 items-center justify-center rounded-xl border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-40"
-      >
-        {isAr ? 'تغيير الاختيار' : 'Change'}
-      </button>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onAction('start_over', { id: 'start_over' })}
-        className="inline-flex flex-1 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-2 py-2 text-xs font-bold text-amber-950 transition hover:border-amber-300 hover:bg-amber-100 disabled:opacity-40"
-      >
-        {isAr ? 'البدء من جديد' : 'Start over'}
-      </button>
-    </div>
-  );
-}
-
 const SHOP_PANEL_LAYOUTS = new Set(['shop_collections', 'category_browse', 'products', 'cart', 'checkout_addresses', 'checkout_delivery', 'checkout_delivery_schedule', 'checkout_payment', 'checkout_confirm', 'address_form']);
 
 function ChatCartCheckoutBar({ isAr, itemCount, subtotal, onCheckout, onViewCart, disabled }) {
   if (!itemCount) return null;
   return (
     <div
-      className="flex shrink-0 items-center gap-2 border-t border-primary-200/80 bg-gradient-to-r from-primary-50 to-white px-3 py-2.5"
+      className="flex shrink-0 items-center gap-2 border-t border-slate-100 bg-white px-3 py-2"
       dir={isAr ? 'rtl' : 'ltr'}
     >
       <button
@@ -227,10 +161,7 @@ function ChatCartCheckoutBar({ isAr, itemCount, subtotal, onCheckout, onViewCart
         onClick={onViewCart}
         className="min-w-0 flex-1 text-start disabled:opacity-50"
       >
-        <p className="text-[10px] font-semibold text-primary-800/70">
-          {isAr ? 'السلة' : 'Cart'}
-        </p>
-        <p className="truncate text-xs font-bold text-primary-900">
+        <p className="truncate text-xs font-bold text-slate-800">
           {itemCount} {isAr ? (itemCount === 1 ? 'منتج' : 'منتجات') : (itemCount === 1 ? 'item' : 'items')}
           {' · '}
           {formatPrice(subtotal)}
@@ -534,7 +465,22 @@ function ActionGrid({ actions, isAr, onAction, variant = 'default' }) {
 }
 
 function WelcomeBody({ message, isAr, onAction }) {
-  return <ActionGrid actions={message.actions} isAr={isAr} onAction={onAction} variant="menu" />;
+  if (!message.actions?.length) return null;
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      {message.actions.map((action) => (
+        <button
+          key={action.id}
+          type="button"
+          onClick={() => onAction(action.id, action)}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-semibold text-slate-700 transition hover:border-primary-200 hover:bg-primary-50 active:scale-[0.98]"
+        >
+          <ActionIcon name={action.icon} isAr={isAr} />
+          {action.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function findCartItemForProduct(cartItems, productId) {
@@ -2331,6 +2277,8 @@ export default function SupportChatWidget() {
     await runProcessor({ actionId });
   };
 
+  const canGoBack = chatState.stack?.length > 0 || chatState.flow !== 'menu' || Boolean(chatState.browsePath);
+
   if (HIDDEN_PREFIXES.some((p) => pathname.startsWith(p))) return null;
   // Hide only after settings loaded — avoid flash; admin can disable in Experience settings
   if (settings && settings.aiChatEnabled === false) return null;
@@ -2385,37 +2333,48 @@ export default function SupportChatWidget() {
           aria-modal="true"
           aria-label={isAr ? 'مساعد المتجر' : 'Store assistant'}
         >
-          <div className={`relative shrink-0 overflow-hidden bg-gradient-to-br from-primary-600 via-primary-600 to-primary-800 px-4 py-3.5 text-white ${isMobileOpen ? 'pt-[max(0.875rem,env(safe-area-inset-top,0px))]' : ''}`}>
-            <div className="pointer-events-none absolute -end-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" aria-hidden />
-            <div className="relative flex items-center gap-3">
-              <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20 backdrop-blur-sm">
-                <AssistantMark className="h-6 w-6" />
-                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-primary-700" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-1.5 text-sm font-bold">
-                  {isAr ? 'مساعد المتجر الذكي' : 'Smart Store Assistant'}
-                  <Sparkles className="h-3.5 w-3.5 text-amber-200" />
-                </p>
-                <p className="mt-0.5 text-[11px] text-primary-100">
-                  {typing
-                    ? (aiEnabled !== false ? (isAr ? 'يفكر…' : 'Thinking…') : (isAr ? 'جاري البحث…' : 'Searching…'))
-                    : (aiEnabled !== false
-                      ? (isAr ? 'مساعد ذكي · متصل' : 'AI assistant · online')
-                      : aiEnabled === false
-                        ? (isAr ? 'مساعد المتجر · متصل' : 'Store assistant · online')
-                        : (isAr ? 'جاري الاتصال…' : 'Connecting…'))}
-                </p>
-              </div>
+          <div className={`flex shrink-0 items-center gap-1.5 border-b border-slate-100 bg-white px-3 py-2.5 ${isMobileOpen ? 'pt-[max(0.625rem,env(safe-area-inset-top,0px))]' : ''}`}>
+            {!hideCheckoutChrome && canGoBack && (
               <button
                 type="button"
-                onClick={() => setOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 hover:bg-white/20"
-                aria-label={isAr ? 'تصغير' : 'Minimize'}
+                disabled={typing}
+                onClick={() => handleAction('back', { id: 'back' })}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                aria-label={isAr ? 'رجوع' : 'Back'}
               >
-                <Minus className="h-4 w-4" />
+                {isAr ? <ArrowRight className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
               </button>
+            )}
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <BotAvatar size="sm" className="ring-0" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-slate-900">
+                  {isAr ? 'المساعد' : 'Assistant'}
+                </p>
+                {typing && (
+                  <p className="text-[11px] text-slate-500">{isAr ? 'يكتب…' : 'Typing…'}</p>
+                )}
+              </div>
             </div>
+            {!hideCheckoutChrome && canGoBack && (
+              <button
+                type="button"
+                disabled={typing}
+                onClick={() => handleAction('start_over', { id: 'start_over' })}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                aria-label={isAr ? 'القائمة الرئيسية' : 'Home'}
+              >
+                <Home className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"
+              aria-label={isAr ? 'إغلاق' : 'Close'}
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           {humanChatActive ? (
@@ -2429,7 +2388,7 @@ export default function SupportChatWidget() {
           <div
             ref={listRef}
             data-support-chat-scroll
-            className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto overscroll-contain bg-gradient-to-b from-slate-50/90 to-white px-3.5 py-4"
+            className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto overscroll-contain bg-slate-50 px-3.5 py-4"
           >
             {chatDisplayMessages.map((m) => (
               <ChatBubble
@@ -2482,23 +2441,6 @@ export default function SupportChatWidget() {
           )}
 
           {!hideCheckoutChrome && (
-            <QuickMenuBar
-              isAr={isAr}
-              onAction={handleAction}
-              disabled={typing}
-            />
-          )}
-
-          {!hideCheckoutChrome && (
-            <ChatFooterBar
-              isAr={isAr}
-              onAction={handleAction}
-              disabled={typing}
-              canGoBack={chatState.stack?.length > 0 || chatState.flow !== 'menu' || Boolean(chatState.browsePath)}
-            />
-          )}
-
-          {!hideCheckoutChrome && (
             <ChatAddedToCartNotice
               isAr={isAr}
               productName={cartNotice?.productName}
@@ -2544,7 +2486,7 @@ export default function SupportChatWidget() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onFocus={preventMobileChatInputScroll}
-                placeholder={isAr ? 'مثال: حليب، منظف، طلباتي…' : 'e.g. milk, detergent, my orders…'}
+                placeholder={isAr ? 'اكتب اسم المنتج…' : 'Type a product name…'}
                 disabled={typing}
                 className="min-h-[2.5rem] flex-1 bg-transparent px-2.5 py-2 text-base md:text-sm focus:outline-none disabled:opacity-60"
                 autoComplete="off"

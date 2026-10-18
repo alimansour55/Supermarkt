@@ -108,11 +108,9 @@ function msg(id, role, text, extras = {}) {
 
 function menuActions(isAr) {
   return [
-    { id: 'search', label: isAr ? 'ابحث واشتري' : 'Search & buy', icon: 'search', variant: 'primary' },
-    { id: 'browse_shop', label: isAr ? 'تسوق الآن' : 'Shop now', icon: 'browse' },
+    { id: 'browse_shop', label: isAr ? 'تسوق' : 'Shop', icon: 'browse' },
     { id: 'orders', label: isAr ? 'طلباتي' : 'My orders', icon: 'orders' },
     { id: 'cart', label: isAr ? 'السلة' : 'Cart', icon: 'cart' },
-    { id: 'delivery', label: isAr ? 'التوصيل' : 'Delivery', icon: 'delivery' },
     { id: 'contact', label: isAr ? 'تواصل معنا' : 'Contact us', icon: 'contact' },
   ];
 }
@@ -860,8 +858,8 @@ function buildMenuReply(isAr, userName, { greetingLine = null } = {}) {
   const subtitle = greetingLine
     ? null
     : (isAr
-      ? 'اكتب ما تحتاجه في الأسفل، أو اختر خدمة:'
-      : 'Type below what you need, or pick a service:');
+      ? 'اكتب اسم المنتج اللي محتاجه، أو اختار:'
+      : 'Type what you need, or pick one:');
   return {
     messages: [
       msg('bot-menu', 'bot', greeting, {
