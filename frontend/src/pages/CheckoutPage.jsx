@@ -486,12 +486,13 @@ export default function CheckoutPage() {
   const needsSchedule = deliveryMethod === 'scheduled' || deliveryMethod === 'recurring';
 
   const validateAddressStep = () => {
-    if (gpsMapEnabled && !hasAddressPin(address) && address.locationSource !== 'manual') {
+    const resolvedStreet = address.street?.trim() || address.formattedAddress?.trim() || '';
+    // Either a map pin or a hand-typed street is enough — never demand both.
+    if (gpsMapEnabled && !hasAddressPin(address) && !resolvedStreet) {
       return language === 'ar'
         ? 'يرجى تحديد موقع التوصيل على الخريطة أو البحث عن عنوانك.'
         : 'Please pin your delivery location on the map or search for your address.';
     }
-    const resolvedStreet = address.street?.trim() || address.formattedAddress?.trim() || '';
     if (!resolvedStreet) {
       return language === 'ar'
         ? 'يرجى تحديد عنوان التوصيل على الخريطة أو إدخال اسم الشارع.'
@@ -656,7 +657,8 @@ export default function CheckoutPage() {
           lng: address.lng,
           formattedAddress: address.formattedAddress,
           placeId: address.placeId,
-          locationSource: address.locationSource || '',
+          // No pin means the customer typed the address by hand.
+          locationSource: hasAddressPin(address) ? (address.locationSource || '') : 'manual',
         },
         area: language === 'ar' ? location.areaAr : location.areaEn,
         phone: localToEgyptPhone(form.phoneLocal),

@@ -105,7 +105,7 @@ export default function MyAddressesPage() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (gpsMapEnabled && !hasAddressPin(form)) {
+    if (gpsMapEnabled && !hasAddressPin(form) && !form.street?.trim()) {
       setError(isAr
         ? 'يرجى تحديد موقع التوصيل على الخريطة أو البحث عن عنوانك.'
         : 'Please pin your delivery location on the map or search for your address.');
@@ -128,6 +128,7 @@ export default function MyAddressesPage() {
         lng: form.lng,
         formattedAddress: form.formattedAddress,
         placeId: form.placeId,
+        locationSource: hasAddressPin(form) ? (form.locationSource || '') : 'manual',
         isDefault: form.isDefault,
         deliveryZoneId: location?.id,
         lang: language,
