@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Heart, LayoutGrid, LogOut, MapPin, RefreshCw, Settings, Sparkles, ShoppingBag, Wallet } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Heart, LayoutGrid, LogOut, MapPin, RefreshCw, Settings, Sparkles, ShoppingBag, Wallet } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -21,7 +21,7 @@ function isActive(pathname, item) {
   return pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
-export default function AccountSidebar() {
+export default function AccountSidebar({ className = '' }) {
   const { language, t } = useLanguage();
   const isAr = language === 'ar';
   const { pathname } = useLocation();
@@ -29,7 +29,7 @@ export default function AccountSidebar() {
   const firstName = user?.name?.trim().split(/\s+/)[0] || (isAr ? 'بك' : 'there');
 
   return (
-    <aside className="lg:sticky lg:top-24 lg:self-start">
+    <aside className={`lg:sticky lg:top-24 lg:self-start ${className}`}>
       <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
         <div className="flex items-center gap-3 border-b border-border bg-primary-50/70 p-4">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-600 text-lg font-bold text-white">
@@ -83,6 +83,14 @@ export default function AccountSidebar() {
  */
 export function AccountLayout() {
   const { isAuthenticated } = useAuth();
+  const { language } = useLanguage();
+  const isAr = language === 'ar';
+  const { pathname } = useLocation();
+  // On mobile the sidebar stacks above the page, so tapping an item loaded the
+  // content off-screen below the menu. Show the full menu only on the account
+  // hub; every other page gets a back link instead (desktop keeps the sidebar).
+  const isHub = pathname === '/profile' || pathname === '/account';
+  const BackIcon = isAr ? ArrowRight : ArrowLeft;
 
   if (!isAuthenticated) {
     return (
@@ -95,8 +103,17 @@ export function AccountLayout() {
   return (
     <div className="container-app py-6 md:py-8">
       <div className="grid items-start gap-6 lg:grid-cols-[260px_1fr] lg:gap-8">
-        <AccountSidebar />
+        <AccountSidebar className={isHub ? '' : 'hidden lg:block'} />
         <div className="min-w-0">
+          {!isHub && (
+            <Link
+              to="/profile"
+              className="mb-4 inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 text-sm font-medium text-primary-700 shadow-sm lg:hidden"
+            >
+              <BackIcon className="h-4 w-4" aria-hidden />
+              {isAr ? 'حسابي' : 'My account'}
+            </Link>
+          )}
           <Outlet />
         </div>
       </div>
