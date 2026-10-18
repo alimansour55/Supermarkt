@@ -26,13 +26,14 @@ function SearchCategoryPicker({
   isAr,
   refetchCategories,
   onNavigate,
+  onMenuOpen,
   categoriesLoading,
 }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const pickerRef = useRef(null);
   const menuRef = useRef(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 200 });
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 200, maxHeight: 320 });
 
   const pickableCategories = rootCategories.flatMap((main) => {
     const descendants = getDescendantsUnderRoot(categories, main.slug);
@@ -49,10 +50,20 @@ function SearchCategoryPicker({
   const updateMenuPosition = useCallback(() => {
     if (!pickerRef.current) return;
     const rect = pickerRef.current.getBoundingClientRect();
+    const margin = 12;
+    const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const width = Math.min(Math.max(rect.width, 240), viewportWidth - margin * 2);
+    const isRtl = getComputedStyle(pickerRef.current).direction === 'rtl';
+    // Anchor to the picker's inline-start edge, then keep the menu inside the viewport
+    const preferredLeft = isRtl ? rect.right - width : rect.left;
+    const left = Math.min(Math.max(preferredLeft, margin), viewportWidth - width - margin);
+    const top = rect.bottom + 6;
     setMenuPos({
-      top: rect.bottom + 6,
-      left: rect.left,
-      width: Math.max(rect.width, 220),
+      top,
+      left,
+      width,
+      maxHeight: Math.max(180, Math.min(320, viewportHeight - top - margin)),
     });
   }, []);
 
@@ -98,6 +109,7 @@ function SearchCategoryPicker({
     if (!menuOpen) {
       updateMenuPosition();
       refetchCategories();
+      onMenuOpen?.();
     }
     setMenuOpen((v) => !v);
   };
@@ -111,9 +123,10 @@ function SearchCategoryPicker({
         top: menuPos.top,
         left: menuPos.left,
         width: menuPos.width,
+        maxHeight: menuPos.maxHeight,
         zIndex: 9999,
       }}
-      className="max-h-80 overflow-y-auto rounded-xl border border-border bg-white py-1 shadow-2xl"
+      className="overflow-y-auto overscroll-contain rounded-xl border border-border bg-white py-1 shadow-2xl"
     >
       <li role="option">
         <button
@@ -342,6 +355,7 @@ export default function SearchAutocomplete({
             refetchCategories={refetchCategories}
             categoriesLoading={categoriesLoading}
             onNavigate={() => setOpen(false)}
+            onMenuOpen={() => setOpen(false)}
           />
         )}
         <div className="relative min-w-0 flex-1">
