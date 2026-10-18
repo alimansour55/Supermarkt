@@ -19,12 +19,16 @@ function getSecureDevUrl() {
  * directly, so this points the customer to where the toggle actually lives.
  */
 export default function GeoErrorNotice({
-  message, code, isAr, onRetry, retrying = false, autoDetect = false,
+  message, code, isAr, onRetry, retrying = false, autoDetect = false, canReprompt = false,
 }) {
   const isPermissionDenied = code === 1 || code === 'PERMISSION_DENIED';
   const secureUrl = code === 'INSECURE_CONTEXT' ? getSecureDevUrl() : null;
-  // Steps are the only way forward on a denied permission, so show them without an extra tap.
-  const [showSteps, setShowSteps] = useState(isPermissionDenied);
+  // Steps are the only way forward on a hard denial, so show them without an extra tap. When
+  // retrying brings the browser prompt back (canReprompt), keep them tucked away instead.
+  const stepsByDefault = isPermissionDenied && !canReprompt;
+  const [stepsToggled, setStepsToggled] = useState(null);
+  const showSteps = stepsToggled ?? stepsByDefault;
+  const setShowSteps = (update) => setStepsToggled(update(showSteps));
   const native = isNativeApp();
 
   // Native app: after the user flips the Location toggle in Settings and returns, retry for them.
@@ -57,7 +61,9 @@ export default function GeoErrorNotice({
             className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${retrying ? 'animate-spin' : ''}`} aria-hidden />
-            {isAr ? 'حاول مرة أخرى' : 'Try again'}
+            {canReprompt
+              ? (isAr ? 'اطلب الإذن مرة أخرى' : 'Ask again')
+              : (isAr ? 'حاول مرة أخرى' : 'Try again')}
           </button>
         )}
         {secureUrl && (

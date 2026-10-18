@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { DELIVERY_LOCATIONS } from '../data/mockData';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { deliveryZoneService } from '../services/apiServices';
+import { hasPendingReloadRetry } from '../utils/geoRetry';
 
 const LocationContext = createContext(null);
 
@@ -14,7 +15,9 @@ export function LocationProvider({ children }) {
   const [manualAddress, setManualAddress] = useLocalStorage('marketplus_location_address', null);
   const [zones, setZones] = useState(DELIVERY_LOCATIONS);
   const [loading, setLoading] = useState(true);
-  const [gateOpen, setGateOpen] = useState(false);
+  // Reopen the popup after the iOS "Try again" reload (utils/geoRetry.js) so the customer
+  // lands back where they were, with the location prompt on screen.
+  const [gateOpen, setGateOpen] = useState(hasPendingReloadRetry);
 
   const refetchZones = useCallback(async () => {
     setLoading(true);

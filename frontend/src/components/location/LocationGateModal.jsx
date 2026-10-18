@@ -10,12 +10,22 @@ import { deliveryZoneService, authService } from '../../services/apiServices';
 import { getGeolocationErrorMessage } from '../../hooks/useCurrentGeolocation';
 import { useGeolocationPermission } from '../../hooks/useGeolocationPermission';
 import { getApproximatePosition } from '../../utils/approxLocate';
+import {
+  canReloadToReprompt, consumeReloadRetry, isPermissionDeniedCode, noteReloadRetryResult,
+  reloadToRetryLocation,
+} from '../../utils/geoRetry';
 import { anyZoneHasCoords, findCoveringZone, haversineKm, nearestZone } from '../../utils/zoneDistance';
 import { markLocationGateDismissed } from '../../utils/locationGate';
 import OsmMapCanvas from '../maps/OsmMapCanvas';
 import GeoErrorNotice from './GeoErrorNotice';
 
 const HELWAN = { lat: 29.8453, lng: 31.3339 };
+
+// iOS denial that a fresh page load can undo — tell them the prompt will come back.
+const SOFT_DENIED = {
+  ar: 'لم يتم السماح بالوصول للموقع. اضغط «اطلب الإذن مرة أخرى» وسيظهر طلب الإذن من جديد — اختر «السماح».',
+  en: 'Location access wasn’t allowed. Tap “Ask again” and the permission prompt will appear again — choose “Allow”.',
+};
 
 const NOT_COVERED = {
   ar: 'عذراً! لا نغطي هذه المنطقة.',
@@ -235,26 +245,51 @@ export default function LocationGateModal({ open }) {
     [locations, selectedZoneId],
   );
 
-  const handleUseMyLocation = useCallback(async () => {
+  const handleUseMyLocation = useCallback(async ({ afterReload = false } = {}) => {
     if (locating) return;
     setGeoError('');
     setGeoErrorCode(null);
     setLocateSuccess(false);
     setLocating(true);
+    const startedAt = Date.now();
     try {
       const coords = await getApproximatePosition();
+      if (afterReload) noteReloadRetryResult(null);
       const { blocked } = await applyPin(coords.lat, coords.lng, 'gps');
       if (!blocked) {
         setLocateSuccess(true);
         toast.success(isAr ? 'تم تحديد موقعك بنجاح' : 'Your location was detected successfully');
       }
     } catch (err) {
-      setGeoError(getGeolocationErrorMessage(err, isAr));
-      setGeoErrorCode(err?.code ?? err?.name ?? null);
+      if (afterReload) noteReloadRetryResult(err, Date.now() - startedAt);
+      const code = err?.code ?? err?.name ?? null;
+      setGeoError(isPermissionDeniedCode(code) && canReloadToReprompt()
+        ? (isAr ? SOFT_DENIED.ar : SOFT_DENIED.en)
+        : getGeolocationErrorMessage(err, isAr));
+      setGeoErrorCode(code);
     } finally {
       setLocating(false);
     }
   }, [applyPin, isAr, locating, toast]);
+
+  // "Try again" after a denial on iOS web: the prompt only comes back on a fresh page load,
+  // so reload and re-request on the way back (see utils/geoRetry.js). Everywhere else a plain
+  // retry is all that can be done from the page.
+  const handleRetryLocation = useCallback(() => {
+    if (isPermissionDeniedCode(geoErrorCode) && canReloadToReprompt()) {
+      reloadToRetryLocation();
+      return;
+    }
+    handleUseMyLocation();
+  }, [geoErrorCode, handleUseMyLocation]);
+
+  // Second half of that reload: request again as soon as the popup is back on screen.
+  const reloadRetryHandledRef = useRef(false);
+  useEffect(() => {
+    if (!open || mode !== 'area' || reloadRetryHandledRef.current) return;
+    reloadRetryHandledRef.current = true;
+    if (consumeReloadRetry()) handleUseMyLocation({ afterReload: true });
+  }, [open, mode, handleUseMyLocation]);
 
   // Chromium browsers report permission changes live (no reload needed): if the customer
   // left this open, went to the browser/site settings, and flipped location on, re-run the
@@ -461,7 +496,7 @@ export default function LocationGateModal({ open }) {
             </p>
             <button
               type="button"
-              onClick={handleUseMyLocation}
+              onClick={() => handleUseMyLocation()}
               disabled={locating}
               className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
                 locateSuccess
@@ -502,9 +537,10 @@ export default function LocationGateModal({ open }) {
             message={geoError}
             code={geoErrorCode}
             isAr={isAr}
-            onRetry={handleUseMyLocation}
+            onRetry={handleRetryLocation}
             retrying={locating}
             autoDetect
+            canReprompt={isPermissionDeniedCode(geoErrorCode) && canReloadToReprompt()}
           />
           {locateSuccess && !coverageError && (
             <p className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
