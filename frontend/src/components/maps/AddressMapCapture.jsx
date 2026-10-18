@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { deliveryZoneService } from '../../services/apiServices';
 import { parseOsmSelection } from '../../utils/osmGeocode';
 import { parsePhotonSelection } from '../../utils/photonGeocode';
@@ -65,17 +66,24 @@ export default function AddressMapCapture({
         city: next.city,
         lat: next.lat,
         lng: next.lng,
+        language: isAr ? 'ar' : 'en',
       });
       setZoneWarning('');
     } catch (err) {
-      setZoneWarning(
-        err.response?.data?.message
-        || (isAr
+      // Build the text here in the customer's language rather than showing the server's
+      // message, which older backends only send in English.
+      const zoneName = isAr ? deliveryZone.nameAr : deliveryZone.nameEn;
+      if (err.response?.status === 400) {
+        setZoneWarning(isAr
+          ? `العنوان خارج منطقة التوصيل المختارة${zoneName ? ` (${zoneName})` : ''}. حرّك الدبوس داخل المنطقة، أو اختر منطقة توصيل أخرى.`
+          : `This address is outside the selected delivery area${zoneName ? ` (${zoneName})` : ''}. Move the pin inside the area, or choose another delivery area.`);
+      } else {
+        setZoneWarning(isAr
           ? 'الموقع قد يكون خارج منطقة التوصيل المختارة.'
-          : 'Location may be outside the selected delivery area.'),
-      );
+          : 'Location may be outside the selected delivery area.');
+      }
     }
-  }, [deliveryZone?.id, isAr]);
+  }, [deliveryZone?.id, deliveryZone?.nameAr, deliveryZone?.nameEn, isAr]);
 
   const applyResolvedAddress = useCallback(async (next) => {
     onChange?.(next);
@@ -468,7 +476,13 @@ export default function AddressMapCapture({
       )}
 
       {zoneWarning && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{zoneWarning}</p>
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-medium leading-6 text-amber-900"
+        >
+          <AlertTriangle className="mt-1 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+          <p className="flex-1">{zoneWarning}</p>
+        </div>
       )}
 
       {deliveryZone && (

@@ -10,6 +10,7 @@ import { getAddressSuggestions } from '../services/placeSuggestion.service.js';
 import { geocodeAddress, reverseGeocode, geocodePlaceId, isGoogleMapsConfigured } from '../services/googleMaps.service.js';
 import { reverseGeocodeOsm } from '../services/osmGeocode.service.js';
 import { addressMatchesDeliveryZone } from '../utils/addressZoneValidation.js';
+import { zoneMismatchMessage } from '../services/addressEnrichment.service.js';
 
 const normalizeFreeDeliveryMethodsInput = (body) => {
   if (!Array.isArray(body.freeDeliveryMethods)) {
@@ -186,7 +187,9 @@ export const resolveDeliveryPlace = asyncHandler(async (req, res) => {
 });
 
 export const validateDeliveryAddress = asyncHandler(async (req, res) => {
-  const { deliveryZoneId, formattedAddress, addressComponents, street, area, city, lat, lng } = req.body;
+  const {
+    deliveryZoneId, formattedAddress, addressComponents, street, area, city, lat, lng, language,
+  } = req.body;
   const zone = await findDeliveryZone(deliveryZoneId);
   if (!zone) throw new AppError('Selected delivery area is not serviceable', 404);
 
@@ -207,7 +210,7 @@ export const validateDeliveryAddress = asyncHandler(async (req, res) => {
   );
 
   if (!matches) {
-    throw new AppError('Address is outside the selected delivery area', 400);
+    throw new AppError(zoneMismatchMessage(zone, language === 'ar' ? 'ar' : 'en'), 400);
   }
 
   res.json({ success: true, data: { valid: true, zone: formatDeliveryZone(zone) } });

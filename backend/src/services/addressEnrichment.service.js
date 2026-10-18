@@ -5,7 +5,7 @@ import { geocodeAddress, reverseGeocode } from './googleMaps.service.js';
 import { findDeliveryZone } from './deliveryZone.service.js';
 import { getGpsDeliveryEnabled } from './storeSettings.service.js';
 
-function zoneMismatchMessage(zone, lang) {
+export function zoneMismatchMessage(zone, lang) {
   const name = lang === 'ar' ? zone.nameAr : zone.nameEn;
   return lang === 'ar'
     ? `العنوان لا يقع ضمن منطقة التوصيل المختارة (${name}). حرّك الدبوس أو اختر منطقة أخرى.`
